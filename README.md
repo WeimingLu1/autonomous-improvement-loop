@@ -61,29 +61,32 @@ version_file: ~/Projects/YOUR_PROJECT/VERSION
 chat_id: YOUR_TELEGRAM_CHAT_ID
 ```
 
-### 3. For Existing Projects — Add Initial Queue
+### 3. Run the Onboarding Wizard
 
-Open `HEARTBEAT.md` and add your known bugs/features:
+The `bootstrap.py` script handles everything — it detects your project state and populates the queue automatically:
 
-```markdown
-## Queue
+```bash
+# First: check what your project needs
+python scripts/bootstrap.py \
+  --project ~/Projects/YOUR_PROJECT \
+  --skill-dir ~/.openclaw/workspace-viya/skills/autonomous-improvement-loop \
+  --report
 
-| # | Type | Score | Content | Source | Status | Created |
-|---|------|-------|---------|--------|--------|---------|
-| 1 | feature | 65 | [[Feature]] Add dark mode | user | pending | 2026-04-18 |
+# Then: generate the initial queue
+python scripts/bootstrap.py \
+  --project ~/Projects/YOUR_PROJECT \
+  --skill-dir ~/.openclaw/workspace-viya/skills/autonomous-improvement-loop
 ```
 
-### 4. For New Projects — Bootstrap First
+| Project state | What it does |
+|--------------|--------------|
+| **New project** | Generates a bootstrap queue of 6-8 foundational tasks to make the project AI-ready |
+| **Existing project** | Scans code for TODO/FIXME comments, GitHub issues, missing tests/docs → populates queue |
+| **Already mature** | Confirms AI-ready, sets mode to `normal` |
 
-Your project needs these minimums before Normal Loop activates:
+Use `--dry-run` first to preview without writing anything.
 
-- [ ] `VERSION` file exists (e.g. `0.0.1`)
-- [ ] `pytest -q` passes
-- [ ] At least one item in the queue
-
-The agent will tell you what's missing during Bootstrap Mode.
-
-### 5. Start Cron
+### 4. Start Cron
 
 ```bash
 openclaw cron add \
@@ -154,11 +157,12 @@ autonomous-improvement-loop/
 ├── DEVLOG.md              ← Completed tasks archive
 ├── LICENSE
 └── scripts/
-    ├── run_status.py          (read/write Run Status)
-    ├── priority_scorer.py     (AI priority scoring)
-    ├── queue_scanner.py       (find new tasks in code)
-    ├── verify_cli_docs.py     (check CLI vs README)
-    └── rollback_if_unstable.py (auto-revert on failure)
+    ├── bootstrap.py               (onboarding wizard for new & existing projects)
+    ├── run_status.py              (read/write Run Status)
+    ├── priority_scorer.py         (AI priority scoring)
+    ├── queue_scanner.py           (find new tasks in code)
+    ├── verify_cli_docs.py         (check CLI vs README)
+    └── rollback_if_unstable.py    (auto-revert on failure)
 ```
 
 ## Risk Warnings

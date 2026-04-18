@@ -239,41 +239,36 @@ cron_schedule: "*/30 * * * *"
 cron_timeout: 3600
 ```
 
-### Step 2: For NEW Projects — Bootstrap First
+### Step 2: Run the Onboarding Wizard
 
-**If your project doesn't exist yet:**
+Run `bootstrap.py` — it automatically detects your project state and sets everything up:
 
-1. Create the project manually (this is the only time you write foundation code yourself):
-   ```bash
-   mkdir -p ~/Projects/YOUR_PROJECT
-   cd ~/Projects/YOUR_PROJECT
-   git init
-   # ... create initial structure
-   ```
-
-2. The skill's Bootstrap Mode will detect what's missing and tell you
-
-3. Once your project passes the readiness check, the skill automatically starts Normal Loop
-
-**Minimum requirements for Normal Loop:**
-- [ ] `VERSION` file exists (e.g. `0.0.1`)
-- [ ] `pytest -q` passes
-- [ ] At least one task in HEARTBEAT.md queue
-
-### Step 3: For EXISTING Projects — Add Initial Queue
-
-Open `HEARTBEAT.md` in the skill directory and add known issues/features:
-
-```markdown
-## Queue
-
-| # | Type | Score | Content | Source | Status | Created |
-|---|------|-------|---------|--------|--------|---------|
-| 1 | feature | 65 | [[Feature]] Add user authentication | user | pending | 2026-04-18 |
-| 2 | improve | 50 | [[Improve]] Write tests for api.py | system | pending | 2026-04-18 |
+```bash
+python scripts/bootstrap.py \
+  --project ~/Projects/YOUR_PROJECT \
+  --skill-dir ~/.openclaw/workspace-viya/skills/autonomous-improvement-loop \
+  --report
 ```
 
-### Step 4: Configure Cron Job
+This prints a **readiness report** showing exactly what your project is missing.
+
+Then run again to **populate the queue**:
+
+```bash
+python scripts/bootstrap.py \
+  --project ~/Projects/YOUR_PROJECT \
+  --skill-dir ~/.openclaw/workspace-viya/skills/autonomous-improvement-loop
+```
+
+| Project state | What bootstrap.py does |
+|--------------|----------------------|
+| **New project** (empty/minimal) | Generates a **bootstrap queue** of 6-8 foundational tasks to make the project AI-ready |
+| **Existing project** (has structure) | Scans codebase for TODO/FIXME comments, GitHub issues, missing tests/docs → populates queue with real candidates |
+| **Already mature** (all checks pass) | Confirms AI-ready, sets mode to `normal`, queue stays as-is |
+
+The script handles everything in one command. You can also use `--dry-run` first to preview what would be written.
+
+### Step 3: Configure Cron Job
 
 ```bash
 openclaw cron add \
@@ -355,13 +350,10 @@ clawhub uninstall autonomous-improvement-loop
 
 - [ ] `gh` CLI authenticated (`gh auth status`)
 - [ ] Project cloned locally (`~/Projects/PROJECT`)
-- [ ] `VERSION` file exists in project root
-- [ ] Python venv with `.venv/bin/pytest`
-- [ ] `pytest -q` passes in project
 - [ ] Telegram chat ID known
 - [ ] OpenClaw agent ID known
 
-**For NEW projects**: The skill will detect missing prerequisites and guide you. No prior setup needed beyond creating the project directory.
+**Run `bootstrap.py --report` first** — it checks everything else (VERSION, pytest, structure) and tells you exactly what your project needs.
 
 ---
 
@@ -369,6 +361,7 @@ clawhub uninstall autonomous-improvement-loop
 
 | Script | Purpose | Key Command |
 |--------|---------|-------------|
+| `bootstrap.py` | **Onboarding wizard** — detects project state, generates bootstrap queue for new projects, scans existing projects for improvement candidates | `--project . --skill-dir . --report` / `--project . --skill-dir .` |
 | `run_status.py` | Read/write Run Status (incl. cron_lock, mode) | `--heartbeat HEARTBEAT.md read` |
 | `priority_scorer.py` | Generate AI scoring prompt (rule fallback) | `--task "..." --type improve` |
 | `queue_scanner.py` | Scan project, append 1 new candidate | `--project . --heartbeat HEARTBEAT.md` |
