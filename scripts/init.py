@@ -1,0 +1,845 @@
+#!/usr/bin/env python3
+r"""
+Autonomous Improvement Loop — 初始化向导
+
+支持两种场景：
+  adopt    接管已有项目（自动检测、配置、一键启动）
+  onboard  从零初始化新项目
+
+用法：
+  # 接管已有项目（最常用）
+  python init.py adopt ~/Projects/HealthAgent
+
+  # 从零初始化新项目
+  python init.py onboard ~/Projects/MyProject
+
+  # 查看项目就绪状态
+  python init.py status ~/Projects/HealthAgent
+
+  # 交互式向导（自动检测所有信息）
+  python init.py adopt
+
+所有参数均为可选：init.py 会自动检测项目路径、GitHub 仓库、
+Agent ID、Telegram Chat ID，必要时才询问。
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import sys
+import textwrap
+from datetime import datetime, timezone
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+# ── Constants ─────────────────────────────────────────────────────────────────
+
+HERE = Path(__file__).parent.resolve()
+SKILL_DIR = HERE.parent
+HEARTBEAT = SKILL_DIR / "HEARTBEAT.md"
+CONFIG_FILE = SKILL_DIR / "config.md"
+
+DEFAULT_SCHEDULE_MS = 30 * 60 * 1000   # 30 min
+DEFAULT_TIMEOUT_S = 3600                # 1 hour
+DEFAULT_LANGUAGE = "zh"
+
+COLOR_RESET = "\033[0m"
+COLOR_GREEN = "\033[32m"
+COLOR_YELLOW = "\033[33m"
+COLOR_RED = "\033[31m"
+COLOR_BLUE = "\033[34m"
+COLOR_BOLD = "\033[1m"
+
+
+def c(text: str, color: str) -> str:
+    return f"{color}{text}{COLOR_RESET}"
+
+
+def ok(msg: str) -> None:
+    print(f"  {c('✓', COLOR_GREEN)} {msg}")
+
+
+def warn(msg: str) -> None:
+    print(f"  {c('⚠', COLOR_YELLOW)} {msg}")
+
+
+def info(msg: str) -> None:
+    print(f"  {c('ℹ', COLOR_BLUE)} {msg}")
+
+
+def fail(msg: str) -> None:
+    print(f"  {c('✗', COLOR_RED)} {msg}")
+
+
+def step(msg: str) -> None:
+    print(f"\n{c(msg, COLOR_BOLD)}")
+
+
+def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, capture_output=True, text=True, **kwargs)
+
+
+def read_file(p: Path) -> str:
+    return p.read_text(encoding="utf-8")
+
+
+def write_file(p: Path, content: str) -> None:
+    p.write_text(content, encoding="utf-8")
+
+
+# ── Auto-detection ─────────────────────────────────────────────────────────────
+
+def detect_project_path() -> Path | None:
+    """Detect from current dir git or common project locations."""
+    # Try git remote first
+    r = run(["git", "rev-parse", "--show-toplevel"], cwd=os.getcwd())
+    if r.returncode == 0:
+        return Path(r.stdout.strip())
+    # Try git remote in a few common locations
+    candidates = [
+        Path.home() / "Projects",
+        Path.home() / "projects",
+        Path.home() / "Code",
+        Path.cwd(),
+    ]
+    for base in candidates:
+        if not base.exists():
+            continue
+        for p in sorted(base.iterdir()):
+            if p.is_dir() and (p / ".git").exists():
+                return p
+    return None
+
+
+def detect_github_repo(project: Path) -> str | None:
+    """Read git remote to get GitHub repo URL."""
+    r = run(["git", "remote", "get-url", "origin"], cwd=project)
+    if r.returncode != 0:
+        return None
+    url = r.stdout.strip()
+    # git@github.com:owner/repo.git → https://github.com/owner/repo
+    m = re.match(r"git@github\.com:(.+?)(?:\.git)?$", url)
+    if m:
+        return f"https://github.com/{m.group(1)}"
+    m = re.match(r"https?://github\.com/(.+?)(?:\.git)?$", url)
+    if m:
+        return f"https://github.com/{m.group(1)}"
+    return None
+
+
+def detect_project_language(project: Path) -> str:
+    """Detect from README.md content or file extensions."""
+    readme_candidates = ["README.md", "README.zh.md", "README-CN.md",
+                         "README.en.md", "README.rst", "README"]
+    for rn in readme_candidates:
+        p = project / rn
+        if p.exists():
+            content = p.read_text(encoding="utf-8", errors="ignore")[:500]
+            if re.search(r"[\u4e00-\u9fff]", content):
+                return "zh"
+            if re.search(r"\bthe\b.*\bto\b.*\bfor\b", content, re.I):
+                return "en"
+    # Fallback: count source file extensions
+    exts: dict[str, int] = {}
+    for p in project.rglob("*"):
+        if not p.is_file() or any(x in p.parts for x in
+                                   ["__pycache__", "node_modules", ".venv", "venv", ".git"]):
+            continue
+        ext = p.suffix.lower()
+        if ext in (".py", ".js", ".ts", ".go", ".rs", ".java", ".rb", ".c", ".cpp"):
+            exts[ext] = exts.get(ext, 0) + 1
+    if exts:
+        dominant = max(exts, key=exts.get)
+        # Python projects typically have Chinese docs
+        return "zh"
+    return DEFAULT_LANGUAGE
+
+
+def detect_version_file(project: Path) -> Path:
+    return project / "VERSION"
+
+
+def detect_cli_name(project: Path) -> str:
+    """Infer CLI name from project name or pyproject.toml."""
+    name = project.name
+    # Try pyproject.toml
+    pp = project / "pyproject.toml"
+    if pp.exists():
+        m = re.search(r'name\s*=\s*["\']([^"\']+)["\']', pp.read_text(encoding="utf-8", errors="ignore"))
+        if m:
+            return m.group(1).replace("_", "-")
+    # Try setup.py
+    sp = project / "setup.py"
+    if sp.exists():
+        m = re.search(r"name\s*=\s*['\"]([^'\"]+)['\"]", sp.read_text(encoding="utf-8", errors="ignore"))
+        if m:
+            return m.group(1).replace("_", "-")
+    # Default: lowercase project dir name
+    return name.lower().replace("_", "-")
+
+
+def detect_openclaw_agent_id() -> str | None:
+    """Read agent id from openclaw config."""
+    r = run(["openclaw", "status", "--json"], timeout=10)
+    if r.returncode == 0:
+        try:
+            data = json.loads(r.stdout)
+            return data.get("agent", {}).get("id") or data.get("agentId")
+        except Exception:
+            pass
+    # Try reading config file
+    config_paths = [
+        Path.home() / ".config" / "openclaw" / "config.json",
+        Path.home() / ".openclaw" / "config.json",
+    ]
+    for p in config_paths:
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8", errors="ignore"))
+                return data.get("agentId") or data.get("agent", {}).get("id")
+            except Exception:
+                pass
+    return None
+
+
+def detect_telegram_chat_id() -> str | None:
+    """Read chat_id from existing config.md."""
+    if CONFIG_FILE.exists():
+        m = re.search(r"chat_id:\s*(\d+)", read_file(CONFIG_FILE))
+        if m:
+            return m.group(1)
+    return None
+
+
+def detect_existing_cron() -> str | None:
+    """Check if a cron job for autonomous-improvement-loop already exists."""
+    r = run(["openclaw", "cron", "list", "--json"], timeout=15)
+    if r.returncode != 0:
+        return None
+    try:
+        crons = json.loads(r.stdout) if r.stdout.strip().startswith("[") else []
+        # The output format varies; try to extract IDs
+        for line in r.stdout.strip().splitlines():
+            if "autonomous" in line.lower() or "improvement" in line.lower():
+                m = re.search(r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", line)
+                if m:
+                    return m.group(0)
+        return None
+    except Exception:
+        return None
+
+
+def detect_pytest_available() -> bool:
+    try:
+        r = run(["python3", "-m", "pytest", "--version"], timeout=10)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def detect_gh_authenticated() -> bool:
+    r = run(["gh", "auth", "status"], timeout=10)
+    return r.returncode == 0
+
+
+# ── Project readiness ─────────────────────────────────────────────────────────
+
+def check_project_readiness(project: Path) -> dict[str, bool]:
+    return {
+        "VERSION 文件存在": (project / "VERSION").exists(),
+        "Git 仓库": (project / ".git").exists(),
+        "src/ 目录": (project / "src").exists(),
+        "tests/ 目录": (project / "tests").exists(),
+        "README 存在": any((project / f).exists() for f in
+                            ["README.md", "README.rst", "README", "README.zh.md"]),
+        "pyproject.toml 或 setup.py": any(
+            (project / f).exists() for f in ["pyproject.toml", "setup.py", "setup.cfg"]),
+        "pytest 可用": detect_pytest_available(),
+        "GitHub CLI 已认证": detect_gh_authenticated(),
+    }
+
+
+# ── Config file management ─────────────────────────────────────────────────────
+
+def build_config(
+    project_path: Path,
+    repo: str,
+    version_file: Path,
+    docs_dir: Path,
+    cli_name: str,
+    agent_id: str,
+    chat_id: str,
+    language: str,
+    cron_job_id: str | None,
+) -> str:
+    return textwrap.dedent(f"""\
+    # Autonomous Improvement Loop — Project Configuration
+
+    > Fill in this file after installing the skill to bind it to your project.
+    > All scripts read paths, repo, and version info from this file.
+
+    ## Project Path
+    project_path: {project_path.expanduser().resolve()}
+
+    ## GitHub Repository
+    repo: {repo}
+
+    ## Version File
+    version_file: {version_file.expanduser().resolve()}
+
+    ## Project Docs Directory
+    docs_agent_dir: {docs_dir.expanduser().resolve()}
+
+    ## CLI Name
+    cli_name: {cli_name}
+
+    ## OpenClaw Agent ID
+    agent_id: {agent_id}
+
+    ## Telegram Chat ID
+    chat_id: {chat_id}
+
+    ## Project Language
+    project_language: {language}   # "en" = English output, "zh" = Chinese output
+
+    ## Cron Schedule
+    cron_schedule: "*/30 * * * *"
+    cron_timeout: {DEFAULT_TIMEOUT_S}
+    cron_job_id: {cron_job_id or ""}
+    """).strip()
+
+
+def write_config(
+    project_path: Path,
+    repo: str,
+    version_file: Path,
+    docs_dir: Path,
+    cli_name: str,
+    agent_id: str,
+    chat_id: str,
+    language: str,
+    cron_job_id: str | None = None,
+) -> None:
+    config = build_config(
+        project_path, repo, version_file, docs_dir, cli_name,
+        agent_id, chat_id, language, cron_job_id,
+    )
+    write_file(CONFIG_FILE, config + "\n")
+
+
+def read_current_config() -> dict[str, str]:
+    """Read existing config values."""
+    if not CONFIG_FILE.exists():
+        return {}
+    text = read_file(CONFIG_FILE)
+    result = {}
+    for line in text.splitlines():
+        m = re.match(r"^(\w[\w_]*):\s*(.+)$", line.strip())
+        if m:
+            result[m.group(1)] = m.group(2).strip()
+    return result
+
+
+# ── Cron management ─────────────────────────────────────────────────────────────
+
+def create_cron(
+    agent_id: str,
+    model: str,
+    chat_id: str,
+    schedule_ms: int = DEFAULT_SCHEDULE_MS,
+) -> str:
+    """Create a new cron job and return its ID."""
+    r = run([
+        "openclaw", "cron", "add",
+        "--name", "Autonomous Improvement Loop",
+        "--every", f"{schedule_ms // 60000}m",
+        "--session", "isolated",
+        "--agent", agent_id,
+        "--model", model,
+        "--announce",
+        "--channel", "telegram",
+        "--to", chat_id,
+        "--timeout-seconds", str(DEFAULT_TIMEOUT_S),
+        "--message", "Autonomous improvement loop triggered",
+    ])
+    if r.returncode != 0:
+        raise RuntimeError(f"Failed to create cron: {r.stderr}")
+    # Extract cron ID from output
+    try:
+        data = json.loads(r.stdout)
+        return data.get("id", "")
+    except Exception:
+        # Fallback: parse from stdout
+        m = re.search(r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", r.stdout)
+        return m.group(0) if m else ""
+
+
+def delete_cron(cron_id: str) -> None:
+    run(["openclaw", "cron", "delete", cron_id])
+
+
+# ── HEARTBEAT queue initialization ─────────────────────────────────────────────
+
+def init_queue_heartbeat(mode: str, language: str) -> None:
+    """Initialize or update the Run Status + empty Queue section."""
+    if not HEARTBEAT.exists():
+        raise RuntimeError(f"HEARTBEAT.md not found at {HEARTBEAT}")
+
+    created = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    run_status = f"""\
+| Field | Value |
+|-------|-------|
+| last_run_time | — |
+| last_run_commit | — |
+| last_run_result | unknown |
+| last_run_task | — |
+| cron_lock | false |
+| mode | {mode} |
+| rollback_on_fail | true |
+"""
+
+    empty_queue = f"""\
+| # | Type | Score | Content | Source | Status | Created |
+|---|------|-------|---------|--------|--------|---------|
+"""
+    if language == "zh":
+        queue_header = "| # | 类型 | 分值 | 内容 | 来源 | 状态 | 创建时间 |\n"
+        queue_divider = "|---|------|-------|---------|--------|----------|\n"
+        empty_queue = queue_header + queue_divider
+
+    content = read_file(HEARTBEAT)
+
+    # Replace Run Status section
+    content = re.sub(
+        r"(## Run Status\n\n)\|[\s\S]*?(\n---\n)",
+        f"\\1{run_status}\\2",
+        content,
+    )
+
+    # Replace Queue section (keep it empty/minimal for new adopt)
+    content = re.sub(
+        r"(\n## Queue\n\n)[\s\S]*?(\n---\n)",
+        f"\\1{empty_queue}\n---\n",
+        content,
+    )
+
+    write_file(HEARTBEAT, content)
+
+
+# ── Adopt: 接管已有项目 ─────────────────────────────────────────────────────────
+
+def cmd_adopt(
+    project: Path,
+    agent_id: str,
+    chat_id: str,
+    language: str,
+    model: str = "minimax-portal/MiniMax-M2.7",
+    force_new_cron: bool = False,
+) -> None:
+    step("🔍 接管已有项目 — 初始化向导")
+
+    # Detect / validate project
+    if not project.exists():
+        fail(f"项目路径不存在: {project}")
+        sys.exit(1)
+
+    repo = detect_github_repo(project)
+    version_file = detect_version_file(project)
+    docs_dir = project / "docs" / "agent"
+    cli_name = detect_cli_name(project)
+    pytest_ok = detect_pytest_available()
+    gh_ok = detect_gh_authenticated()
+    readiness = check_project_readiness(project)
+
+    # Show project info
+    print(f"\n  {c('项目:', COLOR_BOLD)} {project.name}")
+    print(f"  {c('路径:', COLOR_BOLD)} {project}")
+    print(f"  {c('GitHub:', COLOR_BOLD)} {repo or c('未检测到（稍后需手动配置）', COLOR_YELLOW)}")
+    print(f"  {c('CLI 名称:', COLOR_BOLD)} {cli_name}")
+    print(f"  {c('语言:', COLOR_BOLD)} {'中文' if language == 'zh' else 'English'}")
+    print(f"  {c('Agent ID:', COLOR_BOLD)} {agent_id or c('未检测到', COLOR_RED)}")
+
+    # Show readiness
+    step("📋 项目就绪状态检查")
+    new_items = sum(1 for v in readiness.values() if not v)
+    for check, result in readiness.items():
+        if result:
+            ok(check)
+        else:
+            warn(f"{check} {c('(缺失)', COLOR_YELLOW)}")
+    print()
+
+    if new_items > 3:
+        warn(f"项目有 {new_items} 项未就绪。建议先修复再启动自主循环，或先接管再逐步完善。")
+        print("  继续启动...（自主循环会在 Bootstrap 模式下等待）\n")
+
+    # Existing cron?
+    existing_cron = detect_existing_cron()
+    if existing_cron and not force_new_cron:
+        ok(f"已有 Cron Job: {existing_cron}")
+        cron_job_id = existing_cron
+        use_existing = input(f"  {c('使用现有 Cron 还是新建?', COLOR_BOLD)} [使用现有(s)/新建(n)/删除并新建(d)]: ").strip().lower()
+        if use_existing == "n":
+            delete_cron(existing_cron)
+            existing_cron = None
+        elif use_existing == "d":
+            delete_cron(existing_cron)
+            existing_cron = None
+            print("  已删除旧 Cron，将创建新的。")
+        else:
+            print("  使用现有 Cron。")
+    else:
+        existing_cron = None
+
+    # Create cron if needed
+    if not existing_cron:
+        if not agent_id:
+            fail("无法创建 Cron：Agent ID 未设置。请先配置 openclaw agent。")
+            sys.exit(1)
+        if not chat_id:
+            warn("Telegram Chat ID 未设置，Cron 不会发送通知。继续？[y/N]")
+            if input("  > ").strip().lower() != "y":
+                sys.exit(0)
+
+        step("⏰ 创建 Cron Job")
+        try:
+            cron_job_id = create_cron(agent_id, model, chat_id)
+            ok(f"Cron Job 创建成功: {cron_job_id}")
+        except Exception as e:
+            warn(f"创建 Cron 失败: {e}")
+            warn("Cron 未创建，手动运行: openclaw cron add ...")
+            cron_job_id = None
+    else:
+        cron_job_id = existing_cron
+
+    # Write config
+    step("📝 写入 config.md")
+    write_config(
+        project_path=project,
+        repo=repo or "https://github.com/OWNER/REPO",
+        version_file=version_file,
+        docs_dir=docs_dir,
+        cli_name=cli_name,
+        agent_id=agent_id or "viya",
+        chat_id=chat_id or "YOUR_TELEGRAM_CHAT_ID",
+        language=language,
+        cron_job_id=cron_job_id,
+    )
+    ok("config.md 已更新")
+
+    # Init heartbeat
+    mode = "bootstrap" if new_items > 3 else "normal"
+    step("📋 初始化 HEARTBEAT.md")
+    init_queue_heartbeat(mode=mode, language=language)
+    ok(f"HEARTBEAT.md 已初始化（模式: {mode}）")
+
+    # Done
+    print(textwrap.dedent(f"""
+
+    {c('✅ 接管完成!', COLOR_GREEN + COLOR_BOLD)}
+
+    项目: {project.name}
+    模式: {mode}
+    语言: {'中文' if language == 'zh' else 'English'}
+    Cron: {cron_job_id or '未创建'}
+
+    {'首次运行将执行 Bootstrap（等待项目就绪）' if mode == 'bootstrap' else 'Cron 每 30 分钟自动执行'}
+
+    查看队列:
+      cat {HEARTBEAT}
+
+    手动触发 Cron:
+      openclaw cron run {cron_job_id}
+
+    取消 Cron:
+      openclaw cron delete {cron_job_id}
+    """))
+
+
+# ── Onboard: 从零初始化新项目 ──────────────────────────────────────────────────
+
+def cmd_onboard(
+    project: Path,
+    agent_id: str,
+    chat_id: str,
+    language: str,
+    model: str = "minimax-portal/MiniMax-M2.7",
+) -> None:
+    step("🆕 从零初始化新项目 — Bootstrap 向导")
+
+    if project.exists() and any(project.iterdir()):
+        warn(f"目录 {project} 非空，视为已有项目。使用 adopt 模式更合适。")
+        print(f"  python init.py adopt {project}")
+        sys.exit(1)
+
+    print(textwrap.dedent(f"""
+    此向导帮助创建一个 AI-ready 的新项目结构。
+
+    完成后会：
+    1. 创建基础目录结构（src/, tests/, docs/）
+    2. 生成 pyproject.toml
+    3. 写入 VERSION 文件
+    4. 配置 Autonomous Improvement Loop
+    5. 启动 Cron
+
+    项目目录: {project}
+    语言: {'中文' if language == 'zh' else 'English'}
+    """))
+
+    if input("\n  继续? [y/N]: ").strip().lower() != "y":
+        print("取消。")
+        sys.exit(0)
+
+    # Create structure
+    project.mkdir(parents=True, exist_ok=True)
+    (project / "src").mkdir(exist_ok=True)
+    (project / "tests").mkdir(exist_ok=True)
+    (project / "docs").mkdir(exist_ok=True)
+    (project / "docs" / "agent").mkdir(exist_ok=True)
+    ok("目录结构已创建")
+
+    # pyproject.toml
+    pyproject = f"""\
+[project]
+name = "{project.name.lower().replace('-', '_')}"
+version = "0.0.1"
+description = "A project maintained by Autonomous Improvement Loop"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+health = "health_agent.cli.main:app"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+"""
+
+    cli_name = project.name.lower().replace("-", "")
+    pyproject = pyproject.replace("health_agent", cli_name)
+    write_file(project / "pyproject.toml", pyproject)
+    ok("pyproject.toml 已创建")
+
+    # VERSION
+    write_file(project / "VERSION", "0.0.1")
+    ok("VERSION 文件已创建")
+
+    # README
+    readme = f"""# {project.name}
+
+## 安装
+
+```bash
+pip install -e .
+```
+
+## 使用
+
+```bash
+health --help
+```
+"""
+    write_file(project / "README.md", readme)
+    ok("README.md 已创建")
+
+    # Initialize git
+    if not (project / ".git").exists():
+        run(["git", "init"], cwd=project)
+        ok("Git 仓库已初始化")
+
+    # GitHub repo (optional)
+    gh_remote = input("\n  GitHub repo URL（可选，直接回车跳过）: ").strip()
+    if gh_remote:
+        run(["git", "remote", "add", "origin", gh_remote], cwd=project)
+        ok(f"Git remote 已设置: {gh_remote}")
+
+    # Write config
+    step("📝 写入 config.md")
+    write_config(
+        project_path=project,
+        repo=gh_remote or "https://github.com/OWNER/REPO",
+        version_file=project / "VERSION",
+        docs_dir=project / "docs" / "agent",
+        cli_name=project.name.lower().replace("-", ""),
+        agent_id=agent_id or "viya",
+        chat_id=chat_id or "YOUR_TELEGRAM_CHAT_ID",
+        language=language,
+        cron_job_id=None,
+    )
+    ok("config.md 已写入")
+
+    # Init heartbeat (bootstrap mode)
+    step("📋 初始化 HEARTBEAT.md")
+    init_queue_heartbeat(mode="bootstrap", language=language)
+    ok("HEARTBEAT.md 已初始化（模式: bootstrap）")
+
+    print(textwrap.dedent(f"""
+    {c('✅ 新项目初始化完成!', COLOR_GREEN + COLOR_BOLD)}
+
+    项目: {project.name}
+    目录: {project}
+
+    下一步:
+    1. cd {project} && pip install -e ".[dev]"
+    2. health --help
+    3. python init.py adopt {project}  # 完成接管
+
+    Cron 会在首次 adopt 时创建。
+    """))
+
+
+# ── Status: 查看项目状态 ────────────────────────────────────────────────────────
+
+def cmd_status(project: Path) -> None:
+    step("📋 项目就绪状态")
+
+    if not project.exists():
+        fail(f"项目路径不存在: {project}")
+        sys.exit(1)
+
+    readiness = check_project_readiness(project)
+    new_items = sum(1 for v in readiness.values() if not v)
+    mode = "bootstrap" if new_items > 3 else "normal"
+
+    repo = detect_github_repo(project)
+    config = read_current_config()
+
+    print(f"\n  项目: {project.name}")
+    print(f"  路径: {project}")
+    print(f"  GitHub: {repo or c('未配置', COLOR_YELLOW)}")
+    print(f"  语言: {'中文' if config.get('project_language', 'zh') == 'zh' else 'English'}")
+    print(f"  运行模式: {c(mode, COLOR_GREEN if mode == 'normal' else COLOR_YELLOW)}")
+    print()
+    for check, result in readiness.items():
+        if result:
+            ok(check)
+        else:
+            warn(f"{check} (缺失)")
+    print()
+
+    # Queue status
+    if HEARTBEAT.exists():
+        content = read_file(HEARTBEAT)
+        pending = re.findall(r"\|\s*(\d+)\s*\|[^|]*\|[^|]*\|\s*pending\s*\|", content)
+        print(f"  队列待处理任务: {len(pending)} 项")
+        if pending:
+            for m in re.finditer(r"\|\s*(\d+)\s*\|\s*(\w+)\s*\|\s*(\d+)\s*\|\s*([^\|]+?)\s*\|", content):
+                num, kind, score, desc = m.groups()
+                print(f"    #{num} [{score}] {desc.strip()}")
+
+    # Cron status
+    cron_id = config.get("cron_job_id") or detect_existing_cron()
+    if cron_id:
+        r = run(["openclaw", "cron", "list", "--json"], timeout=10)
+        status_text = "active"
+        if r.returncode == 0 and cron_id in r.stdout:
+            status_text = c("active", COLOR_GREEN)
+        print(f"\n  Cron Job: {cron_id} ({status_text})")
+    else:
+        warn("  Cron Job: 未检测到")
+
+    print()
+
+
+# ── Main entry point ────────────────────────────────────────────────────────────
+
+def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Autonomous Improvement Loop 初始化向导",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=textwrap.dedent("""\
+            用法示例:
+
+              # 接管已有项目（最常用）
+              python init.py adopt ~/Projects/HealthAgent
+
+              # 从零初始化新项目
+              python init.py onboard ~/Projects/MyProject
+
+              # 查看项目就绪状态
+              python init.py status ~/Projects/HealthAgent
+
+              # 完全交互式（自动检测所有信息）
+              python init.py adopt
+            """),
+    )
+
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    adopt_p = sub.add_parser("adopt", help="接管已有项目")
+    adopt_p.add_argument("project", nargs="?", type=Path)
+    adopt_p.add_argument("--agent", help="OpenClaw Agent ID")
+    adopt_p.add_argument("--chat-id", help="Telegram Chat ID")
+    adopt_p.add_argument("--language", "--lang", "-l", default=None,
+                         choices=["en", "zh"],
+                         help="项目输出语言")
+    adopt_p.add_argument("--model", "-m", default="minimax-portal/MiniMax-M2.7",
+                         help="LLM model for cron sessions")
+    adopt_p.add_argument("--force-new-cron", action="store_true",
+                         help="强制新建 Cron Job（替换已有的）")
+    adopt_p.set_defaults(func=cmd_adopt)
+
+    onboard_p = sub.add_parser("onboard", help="从零初始化新项目")
+    onboard_p.add_argument("project", nargs="?", type=Path)
+    onboard_p.add_argument("--agent", help="OpenClaw Agent ID")
+    onboard_p.add_argument("--chat-id", help="Telegram Chat ID")
+    onboard_p.add_argument("--language", "--lang", "-l", default=None,
+                          choices=["en", "zh"],
+                          help="项目输出语言")
+    onboard_p.add_argument("--model", "-m", default="minimax-portal/MiniMax-M2.7",
+                          help="LLM model for cron sessions")
+    onboard_p.set_defaults(func=cmd_onboard)
+
+    status_p = sub.add_parser("status", help="查看项目就绪状态")
+    status_p.add_argument("project", nargs="?", type=Path,
+                          default=detect_project_path())
+    status_p.set_defaults(func=cmd_status)
+
+    args = parser.parse_args()
+
+    # Auto-detect project path if not given
+    if hasattr(args, "project") and args.project is None:
+        detected = detect_project_path()
+        if detected:
+            print(f"自动检测到项目: {detected}")
+            args.project = detected
+        else:
+            print("错误: 无法自动检测项目路径，请指定 --project 或在项目目录下运行。")
+            print("\n在以下目录中未找到 git 仓库:")
+            print("  ~/Projects/")
+            print("  ~/projects/")
+            print("  ~/Code/")
+            print("\n请手动指定: python init.py adopt ~/Projects/YourProject")
+            parser.parse_args(["adopt", "--help"])
+            sys.exit(1)
+
+    # Auto-detect agent_id
+    if hasattr(args, "agent") and not args.agent:
+        args.agent = detect_openclaw_agent_id()
+
+    # Auto-detect chat_id
+    if hasattr(args, "chat_id") and not getattr(args, "chat_id", None):
+        args.chat_id = detect_telegram_chat_id()
+
+    # Auto-detect language
+    if hasattr(args, "language") and not args.language:
+        if args.project and args.project.exists():
+            args.language = detect_project_language(args.project)
+        else:
+            args.language = DEFAULT_LANGUAGE
+
+    try:
+        args.func(args)
+    except KeyboardInterrupt:
+        print("\n\n取消。")
+        return 130
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

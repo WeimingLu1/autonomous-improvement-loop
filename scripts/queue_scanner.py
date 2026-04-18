@@ -277,7 +277,7 @@ def all_buckets(project: Path, lang: str = "zh") -> list[tuple[str, str]]:
         ("engage", engagement_features(project, lang)),
     ]
     result: list[tuple[str, str]] = []
-    for _, findings in buckets:
+    for bucket_name, findings in buckets:
         for f in findings:
             result.append((bucket_name, f))
     return result
@@ -320,7 +320,7 @@ def append_to_queue(heartbeat: Path, repo: str, finding: str) -> bool:
     next_num = max(numbers) + 1 if numbers else 1
     created = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
-    new_line = f"{next_num}. [[Improve]] score={score} | {finding} | scanner | pending | {created}"
+    new_line = f"| {next_num} | improve | {score} | [[Improve]] {finding} | scanner | pending | {created} |"
     new_section = section_match.group(1) + section_body.rstrip() + "\n" + new_line + "\n" + section_match.group(3)
     updated = content[:section_match.start()] + new_section + content[section_match.end():]
     heartbeat.write_text(updated, encoding="utf-8")

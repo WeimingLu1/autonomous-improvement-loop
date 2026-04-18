@@ -225,83 +225,45 @@ STOP — wait for next cron trigger
 
 ---
 
-## Setup (4 Steps)
+## Setup (3 Steps — Single Command)
 
-### Step 1: Configure `config.md`
+Use `init.py` as the single entry point. It auto-detects everything.
 
-```markdown
-## Project Path
-project_path: ~/Projects/YOUR_PROJECT
-
-## GitHub Repository
-repo: https://github.com/OWNER/REPO
-
-## Version File
-version_file: ~/Projects/YOUR_PROJECT/VERSION
-
-## Project Docs Directory
-docs_agent_dir: ~/Projects/YOUR_PROJECT/docs/agent
-
-## CLI Name
-cli_name: your-cli-name
-
-## OpenClaw Agent ID
-agent_id: your-agent-id
-
-## Telegram Chat ID
-chat_id: YOUR_TELEGRAM_CHAT_ID
-
-## Project Language
-project_language: zh   # "en" for English, "zh" for Chinese
-
-## Cron Schedule
-cron_schedule: "*/30 * * * *"
-cron_timeout: 3600
-```
-
-### Step 2: Run the Onboarding Wizard
-
-Run `bootstrap.py` — it automatically detects your project state and sets everything up:
+### Step 1: Run `init.py adopt` (接管已有项目)
 
 ```bash
-python scripts/bootstrap.py \
-  --project ~/Projects/YOUR_PROJECT \
-  --skill-dir ~/.openclaw/workspace-viya/skills/autonomous-improvement-loop \
-  --report
+python scripts/init.py adopt ~/Projects/YOUR_PROJECT
 ```
 
-This prints a **readiness report** showing exactly what your project is missing.
-
-Then run again to **populate the queue**:
+**What it does — automatically:**
+1. Detects project path, GitHub repo, CLI name, language
+2. Reads existing `config.md` to reuse values
+3. Checks project readiness (VERSION, pytest, git, README)
+4. Writes `config.md`
+5. Detects or creates Cron Job (every 30 min, isolated session)
+6. Initializes `HEARTBEAT.md`
+7. Prints a full status report
 
 ```bash
-python scripts/bootstrap.py \
-  --project ~/Projects/YOUR_PROJECT \
-  --skill-dir ~/.openclaw/workspace-viya/skills/autonomous-improvement-loop
+# 查看项目就绪状态
+python scripts/init.py status ~/Projects/YOUR_PROJECT
+
+# 完全交互式（自动检测所有信息）
+python scripts/init.py adopt
+
+# 从零初始化新项目
+python scripts/init.py onboard ~/Projects/NEW_PROJECT
 ```
 
-| Project state | What bootstrap.py does |
-|--------------|----------------------|
-| **New project** (empty/minimal) | Generates a **bootstrap queue** of 6-8 foundational tasks to make the project AI-ready |
-| **Existing project** (has structure) | Scans codebase for TODO/FIXME comments, GitHub issues, missing tests/docs → populates queue with real candidates |
-| **Already mature** (all checks pass) | Confirms AI-ready, sets mode to `normal`, queue stays as-is |
+### Step 2: Done
 
-The script handles everything in one command. You can also use `--dry-run` first to preview what would be written.
+`init.py adopt` handles everything. If it cannot detect something (Agent ID, Chat ID), it tells you what to set manually.
 
-### Step 3: Configure Cron Job
+### Step 3: Verify
 
 ```bash
-openclaw cron add \
-  --name "Autonomous Improvement Loop" \
-  --every 30m \
-  --session isolated \
-  --agent YOUR_AGENT_ID \
-  --model minimax-portal/MiniMax-M2.7 \
-  --announce \
-  --channel telegram \
-  --to YOUR_TELEGRAM_CHAT_ID \
-  --timeout-seconds 3600 \
-  --message "Autonomous improvement loop triggered"
+openclaw cron list
+python scripts/init.py status ~/Projects/YOUR_PROJECT
 ```
 
 ---
@@ -407,7 +369,8 @@ clawhub uninstall autonomous-improvement-loop
 
 | Script | Purpose | Key Command |
 |--------|---------|-------------|
-| `bootstrap.py` | **Onboarding wizard** — detects project state, generates bootstrap queue for new projects, scans existing projects for improvement candidates | `--project . --skill-dir . --report` / `--project . --skill-dir .` |
+| `init.py` | **Main entry point** — adopt existing project or onboard new one; auto-detects all settings | `adopt [--project PATH] [--agent ID] [--chat-id ID] [--language en|zh]` / `status [project]` / `onboard project` |
+| `bootstrap.py` | Legacy wizard (replaced by init.py) | `--project . --skill-dir . --report` |
 | `run_status.py` | Read/write Run Status (incl. cron_lock, mode) | `--heartbeat HEARTBEAT.md read` |
 | `priority_scorer.py` | Generate AI scoring prompt (rule fallback) | `--task "..." --type improve` |
 | `queue_scanner.py` | Scan project + append 1 candidate (--scan); or refresh queue to ≥5 items (--refresh) | `--project . --heartbeat HEARTBEAT.md [--language zh] [--refresh --min 5]` |
