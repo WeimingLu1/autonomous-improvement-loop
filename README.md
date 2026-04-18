@@ -14,8 +14,9 @@ A skill for [OpenClaw](https://github.com/openclaw/openclaw) agents that turns y
 Once installed and configured:
 
 - Your agent continuously improves your project on a schedule (cron-driven)
-- All improvement tasks go through an AI-prioritized queue
+- All improvement tasks go through an AI-prioritized queue (HEARTBEAT.md)
 - Every completed task → `git commit` → `git push` → GitHub Release → Telegram report
+- Queue stays full automatically — the scanner keeps finding new tasks
 - The agent never loses context — it remembers the queue across sessions
 
 ## Two Modes
@@ -32,75 +33,34 @@ If your project is too new (no VERSION, no tests, empty queue), the agent enters
 
 ### 1. Install
 
-```
+```bash
 clawhub install autonomous-improvement-loop
 ```
 
-Or install manually:
-```bash
-# Clone this repo
-git clone https://github.com/WeimingLu1/autonomous-improvement-loop.git
-# Point OpenClaw to it (see OpenClaw docs)
-```
-
-### 2. Configure
-
-Edit `config.md` in the skill directory:
-
-```markdown
-## Project Path
-project_path: ~/Projects/YOUR_PROJECT
-
-## GitHub Repository
-repo: https://github.com/OWNER/REPO
-
-## Version File
-version_file: ~/Projects/YOUR_PROJECT/VERSION
-
-## Telegram Chat ID
-chat_id: YOUR_TELEGRAM_CHAT_ID
-```
-
-### 3. Run the Onboarding Wizard
-
-The `bootstrap.py` script handles everything — it detects your project state and populates the queue automatically:
+### 2. One-Command Onboarding
 
 ```bash
-# First: check what your project needs
-python scripts/bootstrap.py \
-  --project ~/Projects/YOUR_PROJECT \
-  --skill-dir ~/.openclaw/workspace-viya/skills/autonomous-improvement-loop \
-  --report
+# 接管已有项目（保留现有队列）
+python scripts/init.py adopt ~/Projects/YOUR_PROJECT --agent viya --chat-id YOUR_CHAT_ID --language zh
 
-# Then: generate the initial queue
-python scripts/bootstrap.py \
-  --project ~/Projects/YOUR_PROJECT \
-  --skill-dir ~/.openclaw/workspace-viya/skills/autonomous-improvement-loop
+# 新项目引导
+python scripts/init.py onboard ~/Projects/YOUR_PROJECT --agent viya --chat-id YOUR_CHAT_ID --language zh
+
+# 查看项目状态
+python scripts/init.py status ~/Projects/YOUR_PROJECT
 ```
 
-| Project state | What it does |
-|--------------|--------------|
-| **New project** | Generates a bootstrap queue of 6-8 foundational tasks to make the project AI-ready |
-| **Existing project** | Scans code for TODO/FIXME comments, GitHub issues, missing tests/docs → populates queue |
-| **Already mature** | Confirms AI-ready, sets mode to `normal` |
+| Subcommand | Use case |
+|------------|----------|
+| `adopt` | 接管已有项目，保留现有队列，自动创建/更新 cron |
+| `onboard` | 新项目引导，生成初始队列，设置 cron |
+| `status` | 查看项目就绪状态、队列内容、cron 状态 |
 
-Use `--dry-run` first to preview without writing anything.
+### 3. Cron Starts Automatically
 
-### 4. Start Cron
+After `adopt` or `onboard`, the cron job is created and runs every 30 minutes. No manual cron setup needed.
 
-```bash
-openclaw cron add \
-  --name "Autonomous Improvement Loop" \
-  --every 30m \
-  --session isolated \
-  --agent YOUR_AGENT_ID \
-  --model minimax-portal/MiniMax-M2.7 \
-  --announce \
-  --channel telegram \
-  --to YOUR_TELEGRAM_CHAT_ID \
-  --timeout-seconds 3600 \
-  --message "Autonomous improvement loop triggered"
-```
+---
 
 ## How It Works
 
@@ -108,10 +68,10 @@ openclaw cron add \
 Cron fires (every 30 min)
     │
     ▼
-Read queue (HEARTBEAT.md)
+Acquire cron_lock (prevent concurrent runs)
     │
     ▼
-Pick top task by score
+Read queue (HEARTBEAT.md) → pick top task by score
     │
     ▼
 Implement + pytest
@@ -120,50 +80,99 @@ Implement + pytest
 git add → commit → push
     │
     ▼
-pytest → auto-revert on failure
+pytest → auto-revert on failure (rollback_on_fail)
     │
     ▼
-Update docs + VERSION bump
+VERSION bump + GitHub Release
     │
     ▼
-GitHub Release + Telegram report
+Telegram report to owner
     │
     ▼
-Scan for next improvement
+Refresh queue (queue_scanner.py) if pending < 5
     │
     ▼
-Wait for next cron
+Release cron_lock → wait for next cron
 ```
+
+---
 
 ## Queue Priority
 
 | Score | Meaning |
 |-------|---------|
-| 100 | User request (forced to #1) |
+| 100 | User request (forced to #1 immediately) |
 | 90-100 | Bug breaking core functionality |
 | 70-89 | Bug in non-core feature |
 | 65-79 | Important feature enhancement |
-| 50-64 | General feature |
-| 30-49 | Internal improvement (tests, docs) |
+| 50-64 | General feature / internal improvement |
+| 30-49 | Tests, docs, code quality |
+
+**Queue rules:**
+- User request → score=100 → inserted at #1, all others shift down
+- During cron execution (cron_lock=true): user requests can still queue, agent refuses direct file edits
+- After any addition: re-sort by score descending, rewrite HEARTBEAT.md
+- Scanner refresh: if pending < 5, scan code for new candidates automatically
+
+---
 
 ## File Structure
 
 ```
 autonomous-improvement-loop/
-├── SKILL.md               ← Skill definition (for OpenClaw)
-├── README.md              ← This file
-├── config.md              ← Project binding configuration
-├── HEARTBEAT.md           ← Queue + Run Status
-├── DEVLOG.md              ← Completed tasks archive
-├── LICENSE
+├── SKILL.md                  # Skill definition (for OpenClaw)
+├── README.md                 # This file
+├── config.md                 # Project binding configuration
+├── HEARTBEAT.md              # Queue + Run Status (the agent's memory)
+├── DEVLOG.md                 # Completed tasks archive
+├── prompts/
+│   └── QUEUE_SYSTEM_PROMPT.md   # System prompt for queue operations
 └── scripts/
-    ├── bootstrap.py               (onboarding wizard for new & existing projects)
-    ├── run_status.py              (read/write Run Status)
-    ├── priority_scorer.py         (AI priority scoring)
-    ├── queue_scanner.py           (find new tasks in code)
-    ├── verify_cli_docs.py         (check CLI vs README)
-    └── rollback_if_unstable.py    (auto-revert on failure)
+    ├── init.py               # Uni entry point: adopt / onboard / status
+    ├── queue_scanner.py      # Scan code → append candidates to queue
+    ├── priority_scorer.py    # AI priority scoring for queue entries
+    ├── run_status.py         # Read/write Run Status section
+    ├── verify_cli_docs.py    # Check CLI help vs README consistency
+    └── rollback_if_unstable.py  # Auto-revert on pytest failure
 ```
+
+---
+
+## Skill Lifecycle
+
+### Install → Configure → Adopt
+
+```bash
+# 1. Install from ClawHub
+clawhub install autonomous-improvement-loop
+
+# 2. Configure project binding
+# (init.py adopt does this automatically, or edit config.md manually)
+
+# 3. One-command adopt
+python scripts/init.py adopt ~/Projects/YOUR_PROJECT \
+  --agent viya \
+  --chat-id 5535183090 \
+  --language zh
+```
+
+### config.md Fields
+
+```markdown
+project_path: ~/Projects/YOUR_PROJECT
+repo: https://github.com/OWNER/REPO
+version_file: ~/Projects/YOUR_PROJECT/VERSION
+docs_agent_dir: ~/Projects/YOUR_PROJECT/docs/agent
+cli_name: your-cli
+agent_id: viya
+chat_id: "5535183090"
+project_language: zh          # "zh" = Chinese output, "en" = English
+cron_schedule: "*/30 * * * *"
+cron_timeout: 3600
+cron_job_id: "uuid-here"
+```
+
+---
 
 ## Risk Warnings
 
@@ -171,8 +180,11 @@ autonomous-improvement-loop/
 
 - Agent auto-commits, auto-releases, auto-modifies code
 - One agent × one project only
-- Disable cron job to pause; uninstall skill to stop
-- User requests are always force-queued (score=100)
+- Disable cron job to pause: `openclaw cron delete <job-id>`
+- User requests are always force-queued at score=100
+- `rollback_on_fail: true` — pytest failure triggers automatic git revert
+
+---
 
 ## Install via ClawHub
 
