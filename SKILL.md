@@ -1,391 +1,214 @@
----
-name: autonomous-improvement-loop
-description: "AUTONOMOUS IMPROVEMENT LOOP | ONE AGENT x ONE PROJECT | CRON-DRIVEN DEV QUEUE
-WARNING: PERSISTENT AUTO-DEV MODE -- auto-commits, auto-releases, auto-modifies files
-Disable cron to pause. Uninstall to stop."
----
+# Autonomous Improvement Loop — Skill Reference
 
-# Autonomous Improvement Loop
+## 概述
 
-> **⚠️ BEFORE INSTALLING — READ THIS**
->
-> Installing this skill **changes your agent's behavior permanently**. Once activated:
-> - The agent enters **continuous development mode** — it will auto-commit, auto-release, and auto-modify code without asking
-> - **One agent × one project only** — the agent becomes dedicated to this single project
-> - **Cron job required** — you must configure a cron job to trigger the loop
-> - **Disable the cron job** to pause the loop; uninstall the skill to stop it entirely
-> - User requests are **always force-queued** (score=100, inserted at #1)
->
-> If you want a human-in-the-loop model where the agent asks before every change, **do not install this skill**.
+这是 AI 时代的"通用型持续改进循环"。它驱动一个持续运转的工作流：
+**维护任务队列 → 挑选最高优先级 → 执行 → 验证 → 记录进度 → 重复**
+
+设计为**类型无关（type-agnostic）** — 支持软件、写作、视频、研究或任意长期项目。
 
 ---
 
-## What This Skill Does
+## 核心概念
 
-Transforms your agent into a **self-sustaining development machine** for a single project.
+### 项目类型（project_kind）
 
-This skill works with **both new and existing projects**:
+Skill 会自动检测项目类型，也可以在 `config.md` 中手动指定：
 
-- **Existing project** → AI takes over maintenance immediately, runs your improvement queue autonomously
-- **New project** → AI helps you bootstrap the foundation, then transitions to autonomous mode once ready
+| 类型 | 说明 | 示例 |
+|------|------|------|
+| `software` | 代码项目 | CLI工具、Web服务、库 |
+| `writing` | 写作/文字项目 | 小说、博客、技术文章 |
+| `video` | 视频/媒体项目 | 短片、纪录片、素材管理 |
+| `research` | 学术/研究项目 | 论文、文献综述 |
+| `generic` | 通用项目 | 任意长期工作 |
 
-**Two operational modes:**
+**自动检测**：队列扫描器 (`project_insights.py`) 通过目录结构和文件类型自动判断项目种类，无需配置即可工作。
 
-| Mode | When triggered | What happens |
-|------|---------------|-------------|
-| **Bootstrap Mode** | Project is new or not yet AI-ready | AI tells you what's missing, helps you set up the foundation, waits for you to finish |
-| **Normal Loop** | Project has basic structure + non-empty queue | AI executes queue tasks autonomously, commits, releases, reports |
-
----
-
-## Project Readiness Check
-
-Every cron trigger runs a readiness check before deciding what to do:
+### 改进循环生命周期
 
 ```
-Is VERSION file present?
-  NO → Bootstrap Mode: tell user "project not initialized, here's what to create first"
-  YES ↓
-
-Is pytest passing?
-  NO → Bootstrap Mode: tell user "pytest must pass before AI can manage this project"
-  YES ↓
-
-Is HEARTBEAT.md queue empty?
-  YES → Bootstrap Mode: suggest initial queue items, wait for user to confirm
-  NO ↓
-
-Normal Loop: execute top queue task
+┌──────────────────────┐
+│  Cron 触发（每30分钟） │
+└──────────┬───────────┘
+           ▼
+┌──────────────────────┐
+│ project_insights.py  │  ← 扫描项目类型，生成改进建议
+│  (通用发现器)         │
+└──────────┬───────────┘
+           ▼
+┌──────────────────────┐
+│  从队列取最新任务      │
+│  （优先级最高）        │
+└──────────┬───────────┘
+           ▼
+┌──────────────────────┐
+│  Agent 执行任务       │
+│  提交 Commit         │
+└──────────┬───────────┘
+           ▼
+┌──────────────────────┐
+│ verify_and_revert.py │  ← 验证结果，失败则回滚
+│  (验证钩子)          │
+└──────────┬───────────┘
+           ▼
+┌──────────────────────┐
+│  更新队列 + 报告       │
+│  Telegram / GitHub   │
+└──────────────────────┘
 ```
 
 ---
 
-## Bootstrap Mode — For New Projects
+## HEARTBEAT.md 结构
 
-When the project is too new for AI management, the agent will:
-
-1. **Detect what's missing** — VERSION, src/ structure, tests, docs, etc.
-2. **Tell you clearly** — what the project needs before AI can take over
-3. **Suggest a bootstrap queue** — a set of foundational tasks to make the project AI-ready
-4. **Wait** — cron keeps firing, agent keeps checking readiness, does nothing until ready
-5. **Auto-switch** — once project passes readiness check, agent automatically enters Normal Loop
-
-**Example bootstrap queue for a new project:**
-
-| # | Type | Task | Why needed |
-|---|------|------|-------------|
-| 1 | feature | Initialize project structure (src/, tests/, pyproject.toml) | Foundation for AI to work |
-| 2 | feature | Add VERSION file and basic CLI entrypoint | AI needs version tracking |
-| 3 | feature | Write first passing test | AI needs tests to validate changes |
-| 4 | feature | Set up README with install instructions | Project needs user-facing docs |
-| 5 | feature | Configure GitHub repo and CI | AI needs to commit and release |
-
-Once these 5 items are done, the project passes readiness check → Normal Loop begins automatically.
-
+```
+## Run Status         ← 运行时状态
+## Queue              ← 任务队列（核心工作区）
+## Done Log           ← 已完成任务日志
 ---
+```
 
-## Normal Loop — For Established Projects
+### Run Status 字段
 
-For projects that already have basic structure, the agent:
+| 字段 | 说明 |
+|------|------|
+| `last_run_time` | 最近一次运行时间 |
+| `last_run_commit` | 最近一次 commit hash |
+| `last_run_result` | `pass` / `fail` / `unverified` |
+| `last_run_task` | 最近任务的描述 |
+| `cron_lock` | `true` = 有人在修改队列，跳过本次 Cron |
+| `mode` | `bootstrap` / `normal` |
+| `rollback_on_fail` | `true` = 任务失败时自动回滚 |
 
-1. Reads the queue from HEARTBEAT.md
-2. Executes the top pending task
-3. Commits, pushes, runs pytest
-4. Creates GitHub Release
-5. Updates docs
-6. Announces to Telegram
-7. Scans for the next improvement opportunity
-8. Waits for next cron trigger
+### Queue 格式
 
----
-
-## Architecture
-
-| Layer | What | Where |
-|-------|------|-------|
-| Skill state | SKILL.md, config.md, HEARTBEAT.md, DEVLOG.md | `skills/autonomous-improvement-loop/` |
-| Scripts | run_status, priority_scorer, queue_scanner, verify_cli_docs, rollback_if_unstable | `skills/autonomous-improvement-loop/scripts/` |
-| Agent prompts | Queue system rules, pre-commit checklist | `skills/autonomous-improvement-loop/prompts/` |
-| Project code | Source, README, VERSION, docs/ | `~/Projects/YOUR_PROJECT/` |
-| Trigger | OpenClaw cron (every 30 min, isolated session) | `openclaw cron list` |
-| Reporting | Telegram | Chat ID in config.md |
-
-**Key principle**: All loop state stays in the skill directory — the project directory is only for code.
-
----
-
-## Queue System
-
-### HEARTBEAT.md Structure
-
-```markdown
-## Run Status
-
-| Field | Value |
-|-------|-------|
-| last_run_time | — |
-| last_run_commit | — |
-| last_run_result | unknown |
-| last_run_task | — |
-| cron_lock | false |
-| rollback_on_fail | true |
-| mode | bootstrap |  ← "bootstrap" or "normal"
-
-## Queue
-
+```
 | # | Type | Score | Content | Source | Status | Created |
 |---|------|-------|---------|--------|--------|---------|
-| 1 | feature | 65 | [[Feature]] Add dark mode toggle | user | pending | 2026-04-18 |
+| 1 | improve | 72 | [[Improve]] 为未测试的模块补齐单元测试 | scanner | done | 2026-04-18 |
 ```
 
-### Priority Algorithm
+- **Type**：`improve` / `feature` / `fix` / `wizard` / `user`
+- **Score**：优先级分数（越高越先执行）
+- **Source**：`scanner` / `user` / `agent`
+- **Status**：`pending` / `done` / `skip`
 
-```
-score = 100                  → User request (forced to #1, all others shift down)
-score = 90-100               → Bug that breaks core functionality
-score = 70-89                → Bug in non-core feature
-score = 65-79               → Important feature enhancement
-score = 50-64               → General feature
-score = 30-49               → Internal improvement (tests, docs)
+---
 
-Tiebreaker: older creation time wins
-```
+## 队列驱动流程
 
-### Queue Minimum Size
+### 用户请求插入任务
 
-After each cron execution, the loop **ensures the queue has at least 5 pending items** by running `refresh_queue` (queue_scanner --refresh --min 5). This keeps the backlog healthy even when many small tasks get done in sequence.
+用户通过消息请求任务 → 直接写入 HEARTBEAT.md Queue 区（优先级 100，标记 `user`）
 
-The scanner draws from **10 creative buckets**, not just code hygiene:
-- `test` / `service` — missing unit tests
-- `todo` / `doc` — code cleanliness
-- `cli` — missing CLI features (--json, completions)
-- `ux` — user experience improvements
-- `feature` — new feature ideas
-- `intelligence` — smart/AI-adjacent features (insights, predictions, anomaly detection)
-- `data` — import/export/integration
-- `engage` — retention & engagement (achievements, streaks, app scores)
+### Cron 自动执行
 
-Higher-impact buckets (intelligence, engage, feature) score 65-72; internal improvements score 45-55.
+1. **Cron** 每 30 分钟触发一个隔离 Agent Session
+2. Session 读取 `skills/autonomous-improvement-loop/SKILL.md`
+3. 按 SKILL.md 内指令执行循环
 
-### cron_lock — How Serialization Works
+---
 
-| Step | User | Cron |
+## 脚本说明
+
+| 脚本 | 职责 | 输入 |
 |------|------|------|
-| 1 | User sends request | Cron fires (isolated session) |
-| 2 | Check: cron_lock? | Set cron_lock = true |
-| 3 | cron_lock=false --> join queue (#1) | Execute task, commit+push |
-| 4 | No collision possible | Set cron_lock = false, announce |
-
-**No file locks needed** — cron runs in an isolated session; user and cron never execute simultaneously.
+| `project_insights.py` | 扫描项目类型，生成改进建议 | `--project`, `--heartbeat`, `--language` |
+| `init.py` | 接管已有项目 / 初始化新项目 / 查看状态 | adopt / onboard / status |
+| `verify_and_revert.py` | 执行验证命令，失败则自动回滚 | `--project`, `--heartbeat`, `--commit`, `--task` |
+| `priority_scorer.py` | 优先级评分（支持用户请求插队） | stdin/stdout HEARTBEAT 格式 |
+| `run_status.py` | 读写 Run Status 区 | `--heartbeat`, `read`/`write` |
 
 ---
 
-## Complete Execution Flow (8 Steps)
+## 验证与回滚
 
-```
-① cron fires (every 30 min, isolated session, 1h timeout)
-       │
-       ▼
-② cron_lock = true
-       │
-       ▼
-③ Project Readiness Check
-       ├─ VERSION missing?  --> Bootstrap Mode (announce what's missing)
-       ├─ pytest failing?   --> Bootstrap Mode (tell user to fix tests)
-       ├─ queue empty?      --> Bootstrap Mode (suggest initial queue)
-       └─ all checks pass   --> Normal Loop
-       │
-─── [ Bootstrap Mode: report to user, wait for next cron ] ───
+`verify_and_revert.py` 读取 `config.md` 中的 `verification_command`：
 
-④ Read Queue → AI re-score → sort → take top task
-       │
-⑤ Implement (pytest green throughout)
-       │
-⑥ git add + commit + push
-       │
-⑦ rollback_if_unstable.py
-       ├─ pytest pass → continue
-       └─ pytest fail → git revert + write fail status + announce rollback
-       │
-⑧ Update docs (README.md, project docs/)
-       │
-⑨ Release: VERSION bump → git tag → gh release create
-       │
-⑩ cron_lock = false + run_status.py write
-       │
-⑪ Announce to Telegram
-       │
-⑫ refresh_queue.py (queue_scanner --refresh --min 5)
-       │     └─ keeps adding candidates until queue has ≥5 pending items
-       │
-⑬ Update memory/YYYY-MM-DD.md
-       │
-STOP — wait for next cron trigger
+- **空** → 无自动验证，仅标记 `unverified`，需要人工确认
+- **配置了命令** → 执行，成功则写 `pass`，失败则自动回滚上一次 commit
+
+不再强制绑定 pytest — 任何可执行的 shell 命令都可以作为验证命令。
+
+---
+
+## 报告模板（Telegram）
+
+```markdown
+📋 项目改进报告 — {project_name}
+
+完成: {done_count} 个任务
+耗时: {duration}
+结果: {result}
+
+{if failures}:
+⚠️ 失败:
+{list}
+{/if}
+
+{if unverified}:
+⚠️ 未验证，需要人工检查
+{/if}
+
+下一任务: {next_task}
+轮次: {iteration}
 ```
 
 ---
 
-## Setup (3 Steps — Single Command)
+## 项目类型与改进建议对照
 
-Use `init.py` as the single entry point. It auto-detects everything.
+### software（代码项目）
+- 单元测试覆盖、文档、TODO/FIXME 处理
+- CLI 体验、配置管理、错误提示
+- 智能功能（建议、检测）、数据导入导出
+- 成就/连续系统
 
-### Step 1: Run `init.py adopt` (接管已有项目)
+### writing（写作项目）
+- 情节一致性、角色弧线、节奏审查
+- 对话自然性、场景目标与张力
+- 结构完整性、章节钩子
+- 术语一致性、可读性
+
+### video（视频/媒体项目）
+- 脚本结构、镜头语言、过渡
+- 节奏/情绪弧线、连续性（道具/服装/时间线）
+- 音效/音乐 cue、旁白质量
+- 剪辑点、B-roll 覆盖
+
+### research（学术/研究项目）
+- 论文结构、引言/方法/结果/讨论完整
+- 引用完整、格式一致
+- 方法论可复现、假设明确
+- 结论有据、不过度推断、局限性承认
+
+### generic（通用项目）
+- 整体结构清晰、层次导航合理
+- 术语和格式一致、内容无重复
+- 各部分完整无缺口、工作流可自动化环节
+- 关键决策有文档记录
+
+---
+
+## init.py 使用
 
 ```bash
-python scripts/init.py adopt ~/Projects/YOUR_PROJECT
-```
+# 接管已有项目（任何类型）
+python init.py adopt /path/to/project
 
-**What it does — automatically:**
-1. Detects project path, GitHub repo, CLI name, language
-2. Reads existing `config.md` to reuse values
-3. Checks project readiness (VERSION, pytest, git, README)
-4. Writes `config.md`
-5. Detects or creates Cron Job (every 30 min, isolated session)
-6. Initializes `HEARTBEAT.md`, or preserves/deduplicates an existing queue for partially-managed projects
-7. Prints a full status report
+# 从零初始化新项目（会询问项目类型）
+python init.py onboard /path/to/project
 
-```bash
 # 查看项目就绪状态
-python scripts/init.py status ~/Projects/YOUR_PROJECT
-
-# 完全交互式（自动检测所有信息）
-python scripts/init.py adopt
-
-# 从零初始化新项目
-python scripts/init.py onboard ~/Projects/NEW_PROJECT
-```
-
-### Step 2: Done
-
-`init.py adopt` handles everything. If it cannot detect something (Agent ID, Chat ID), it tells you what to set manually.
-
-### Step 3: Verify
-
-```bash
-openclaw cron list
-python scripts/init.py status ~/Projects/YOUR_PROJECT
+python init.py status /path/to/project
 ```
 
 ---
 
-## Telegram Report Template
+## 升级注意事项
 
-**Language**: All text in the report (title, body, commit message, release notes) is generated in the language specified by `project_language` in `config.md`.
-
-**English version:**
-```
-✅ 【Completed: Task Name】
-
-What it is:
-(Plain language, no jargon)
-
-Why it matters:
-(User perspective benefit)
-
-How to use:
-(Concrete command/example)
-
-Test results:
-pytest N passed
-
-New queue:
-#bug: (count) | #feature: (count remaining)
-
-Commit: HASH
-Release: v0.0.X → URL
-```
-
-**Chinese version (project_language: zh):**
-```
-✅ 【已完成: 任务名称】
-
-这是什么：
-（简单易懂地描述）
-
-为什么重要：
-（对用户有什么实际好处）
-
-怎么用：
-（具体命令或示例）
-
-测试结果：
-pytest N passed
-
-当前队列：
-#bug: (count) | #feature: (count remaining)
-
-Commit: HASH
-Release: v0.0.X → URL
-```
-
----
-
-## Risk Warnings
-
-> **⚠️ IMPORTANT — READ BEFORE ENABLING**
-
-### 🔴 Permanent Behavior Change
-Installing this skill **permanently changes agent behavior**. The agent will no longer ask for confirmation before making commits, releasing versions, or modifying project files.
-
-### 🔴 One Project Only
-This skill dedicates one agent to one project. If your agent has other responsibilities, they may be affected when the cron loop runs.
-
-### 🔴 Auto-Commit + Auto-Release
-Every completed task triggers:
-- `git commit && git push`
-- `git tag && gh release create`
-- README.md updates
-- Version number increment
-
-### 🔴 Bootstrap Waits, Not Panics
-When your project is new and not ready, the agent **will not crash or spam you**. It will calmly report what's missing on the first cron, then wait silently on subsequent crons until you fix it.
-
-### 🟡 How to Pause
-Disable the loop without uninstalling the skill:
-```bash
-openclaw cron delete YOUR_CRON_JOB_ID
-```
-
-### 🟡 How to Stop Completely
-```bash
-openclaw cron delete YOUR_CRON_JOB_ID
-clawhub uninstall autonomous-improvement-loop
-```
-
----
-
-## Prerequisites
-
-- [ ] `gh` CLI authenticated (`gh auth status`)
-- [ ] Project cloned locally (`~/Projects/PROJECT`)
-- [ ] Telegram chat ID known
-- [ ] OpenClaw agent ID known
-
-**Run `bootstrap.py --report` first** — it checks everything else (VERSION, pytest, structure) and tells you exactly what your project needs.
-
----
-
-## Script Reference
-
-| Script | Purpose | Key Command |
-|--------|---------|-------------|
-| `init.py` | **Main entry point** — adopt existing project or onboard new one; auto-detects all settings | `adopt [--project PATH] [--agent ID] [--chat-id ID] [--language en|zh]` / `status [project]` / `onboard project` |
-| `bootstrap.py` | Legacy wizard (replaced by init.py) | `--project . --skill-dir . --report` |
-| `run_status.py` | Read/write Run Status (incl. cron_lock, mode) | `--heartbeat HEARTBEAT.md read` |
-| `priority_scorer.py` | Generate AI scoring prompt (rule fallback) | `--task "..." --type improve` |
-| `queue_scanner.py` | Scan project + append 1 candidate (--scan); or refresh queue to ≥5 items (--refresh) | `--project . --heartbeat HEARTBEAT.md [--language zh] [--refresh --min 5]` |
-| `verify_cli_docs.py` | Check CLI vs README alignment | `--project . --cli-name MYAPP` |
-| `rollback_if_unstable.py` | Push → pytest → auto git revert on fail | `--project . --heartbeat HEARTBEAT.md --task "..."` |
-
----
-
-## Files Summary
-
-| What | Where |
-|------|-------|
-| Skill state | `skills/autonomous-improvement-loop/` |
-| Queue + Status | `skills/autonomous-improvement-loop/HEARTBEAT.md` |
-| Archive | `skills/autonomous-improvement-loop/DEVLOG.md` |
-| Project binding | `skills/autonomous-improvement-loop/config.md` |
-| Cron registration | `openclaw cron list` |
-| Project code | `~/Projects/PROJECT/` |
+- `config.md` 中 `verification_command` 替代了旧的 pytest 绑定
+- `publish_command` 替代了旧的 GitHub Release 字段
+- `project_kind` 字段替代了旧的隐式 Python-only 假设
+- `bootstrap.py` 已降级为 legacy，仅用于旧项目兼容

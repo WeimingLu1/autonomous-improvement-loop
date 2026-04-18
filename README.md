@@ -1,6 +1,6 @@
 # Autonomous Improvement Loop
 
-**One agent. One project. Cron-driven autonomous development queue.**
+**One agent. One project. Cron-driven autonomous improvement queue.**
 
 [![ClawHub](https://img.shields.io/badge/Install-ClawHub-6B57FF?style=flat-square)](https://clawhub.ai/weiminglu1/autonomous-improvement-loop)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -9,25 +9,39 @@
 
 ## What Is This?
 
-A skill for [OpenClaw](https://github.com/openclaw/openclaw) agents that turns your agent into a **self-sustaining development machine** for a single project.
+A skill for [OpenClaw](https://github.com/openclaw/openclaw) agents that turns your agent into a **self-sustaining improvement machine** for a single project.
+
+**Type-agnostic** — works for any long-running project:
+
+- **Software** — code, CLI tools, libraries
+- **Writing** — novels, scripts, blog posts
+- **Video** — scripts, storyboards, footage projects
+- **Research** — papers, theses, literature reviews
+- **Generic** — any structured long-term work
 
 Once installed and configured:
 
 - Your agent continuously improves your project on a schedule (cron-driven)
 - All improvement tasks go through an AI-prioritized queue (HEARTBEAT.md)
-- Every completed task → `git commit` → `git push` → GitHub Release → Telegram report
+- Every completed task → commit → optional publish → report
 - Queue stays full automatically — the scanner keeps finding new tasks
 - The agent never loses context — it remembers the queue across sessions
 
-## Two Modes
+---
 
-### Normal Loop — For Established Projects
+## Project Types
 
-Your agent picks the highest-priority task from the queue, implements it, commits, releases, and reports back. No manual intervention needed.
+The skill auto-detects your project type and generates relevant improvement ideas.
 
-### Bootstrap Mode — For New Projects
+| Type | Indicators | Example improvements |
+|------|-----------|---------------------|
+| `software` | `src/`, `tests/`, `Cargo.toml` | test coverage, docs, CLI UX |
+| `writing` | `chapters/`, `outline.md` | plot consistency, pacing, character voice |
+| `video` | `scripts/`, `scenes/`, `storyboard/` | scene pacing, shot clarity, continuity |
+| `research` | `papers/`, `references/`, `*.tex` | citation gaps, structure, methodology |
+| `generic` | any directory | structure, clarity, consistency |
 
-If your project is too new (no VERSION, no tests, empty queue), the agent enters Bootstrap Mode. It tells you exactly what's missing and waits until you're ready — it won't touch your code until the foundation is in place.
+---
 
 ## Quick Start
 
@@ -37,14 +51,14 @@ If your project is too new (no VERSION, no tests, empty queue), the agent enters
 clawhub install autonomous-improvement-loop
 ```
 
-### 2. One-Command Onboarding
+### 2. One-command setup
 
 ```bash
-# 接管已有项目（保留现有队列）
-python scripts/init.py adopt ~/Projects/YOUR_PROJECT --agent YOUR_AGENT_ID --chat-id YOUR_CHAT_ID --language zh
+# 接管已有项目（任何类型）
+python scripts/init.py adopt ~/Projects/YOUR_PROJECT
 
-# 新项目引导
-python scripts/init.py onboard ~/Projects/YOUR_PROJECT --agent YOUR_AGENT_ID --chat-id YOUR_CHAT_ID --language zh
+# 从零初始化新项目（会询问项目类型）
+python scripts/init.py onboard ~/Projects/MyProject
 
 # 查看项目状态
 python scripts/init.py status ~/Projects/YOUR_PROJECT
@@ -52,13 +66,13 @@ python scripts/init.py status ~/Projects/YOUR_PROJECT
 
 | Subcommand | Use case |
 |------------|----------|
-| `adopt` | 接管已有项目，保留现有队列，自动创建/更新 cron |
-| `onboard` | 新项目引导，生成初始队列，设置 cron |
-| `status` | 查看项目就绪状态、队列内容、cron 状态 |
+| `adopt` | Take over an existing project, preserve queue, create cron |
+| `onboard` | Bootstrap a brand-new project, set up directory structure |
+| `status` | Show readiness, queue contents, cron status |
 
-### 3. Cron Starts Automatically
+### 3. Cron starts automatically
 
-After `adopt` or `onboard`, the cron job is created and runs every 30 minutes. No manual cron setup needed.
+After `adopt` or `onboard`, the cron job runs every 30 minutes automatically.
 
 ---
 
@@ -71,127 +85,104 @@ Cron fires (every 30 min)
 Acquire cron_lock (prevent concurrent runs)
     │
     ▼
-Read queue (HEARTBEAT.md) → pick top task by score
+project_insights.py — auto-detect project type, generate improvement ideas
     │
     ▼
-Implement + pytest
+Pick top task from queue (highest score, not yet done)
     │
     ▼
-git add → commit → push
+Agent implements the task → git commit
     │
     ▼
-pytest → auto-revert on failure (rollback_on_fail)
+verify_and_revert.py — run verification_command from config.md
+  - pass    → mark done, push
+  - fail    → auto-revert commit, push
+  - unverified (no command configured) → mark unverified, notify
     │
     ▼
-VERSION bump + GitHub Release
+Telegram report + update HEARTBEAT.md
     │
     ▼
-Telegram report to owner
-    │
-    ▼
-Refresh queue (queue_scanner.py) if pending < 5
-    │
-    ▼
-Release cron_lock → wait for next cron
+Queue refreshed if below minimum
 ```
 
 ---
 
-## Queue Priority
+## Verification & Rollback
 
-| Score | Meaning |
-|-------|---------|
-| 100 | User request (forced to #1 immediately) |
-| 90-100 | Bug breaking core functionality |
-| 70-89 | Bug in non-core feature |
-| 65-79 | Important feature enhancement |
-| 50-64 | General feature / internal improvement |
-| 30-49 | Tests, docs, code quality |
+The skill reads `verification_command` from `config.md`.
 
-**Queue rules:**
-- User request → score=100 → inserted at #1, all others shift down
-- During cron execution (cron_lock=true): user requests can still queue, agent refuses direct file edits
-- After any addition: re-sort by score descending, rewrite HEARTBEAT.md
-- Scanner refresh: if pending < 5, scan code for new candidates automatically
+- **Empty** → no auto-verification, task marked `unverified`
+- **Configured** → runs the command; on failure, auto-reverts the last commit
 
----
+Examples:
 
-## File Structure
+```yaml
+# Software: run test suite
+verification_command: pytest tests/ -q
 
-```
-autonomous-improvement-loop/
-├── SKILL.md                  # Skill definition (for OpenClaw)
-├── README.md                 # This file
-├── config.md                 # Project binding configuration
-├── HEARTBEAT.md              # Queue + Run Status (the agent's memory)
-├── DEVLOG.md                 # Completed tasks archive
-├── prompts/
-│   └── QUEUE_SYSTEM_PROMPT.md   # System prompt for queue operations
-└── scripts/
-    ├── init.py               # Uni entry point: adopt / onboard / status
-    ├── queue_scanner.py      # Scan code → append candidates to queue
-    ├── priority_scorer.py    # AI priority scoring for queue entries
-    ├── run_status.py         # Read/write Run Status section
-    ├── verify_cli_docs.py    # Check CLI help vs README consistency
-    └── rollback_if_unstable.py  # Auto-revert on pytest failure
+# Writing: spell-check
+verification_command: python -m spellchecker .
+
+# Video: duration check
+verification_command: ffprobe -v error -show_entries format=duration -i footage.mov
+
+# Research: structure check
+verification_command: python -m mypaper.check
 ```
 
 ---
 
-## Skill Lifecycle
+## Configuration (config.md)
 
-### Install → Configure → Adopt
+```yaml
+project_path: .
+project_kind: generic      # software | writing | video | research | generic
+                          # leave empty for auto-detection
+project_language: zh      # zh = Chinese, en = English
+github_repo: https://github.com/OWNER/REPO
 
-```bash
-# 1. Install from ClawHub
-clawhub install autonomous-improvement-loop
+verification_command:       # empty = no auto-verification
+publish_command:          # optional: runs after successful task
 
-# 2. Configure project binding
-# (init.py adopt does this automatically, or edit config.md manually)
-
-# 3. One-command adopt
-python scripts/init.py adopt ~/Projects/YOUR_PROJECT \
-  --agent YOUR_AGENT_ID \
-  --chat-id YOUR_CHAT_ID \
-  --language zh
-```
-
-### config.md Fields
-
-```markdown
-project_path: ~/Projects/YOUR_PROJECT
-repo: https://github.com/OWNER/REPO
-version_file: ~/Projects/YOUR_PROJECT/VERSION
-docs_agent_dir: ~/Projects/YOUR_PROJECT/docs/agent
-cli_name: your-cli
-agent_id: YOUR_AGENT_ID
-chat_id: "YOUR_CHAT_ID"
-project_language: zh          # "zh" = Chinese output, "en" = English
 cron_schedule: "*/30 * * * *"
-cron_timeout: 3600
-cron_job_id: "uuid-here"
+cron_enabled: true
 ```
 
 ---
 
-## Risk Warnings
+## Queue Format (HEARTBEAT.md)
 
-> **⚠️ This skill permanently changes agent behavior.**
+```
+| # | Type | Score | Content | Source | Status | Created |
+|---|------|-------|---------|--------|--------|---------|
+| 1 | improve | 72 | [[Improve]] 为未测试的模块补齐单元测试 | scanner | done | 2026-04-18 |
+```
 
-- Agent auto-commits, auto-releases, auto-modifies code
-- One agent × one project only
-- Disable cron job to pause: `openclaw cron delete <job-id>`
-- User requests are always force-queued at score=100
-- `rollback_on_fail: true` — pytest failure triggers automatic git revert
+- **Type**: `improve` | `feature` | `fix` | `wizard` | `user`
+- **Score**: 1–100 (higher = more urgent)
+- **Source**: `scanner` | `user` | `agent`
+- **Status**: `pending` | `done` | `skip`
 
 ---
 
-## Install via ClawHub
+## Scripts
 
-The latest version is always on ClawHub:
+| Script | Purpose |
+|--------|---------|
+| `init.py` | adopt / onboard / status — the main setup tool |
+| `project_insights.py` | Scan project, generate improvement candidates |
+| `priority_scorer.py` | Score queue entries (supports user requests) |
+| `verify_and_revert.py` | Run verification, rollback on failure |
+| `run_status.py` | Read/write Run Status section |
+| `bootstrap.py` | Legacy helper for Python software projects |
 
-**https://clawhub.ai/weiminglu1/autonomous-improvement-loop**
+---
 
-## License
+## Migrating from v4 / v5
 
-MIT-0 — Free to use, modify, and redistribute. No attribution required.
+- `queue_scanner.py` → renamed to `project_insights.py` (same interface, generic buckets)
+- `rollback_if_unstable.py` → renamed to `verify_and_revert.py` (reads `verification_command` from config)
+- `config.md` fields `version_file`, `cli_name`, `docs_dir` → removed (no longer required)
+- `config.md` new fields: `project_kind`, `verification_command`, `publish_command`
+- `project_language` replaces per-command `--zh` flags

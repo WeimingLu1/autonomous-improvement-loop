@@ -256,18 +256,65 @@ def detect_gh_authenticated() -> bool:
 
 # ── Project readiness ─────────────────────────────────────────────────────────
 
+def _read_kind_from_config() -> str:
+    """Try to read project_kind from config.md."""
+    if not CONFIG_FILE.exists():
+        return "generic"
+    for line in CONFIG_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line.startswith("project_kind:"):
+            val = line.partition(":")[2].strip()
+            return val if val else "generic"
+    return "generic"
+
+
 def check_project_readiness(project: Path) -> dict[str, bool]:
-    return {
-        "VERSION 文件存在": (project / "VERSION").exists(),
+    kind = _read_kind_from_config()
+    build_cfg = detect_build_config(project)
+    test_ok, test_cmd = detect_any_test_command(project)
+    readme_ok = any((project / f).exists() for f in
+                     ["README.md", "README.rst", "README", "README.zh.md"])
+
+    base = {
         "Git 仓库": (project / ".git").exists(),
-        "src/ 目录": (project / "src").exists(),
-        "tests/ 目录": (project / "tests").exists(),
-        "README 存在": any((project / f).exists() for f in
-                            ["README.md", "README.rst", "README", "README.zh.md"]),
-        "pyproject.toml 或 setup.py": any(
-            (project / f).exists() for f in ["pyproject.toml", "setup.py", "setup.cfg"]),
-        "pytest 可用": detect_pytest_available(),
+        "README 存在": readme_ok,
         "GitHub CLI 已认证": detect_gh_authenticated(),
+    }
+
+    if kind == "software":
+        build_label = f"构建系统 ({build_cfg})" if build_cfg else "构建系统"
+        test_label = f"验证命令 ({test_cmd})" if test_cmd else "验证命令"
+        return {
+            **base,
+            "源码目录存在": any((project / d).exists() for d in ["src", "lib", "app", "packages"]),
+            build_label: bool(build_cfg),
+            test_label: test_ok if test_cmd else not (project / "tests").exists(),
+        }
+    if kind == "writing":
+        return {
+            **base,
+            "内容目录存在": any((project / d).exists() for d in ["chapters", "manuscript", "drafts", "scenes"]),
+            "大纲存在": any((project / f).exists() for f in ["outline.md", "outline.txt"]),
+            "角色/素材目录存在": any((project / d).exists() for d in ["characters", "notes", "materials"]),
+        }
+    if kind == "video":
+        return {
+            **base,
+            "脚本目录存在": any((project / d).exists() for d in ["scripts", "scenes"]),
+            "分镜/素材目录存在": any((project / d).exists() for d in ["storyboard", "assets", "footage"]),
+            "大纲存在": any((project / f).exists() for f in ["outline.md", "treatment.md"]),
+        }
+    if kind == "research":
+        return {
+            **base,
+            "研究内容目录存在": any((project / d).exists() for d in ["papers", "notes", "references"]),
+            "大纲存在": any((project / f).exists() for f in ["outline.md", "proposal.md"]),
+            "引用/文献存在": any((project / d).exists() for d in ["references", "bib"]),
+        }
+    return {
+        **base,
+        "内容目录存在": any((project / d).exists() for d in ["docs", "materials", "notes", "content", "assets"]),
+        "结构文件存在": any((project / f).exists() for f in ["outline.md", "index.md", "README.md"]),
     }
 
 
@@ -276,34 +323,27 @@ def check_project_readiness(project: Path) -> dict[str, bool]:
 def build_config(
     project_path: Path,
     repo: str,
-    version_file: Path,
-    docs_dir: Path,
-    cli_name: str,
+    version_file: Path | None,
+    docs_dir: Path | None,
+    cli_name: str | None,
     agent_id: str,
     chat_id: str,
     language: str,
     cron_job_id: str | None,
+    project_kind: str | None = None,
 ) -> str:
+    kind_line = f"    project_kind: {project_kind or 'generic'}   # software | writing | video | research | generic"
     return textwrap.dedent(f"""\
     # Autonomous Improvement Loop — Project Configuration
 
     > Fill in this file after installing the skill to bind it to your project.
-    > All scripts read paths, repo, and version info from this file.
 
-    ## Project Path
+    ## Project
     project_path: {project_path.expanduser().resolve()}
+    {kind_line}
 
     ## GitHub Repository
     repo: {repo}
-
-    ## Version File
-    version_file: {version_file.expanduser().resolve()}
-
-    ## Project Docs Directory
-    docs_agent_dir: {docs_dir.expanduser().resolve()}
-
-    ## CLI Name
-    cli_name: {cli_name}
 
     ## OpenClaw Agent ID
     agent_id: {agent_id}
@@ -314,7 +354,11 @@ def build_config(
     ## Project Language
     project_language: {language}   # "en" = English output, "zh" = Chinese output
 
-    ## Cron Schedule
+    ## Verification & Publish
+    verification_command:   # empty = no auto-verification
+    publish_command:        # optional: shell command after successful task
+
+    ## Cron
     cron_schedule: "*/30 * * * *"
     cron_timeout: {DEFAULT_TIMEOUT_S}
     cron_job_id: {cron_job_id or ""}
@@ -324,17 +368,18 @@ def build_config(
 def write_config(
     project_path: Path,
     repo: str,
-    version_file: Path,
-    docs_dir: Path,
-    cli_name: str,
+    version_file: Path | None,
+    docs_dir: Path | None,
+    cli_name: str | None,
     agent_id: str,
     chat_id: str,
     language: str,
     cron_job_id: str | None = None,
+    project_kind: str | None = None,
 ) -> None:
     config = build_config(
         project_path, repo, version_file, docs_dir, cli_name,
-        agent_id, chat_id, language, cron_job_id,
+        agent_id, chat_id, language, cron_job_id, project_kind,
     )
     write_file(CONFIG_FILE, config + "\n")
 
@@ -410,7 +455,7 @@ def seed_queue(project: Path, mode: str, language: str) -> None:
     run(
         [
             sys.executable,
-            str(HERE / "queue_scanner.py"),
+            str(HERE / "project_insights.py"),
             "--project", str(project),
             "--heartbeat", str(HEARTBEAT),
             "--language", language,
@@ -690,6 +735,50 @@ def cmd_adopt(
 
 # ── Onboard: 从零初始化新项目 ──────────────────────────────────────────────────
 
+_KNOWN_TYPES = {
+    "software": "代码/CLI 项目（src/, tests/, 构建配置）",
+    "writing": "写作项目（chapters/, outline.md, characters/）",
+    "video": "视频/媒体项目（scripts/, scenes/, storyboard/）",
+    "research": "学术/研究项目（papers/, references/, notes/）",
+    "generic": "通用项目（docs/, materials/, README）",
+}
+
+
+def _scaffold_project(project: Path, kind: str) -> None:
+    """Create minimal directory structure based on project kind."""
+    project.mkdir(parents=True, exist_ok=True)
+    if kind == "software":
+        (project / "src").mkdir(exist_ok=True)
+        (project / "tests").mkdir(exist_ok=True)
+        (project / "docs").mkdir(exist_ok=True)
+        (project / "docs" / "agent").mkdir(exist_ok=True)
+        (project / "src" / ".gitkeep").touch()
+        (project / "tests" / ".gitkeep").touch()
+    elif kind == "writing":
+        (project / "chapters").mkdir(exist_ok=True)
+        (project / "characters").mkdir(exist_ok=True)
+        (project / "outline.md").write_text("# 大纲\n\n", encoding="utf-8")
+        (project / "characters" / "README.md").write_text("# 角色设定\n\n", encoding="utf-8")
+        (project / "chapters" / ".gitkeep").touch()
+    elif kind == "video":
+        (project / "scripts").mkdir(exist_ok=True)
+        (project / "scenes").mkdir(exist_ok=True)
+        (project / "storyboard").mkdir(exist_ok=True)
+        (project / "assets").mkdir(exist_ok=True)
+        (project / "scripts" / "outline.md").write_text("# 脚本大纲\n\n", encoding="utf-8")
+        (project / "scenes" / ".gitkeep").touch()
+    elif kind == "research":
+        (project / "papers").mkdir(exist_ok=True)
+        (project / "references").mkdir(exist_ok=True)
+        (project / "notes").mkdir(exist_ok=True)
+        (project / "outline.md").write_text("# 研究大纲\n\n", encoding="utf-8")
+        (project / "references" / "README.md").write_text("# 参考文献\n\n", encoding="utf-8")
+    else:
+        (project / "docs").mkdir(exist_ok=True)
+        (project / "materials").mkdir(exist_ok=True)
+        (project / "docs" / "README.md").write_text("# 文档\n\n", encoding="utf-8")
+
+
 def cmd_onboard(
     project: Path,
     agent_id: str,
@@ -697,24 +786,35 @@ def cmd_onboard(
     language: str,
     model: str = "MODEL",
 ) -> None:
-    step("🆕 从零初始化新项目 — Bootstrap 向导")
+    step("🆕 从零初始化新项目")
 
     if project.exists() and any(project.iterdir()):
         warn(f"目录 {project} 非空，视为已有项目。使用 adopt 模式更合适。")
         print(f"  python init.py adopt {project}")
         sys.exit(1)
 
+    # Step 1: pick project kind
+    step("📂 选择项目类型")
+    for key, desc in _KNOWN_TYPES.items():
+        print(f"  {c(key, COLOR_GREEN):12} {desc}")
+    print()
+    kind = ask("项目类型（software / writing / video / research / generic）", "generic").strip().lower()
+    if kind not in _KNOWN_TYPES:
+        warn(f"未知类型 '{kind}'，使用 generic。")
+        kind = "generic"
+
+    # Step 2: confirm
     print(textwrap.dedent(f"""
     此向导帮助创建一个 AI-ready 的新项目结构。
 
     完成后会：
-    1. 创建基础目录结构（src/, tests/, docs/）
-    2. 生成 pyproject.toml
-    3. 写入 VERSION 文件
-    4. 配置 Autonomous Improvement Loop
-    5. 启动 Cron
+    1. 创建基础目录结构（按 {kind} 类型）
+    2. 初始化 Git 仓库
+    3. 配置 Autonomous Improvement Loop
+    4. 启动 Cron
 
     项目目录: {project}
+    项目类型: {kind}
     语言: {'中文' if language == 'zh' else 'English'}
     """))
 
@@ -722,84 +822,39 @@ def cmd_onboard(
         print("取消。")
         sys.exit(0)
 
-    # Create structure
-    project.mkdir(parents=True, exist_ok=True)
-    (project / "src").mkdir(exist_ok=True)
-    (project / "tests").mkdir(exist_ok=True)
-    (project / "docs").mkdir(exist_ok=True)
-    (project / "docs" / "agent").mkdir(exist_ok=True)
-    ok("目录结构已创建")
+    # Step 3: scaffold
+    step("🏗  创建项目结构")
+    _scaffold_project(project, kind)
+    ok(f"目录结构已创建（{kind}）")
 
-    # pyproject.toml
-    pyproject = f"""\
-[project]
-name = "{project.name.lower().replace('-', '_')}"
-version = "0.0.1"
-description = "A project maintained by Autonomous Improvement Loop"
-requires-python = ">=3.11"
-dependencies = []
-
-[project.scripts]
-health = "health_agent.cli.main:app"
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-"""
-
-    cli_name = project.name.lower().replace("-", "")
-    pyproject = pyproject.replace("health_agent", cli_name)
-    write_file(project / "pyproject.toml", pyproject)
-    ok("pyproject.toml 已创建")
-
-    # VERSION
-    write_file(project / "VERSION", "0.0.1")
-    ok("VERSION 文件已创建")
-
-    # README
-    readme = f"""# {project.name}
-
-## 安装
-
-```bash
-pip install -e .
-```
-
-## 使用
-
-```bash
-health --help
-```
-"""
-    write_file(project / "README.md", readme)
-    ok("README.md 已创建")
-
-    # Initialize git
+    # Step 4: git
     if not (project / ".git").exists():
         run(["git", "init"], cwd=project)
         ok("Git 仓库已初始化")
 
-    # GitHub repo (optional)
+    # Step 5: GitHub repo (optional)
     gh_remote = ask("\n  GitHub repo URL（可选，直接回车跳过）")
     if gh_remote:
         run(["git", "remote", "add", "origin", gh_remote], cwd=project)
         ok(f"Git remote 已设置: {gh_remote}")
 
-    # Write config
+    # Step 6: write config
     step("📝 写入 config.md")
     write_config(
         project_path=project,
         repo=gh_remote or "https://github.com/OWNER/REPO",
-        version_file=project / "VERSION",
-        docs_dir=project / "docs" / "agent",
-        cli_name=project.name.lower().replace("-", ""),
+        version_file=None,
+        docs_dir=None,
+        cli_name=None,
         agent_id=agent_id or "YOUR_AGENT_ID",
         chat_id=chat_id or "YOUR_TELEGRAM_CHAT_ID",
         language=language,
         cron_job_id=None,
+        project_kind=kind,
     )
     ok("config.md 已写入")
 
-    # Init heartbeat (bootstrap mode)
+    # Step 7: init heartbeat
     step("📋 初始化 HEARTBEAT.md")
     init_queue_heartbeat(mode="bootstrap", language=language)
     ok("HEARTBEAT.md 已初始化（模式: bootstrap）")
@@ -808,14 +863,14 @@ health --help
     {c('✅ 新项目初始化完成!', COLOR_GREEN + COLOR_BOLD)}
 
     项目: {project.name}
+    类型: {kind}
     目录: {project}
 
     下一步:
-    1. cd {project} && pip install -e ".[dev]"
-    2. health --help
-    3. python init.py adopt {project}  # 完成接管
+      python init.py adopt {project}  # 完成接管，启动 Cron
 
-    Cron 会在首次 adopt 时创建。
+    查看队列:
+      cat {HEARTBEAT}
     """))
 
 
