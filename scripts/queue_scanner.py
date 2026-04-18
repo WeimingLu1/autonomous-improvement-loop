@@ -138,10 +138,10 @@ def ux_improvements(project: Path, lang: str = "zh") -> list[str]:
             "Add progress bar for long-running operations like data export",
             "Improve error messages: show suggested fix when a command fails",
             "Add shell completions (bash/zsh/fish) for the CLI",
-            "Add interactive wizard mode for `health profile init`",
+            "Add interactive wizard mode for `MYAPP profile init`",
             "Add confirmation prompt before destructive commands (delete, reset)",
             "Add `--verbose` flag to show detailed execution info",
-            "Support config file (~/.healthagent.yaml) to set defaults",
+            "Support config file (~/.myapp.yaml) to set defaults",
         ])
     else:
         ideas.extend([
@@ -149,10 +149,10 @@ def ux_improvements(project: Path, lang: str = "zh") -> list[str]:
             "为耗时的操作（如导出）增加进度条",
             "改进错误提示：命令失败时给出修复建议",
             "为 CLI 增加 shell 自动补全（bash/zsh/fish）",
-            "为 `health profile init` 增加交互式引导模式",
+            "为 `MYAPP profile init` 增加交互式引导模式",
             "为危险命令（删除、重置）增加确认提示",
             "增加 `--verbose` 选项显示详细执行信息",
-            "支持配置文件（~/.healthagent.yaml）设置默认参数",
+            "支持配置文件（~/.myapp.yaml）设置默认参数",
         ])
     return ideas
 
@@ -162,25 +162,25 @@ def feature_enhancements(project: Path, lang: str = "zh") -> list[str]:
     ideas: list[str] = []
     if lang == "en":
         ideas.extend([
-            "Add `health export timeline` command: export events as a readable daily timeline",
-            "Add `health summary streak` command: show consecutive days of logging",
-            "Add `health check --suggest` to not just report signals but suggest next actions",
-            "Add `health log --undo` to undo the last logged event",
-            "Add `health compare` command: compare this week vs last week",
+            "Add `MYAPP export timeline` command: export events as a readable daily timeline",
+            "Add `MYAPP summary streak` command: show consecutive days of logging",
+            "Add `MYAPP check --suggest` to not just report signals but suggest next actions",
+            "Add `MYAPP log --undo` to undo the last logged event",
+            "Add `MYAPP compare` command: compare this week vs last week",
             "Add tag/category support for events (e.g., 'workout:running', 'meal:low-carb')",
-            "Add `health check --json` to output structured rule results",
-            "Add `health profile export/import` to backup and restore profile data",
+            "Add `MYAPP check --json` to output structured rule results",
+            "Add `MYAPP profile export/import` to backup and restore profile data",
         ])
     else:
         ideas.extend([
-            "新增 `health export timeline` 命令：导出为可读的每日时间线",
-            "新增 `health summary streak` 命令：显示连续记录天数",
-            "改进 `health check --suggest`：不仅报信号，还给出下一步行动建议",
-            "新增 `health log --undo`：撤销上一条记录",
-            "新增 `health compare` 命令：对比本周与上周的数据",
+            "新增 `MYAPP export timeline` 命令：导出为可读的每日时间线",
+            "新增 `MYAPP summary streak` 命令：显示连续记录天数",
+            "改进 `MYAPP check --suggest`：不仅报信号，还给出下一步行动建议",
+            "新增 `MYAPP log --undo`：撤销上一条记录",
+            "新增 `MYAPP compare` 命令：对比本周与上周的数据",
             "为事件增加标签/分类支持（如 'workout:running', 'meal:low-carb'）",
-            "为 `health check` 增加 `--json` 输出结构化规则结果",
-            "新增 `health profile export/import`：备份和恢复 profile 数据",
+            "为 `MYAPP check` 增加 `--json` 输出结构化规则结果",
+            "新增 `MYAPP profile export/import`：备份和恢复 profile 数据",
         ])
     return ideas
 
@@ -190,18 +190,18 @@ def intelligence_features(project: Path, lang: str = "zh") -> list[str]:
     ideas: list[str] = []
     if lang == "en":
         ideas.extend([
-            "Add `health insight` command: proactive health tip based on recent patterns",
+            "Add `MYAPP insight` command: proactive health tip based on recent patterns",
             "Detect abnormal values automatically and warn user (e.g., unusually high BP)",
-            "Add weekly health digest: summarize the week and highlight anomalies",
+            "Add weekly MYAPP digest: summarize the week and highlight anomalies",
             "Add goal tracking: compare actual exercise/sleep vs user's set goals",
             "Predict next-week sleep/exercise trends based on historical patterns",
             "Add meal nutrition estimation hint when logging meals",
         ])
     else:
         ideas.extend([
-            "新增 `health insight` 命令：基于近期规律主动推送健康提示",
+            "新增 `MYAPP insight` 命令：基于近期规律主动推送应用提示",
             "自动检测异常数值并提醒用户（如血压异常高）",
-            "新增每周健康摘要：总结本周数据并标注异常",
+            "新增每周应用摘要：总结本周数据并标注异常",
             "新增目标追踪：对比实际运动/睡眠与设定目标的差距",
             "基于历史数据预测下周睡眠/运动趋势",
             "记录饮食时自动估算营养素（热量、碳水、蛋白质）",
@@ -215,18 +215,18 @@ def data_capabilities(project: Path, lang: str = "zh") -> list[str]:
     if lang == "en":
         ideas.extend([
             "Add CSV import: bulk-import historical data from spreadsheets",
-            "Add `health export json` for structured data export (already exists for some)",
+            "Add `MYAPP export json` for structured data export (already exists for some)",
             "Add Apple Health / Google Fit import integration",
-            "Add `health backup` command: export entire database to a file",
-            "Add `health restore` command: import backup file to restore data",
+            "Add `MYAPP backup` command: export entire database to a file",
+            "Add `MYAPP restore` command: import backup file to restore data",
         ])
     else:
         ideas.extend([
             "新增 CSV 导入：批量从表格导入历史数据",
-            "统一 `health export` 各子命令的 JSON 输出格式",
+            "统一 `MYAPP export` 各子命令的 JSON 输出格式",
             "新增 Apple Health / Google Fit 数据导入集成",
-            "新增 `health backup` 命令：导出完整数据库备份",
-            "新增 `health restore` 命令：从备份文件恢复数据",
+            "新增 `MYAPP backup` 命令：导出完整数据库备份",
+            "新增 `MYAPP restore` 命令：从备份文件恢复数据",
         ])
     return ideas
 
@@ -239,7 +239,7 @@ def engagement_features(project: Path, lang: str = "zh") -> list[str]:
             "Add achievement badges: 'First Log', '7-day streak', 'Marathon month'",
             "Add motivational messages when user maintains a good streak",
             "Add daily check-in reminder via system notification",
-            "Add `health score` command: give an overall health score 0-100",
+            "Add `MYAPP score` command: give an overall health score 0-100",
             "Add leaderboard: track personal bests across time periods",
         ])
     else:
@@ -247,7 +247,7 @@ def engagement_features(project: Path, lang: str = "zh") -> list[str]:
             "新增成就徽章：'首次记录'、'连续7天'、'运动达人月'",
             "当用户保持连续记录时发送激励消息",
             "新增每日签到提醒（系统通知）",
-            "新增 `health score` 命令：给出综合健康评分 0-100",
+            "新增 `MYAPP score` 命令：给出综合应用评分 0-100",
             "新增个人记录排行榜：追踪不同时段的最佳成绩",
         ])
     return ideas
@@ -375,7 +375,7 @@ def _score_finding(finding: str) -> int:
         return 68
     if any(k in finding_lower for k in ['suggest', 'compare', 'undo', 'wizard', 'completion', '建议', '对比', '撤销', '补全']):
         return 70
-    if any(k in finding_lower for k in ['health check', 'check --json', '规则']):
+    if any(k in finding_lower for k in ['MYAPP check', 'check --json', '规则']):
         return 62
     if any(k in finding_lower for k in ['error', 'verbose', 'config', 'confirm', '错误', '详细', '配置', '确认']):
         return 55

@@ -8,13 +8,13 @@ Autonomous Improvement Loop — 初始化向导
 
 用法：
   # 接管已有项目（最常用）
-  python init.py adopt ~/Projects/HealthAgent
+  python init.py adopt ~/Projects/YOUR_PROJECT
 
   # 从零初始化新项目
   python init.py onboard ~/Projects/MyProject
 
   # 查看项目就绪状态
-  python init.py status ~/Projects/HealthAgent
+  python init.py status ~/Projects/YOUR_PROJECT
 
   # 交互式向导（自动检测所有信息）
   python init.py adopt
@@ -192,7 +192,7 @@ def detect_cli_name(project: Path) -> str:
 
 def detect_openclaw_agent_id() -> str | None:
     """Read agent id from openclaw config or workspace."""
-    # Prefer current skill workspace path (e.g. .../.openclaw/workspace-viya/...)
+    # Prefer current skill workspace path (e.g. .../.openclaw/workspace-YOUR_AGENT/...)
     for parent in HERE.parents:
         if parent.name.startswith("workspace-"):
             return parent.name.replace("workspace-", "")
@@ -543,7 +543,7 @@ def cmd_adopt(
     agent_id: str,
     chat_id: str | None,
     language: str,
-    model: str = "minimax-portal/MiniMax-M2.7",
+    model: str = "MODEL",
     force_new_cron: bool = False,
 ) -> None:
     step("🔍 接管已有项目 — 初始化向导")
@@ -628,7 +628,7 @@ def cmd_adopt(
         version_file=version_file,
         docs_dir=docs_dir,
         cli_name=cli_name,
-        agent_id=agent_id or "viya",
+        agent_id=agent_id or "YOUR_AGENT_ID",
         chat_id=chat_id or "YOUR_TELEGRAM_CHAT_ID",
         language=language,
         cron_job_id=cron_job_id,
@@ -695,7 +695,7 @@ def cmd_onboard(
     agent_id: str,
     chat_id: str | None,
     language: str,
-    model: str = "minimax-portal/MiniMax-M2.7",
+    model: str = "MODEL",
 ) -> None:
     step("🆕 从零初始化新项目 — Bootstrap 向导")
 
@@ -792,7 +792,7 @@ health --help
         version_file=project / "VERSION",
         docs_dir=project / "docs" / "agent",
         cli_name=project.name.lower().replace("-", ""),
-        agent_id=agent_id or "viya",
+        agent_id=agent_id or "YOUR_AGENT_ID",
         chat_id=chat_id or "YOUR_TELEGRAM_CHAT_ID",
         language=language,
         cron_job_id=None,
@@ -898,13 +898,13 @@ def main() -> int:
             用法示例:
 
               # 接管已有项目（最常用）
-              python init.py adopt ~/Projects/HealthAgent
+              python init.py adopt ~/Projects/YOUR_PROJECT
 
               # 从零初始化新项目
               python init.py onboard ~/Projects/MyProject
 
               # 查看项目就绪状态
-              python init.py status ~/Projects/HealthAgent
+              python init.py status ~/Projects/YOUR_PROJECT
 
               # 完全交互式（自动检测所有信息）
               python init.py adopt
@@ -920,7 +920,7 @@ def main() -> int:
     adopt_p.add_argument("--language", "--lang", "-l", default=None,
                          choices=["en", "zh"],
                          help="项目输出语言")
-    adopt_p.add_argument("--model", "-m", default="minimax-portal/MiniMax-M2.7",
+    adopt_p.add_argument("--model", "-m", default="YOUR_MODEL",
                          help="LLM model for cron sessions")
     adopt_p.add_argument("--force-new-cron", action="store_true",
                          help="强制新建 Cron Job（替换已有的）")
@@ -933,7 +933,7 @@ def main() -> int:
     onboard_p.add_argument("--language", "--lang", "-l", default=None,
                           choices=["en", "zh"],
                           help="项目输出语言")
-    onboard_p.add_argument("--model", "-m", default="minimax-portal/MiniMax-M2.7",
+    onboard_p.add_argument("--model", "-m", default="YOUR_MODEL",
                           help="LLM model for cron sessions")
     onboard_p.set_defaults(func=cmd_onboard)
 

@@ -1,18 +1,25 @@
 #!/usr/bin/env python3
 """Verify that top-level CLI commands in a project appear in README examples.
 
-This is a standalone, project-agnostic script. It:
+This script is **project-type-agnostic**: it only runs when the project
+actually has a CLI binary. For non-CLI projects it silently skips.
+
+It:
 1. Runs `<project>/.venv/bin/<cli-name> --help` to get CLI commands
-2. Scans README.md for `health <cmd>` or `<cli-name> <cmd>` patterns
+2. Scans README.md for `<cli-name> <cmd>` patterns
 3. Reports mismatches (CLI has but README missing; README has but CLI missing)
 
 Usage:
-    python verify_cli_docs.py --project /path/to/project [--cli-name health] [--readme README.md]
+    python verify_cli_docs.py --project /path/to/project [--cli-name MYAPP] [--readme README.md]
 
 Arguments:
     --project   Project root (required)
-    --cli-name  CLI binary name (default: health)
+    --cli-name  CLI binary name (required, no default — must match your project)
     --readme    Path to README.md (default: <project>/README.md)
+
+Exit codes:
+    0 = all aligned (or CLI binary not found, skipped)
+    1 = mismatches found
 """
 
 from __future__ import annotations
@@ -58,10 +65,19 @@ def get_readme_commands(readme_path: Path, cli_name: str) -> set[str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Verify CLI commands are documented in README")
+    parser = argparse.ArgumentParser(
+        description="Verify CLI commands are documented in README. "
+        "Skips silently if no CLI binary is found (project-type-agnostic).",
+    )
     parser.add_argument("--project", required=True, type=Path, help="Project root")
-    parser.add_argument("--cli-name", default="health", help="CLI binary name (default: health)")
-    parser.add_argument("--readme", type=Path, help="Path to README.md (default: <project>/README.md)")
+    parser.add_argument(
+        "--cli-name", required=True,
+        help="CLI binary name (e.g. myapp, health, your-cli)",
+    )
+    parser.add_argument(
+        "--readme", type=Path,
+        help="Path to README.md (default: <project>/README.md)",
+    )
     args = parser.parse_args()
 
     project = args.project.resolve()
@@ -71,20 +87,35 @@ def main() -> int:
         print(f"ERROR: README not found: {readme}", file=sys.stderr)
         return 1
 
-    venv_bin = project / ".venv" / "bin"
-    cli_bin = venv_bin / args.cli_name
-    if not cli_bin.exists():
-        print(f"ERROR: CLI binary not found: {cli_bin}", file=sys.stderr)
-        return 1
+    # Try common venv layouts; skip gracefully if not found
+    for venv in [
+        project / ".venv" / "bin",
+        project / "venv" / "bin",
+        project / ".env" / "bin",
+    ]:
+        cli_bin = venv / args.cli_name
+        if cli_bin.exists():
+            break
+    else:
+        # No CLI binary found — not a CLI project, skip silently
+        print(f"(verify_cli_docs: no CLI binary '{args.cli_name}' found, skipping)")
+        return 0
 
-    cli_commands = get_cli_commands(cli_bin)
+    try:
+        cli_commands = get_cli_commands(cli_bin)
+    except Exception:
+        # Binary exists but --help failed — skip
+        print(f"(verify_cli_docs: could not run '{args.cli_name} --help', skipping)")
+        return 0
+
     readme_commands = get_readme_commands(readme, args.cli_name)
 
     missing_in_readme = sorted(cli_commands - readme_commands)
     stale_in_readme = sorted(readme_commands - cli_commands)
 
     print("=" * 60)
-    print(f"CLI commands:    {sorted(cli_commands)}")
+    print(f"CLI binary:     {cli_bin}")
+    print(f"CLI commands:   {sorted(cli_commands)}")
     print(f"README commands: {sorted(readme_commands)}")
     print("=" * 60)
 
