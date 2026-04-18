@@ -13,33 +13,27 @@ A skill for [OpenClaw](https://github.com/openclaw/openclaw) agents that turns y
 
 **Type-agnostic** — works for any long-running project:
 
-- **Software** — code, CLI tools, libraries
-- **Writing** — novels, scripts, blog posts
-- **Video** — scripts, storyboards, footage projects
-- **Research** — papers, theses, literature reviews
-- **Generic** — any structured long-term work
+| Type | Description | Example improvements |
+|------|-------------|---------------------|
+| `software` | Code projects | test coverage, docs, CLI UX |
+| `writing` | Prose / scripts | plot consistency, pacing, character voice |
+| `video` | Media / footage | scene pacing, shot clarity, continuity |
+| `research` | Papers / theses | citation gaps, structure, methodology |
+| `generic` | Any structured work | structure, clarity, consistency |
 
 Once installed and configured:
 
 - Your agent continuously improves your project on a schedule (cron-driven)
 - All improvement tasks go through an AI-prioritized queue (HEARTBEAT.md)
-- Every completed task → commit → optional publish → report
+- Every completed task → commit → optional verification → report
 - Queue stays full automatically — the scanner keeps finding new tasks
 - The agent never loses context — it remembers the queue across sessions
 
 ---
 
-## Project Types
+## Project Type Auto-Detection
 
-The skill auto-detects your project type and generates relevant improvement ideas.
-
-| Type | Indicators | Example improvements |
-|------|-----------|---------------------|
-| `software` | `src/`, `tests/`, `Cargo.toml` | test coverage, docs, CLI UX |
-| `writing` | `chapters/`, `outline.md` | plot consistency, pacing, character voice |
-| `video` | `scripts/`, `scenes/`, `storyboard/` | scene pacing, shot clarity, continuity |
-| `research` | `papers/`, `references/`, `*.tex` | citation gaps, structure, methodology |
-| `generic` | any directory | structure, clarity, consistency |
+The skill auto-detects your project type and generates relevant improvement ideas. You can also set `project_kind` manually in `config.md`.
 
 ---
 
@@ -54,21 +48,21 @@ clawhub install autonomous-improvement-loop
 ### 2. One-command setup
 
 ```bash
-# 接管已有项目（任何类型）
-python scripts/init.py adopt ~/Projects/YOUR_PROJECT
+# Take over an existing project (any type)
+python scripts/init.py adopt ~/Projects/MY_PROJECT
 
-# 从零初始化新项目（会询问项目类型）
+# Bootstrap a brand-new project (prompts for project type)
 python scripts/init.py onboard ~/Projects/MyProject
 
-# 查看项目状态
-python scripts/init.py status ~/Projects/YOUR_PROJECT
+# Check project readiness and queue
+python scripts/init.py status ~/Projects/MY_PROJECT
 ```
 
 | Subcommand | Use case |
-|------------|----------|
-| `adopt` | Take over an existing project, preserve queue, create cron |
-| `onboard` | Bootstrap a brand-new project, set up directory structure |
-| `status` | Show readiness, queue contents, cron status |
+|-----------|----------|
+| `adopt` | Take over an existing project, preserve existing queue, create cron |
+| `onboard` | Bootstrap a new project with type-appropriate directory structure |
+| `status` | Show readiness checklist, queue contents, cron status |
 
 ### 3. Cron starts automatically
 
@@ -82,7 +76,7 @@ After `adopt` or `onboard`, the cron job runs every 30 minutes automatically.
 Cron fires (every 30 min)
     │
     ▼
-Acquire cron_lock (prevent concurrent runs)
+Acquire cron_lock — prevent concurrent runs
     │
     ▼
 project_insights.py — auto-detect project type, generate improvement ideas
@@ -95,9 +89,9 @@ Agent implements the task → git commit
     │
     ▼
 verify_and_revert.py — run verification_command from config.md
-  - pass    → mark done, push
-  - fail    → auto-revert commit, push
-  - unverified (no command configured) → mark unverified, notify
+  • pass       → mark done, push
+  • fail       → auto-revert commit, push
+  • unverified → mark unverified, notify (no verification_command set)
     │
     ▼
 Telegram report + update HEARTBEAT.md
@@ -112,10 +106,8 @@ Queue refreshed if below minimum
 
 The skill reads `verification_command` from `config.md`.
 
-- **Empty** → no auto-verification, task marked `unverified`
+- **Empty** → no auto-verification; task is marked `unverified`
 - **Configured** → runs the command; on failure, auto-reverts the last commit
-
-Examples:
 
 ```yaml
 # Software: run test suite
@@ -137,13 +129,12 @@ verification_command: python -m mypaper.check
 
 ```yaml
 project_path: .
-project_kind: generic      # software | writing | video | research | generic
-                          # leave empty for auto-detection
-project_language: zh      # zh = Chinese, en = English
+project_kind:           # auto-detected; or: software | writing | video | research | generic
+project_language: en   # zh = Chinese queue output, en = English
 github_repo: https://github.com/OWNER/REPO
 
-verification_command:       # empty = no auto-verification
-publish_command:          # optional: runs after successful task
+verification_command:   # empty = no auto-verification
+publish_command:        # optional: runs after successful task
 
 cron_schedule: "*/30 * * * *"
 cron_enabled: true
@@ -156,11 +147,11 @@ cron_enabled: true
 ```
 | # | Type | Score | Content | Source | Status | Created |
 |---|------|-------|---------|--------|--------|---------|
-| 1 | improve | 72 | [[Improve]] 为未测试的模块补齐单元测试 | scanner | done | 2026-04-18 |
+| 1 | improve | 72 | [[Improve]] Add unit tests for untested module | scanner | done | 2026-04-18 |
 ```
 
 - **Type**: `improve` | `feature` | `fix` | `wizard` | `user`
-- **Score**: 1–100 (higher = more urgent)
+- **Score**: 1–100 (higher = more urgent; user requests = 100)
 - **Source**: `scanner` | `user` | `agent`
 - **Status**: `pending` | `done` | `skip`
 
@@ -170,19 +161,22 @@ cron_enabled: true
 
 | Script | Purpose |
 |--------|---------|
-| `init.py` | adopt / onboard / status — the main setup tool |
-| `project_insights.py` | Scan project, generate improvement candidates |
-| `priority_scorer.py` | Score queue entries (supports user requests) |
+| `init.py` | adopt / onboard / status — main setup tool |
+| `project_insights.py` | Scan project, generate type-specific improvement candidates |
+| `priority_scorer.py` | Score queue entries (supports user request insertion) |
 | `verify_and_revert.py` | Run verification, rollback on failure |
 | `run_status.py` | Read/write Run Status section |
-| `bootstrap.py` | Legacy helper for Python software projects |
+| `bootstrap.py` | Legacy helper for old Python software projects |
+| `queue_scanner.py` | **Legacy** — redirects to `project_insights.py` |
+| `rollback_if_unstable.py` | **Legacy** — redirects to `verify_and_revert.py` |
+| `verify_cli_docs.py` | Check CLI docs are in sync with --help output |
 
 ---
 
 ## Migrating from v4 / v5
 
-- `queue_scanner.py` → renamed to `project_insights.py` (same interface, generic buckets)
-- `rollback_if_unstable.py` → renamed to `verify_and_revert.py` (reads `verification_command` from config)
+- `queue_scanner.py` → replaced by `project_insights.py` (same CLI interface, generic buckets)
+- `rollback_if_unstable.py` → replaced by `verify_and_revert.py` (reads `verification_command` from config)
 - `config.md` fields `version_file`, `cli_name`, `docs_dir` → removed (no longer required)
 - `config.md` new fields: `project_kind`, `verification_command`, `publish_command`
 - `project_language` replaces per-command `--zh` flags

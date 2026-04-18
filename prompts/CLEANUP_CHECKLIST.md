@@ -1,29 +1,35 @@
-# 提交前自查清单
+# Cleanup Checklist
 
-每次 commit 前逐项检查：
+> Post-run verification checklist for the Autonomous Improvement Loop skill.
 
-## 代码质量
-- [ ] 没有打印调试语句（print/debug/log）
-- [ ] 没有 TODO/FIXME 未完成（除非已在队列中记录）
-- [ ] 变量/函数命名清晰，符合项目风格
-- [ ] 没有巨大的函数（>50行考虑拆分）
+## After Each Task
 
-## 功能
-- [ ] pytest 全部通过（`pytest -q`）
-- [ ] 新功能有对应的测试
-- [ ] CLI 命令 `--help` 输出正确
+- [ ] Task was implemented correctly
+- [ ] `git commit` was created with a clear message
+- [ ] HEARTBEAT.md Run Status updated (last_run_time, last_run_commit, last_run_result, last_run_task)
+- [ ] Queue entry marked `done` (or `skip` if intentionally skipped)
+- [ ] Telegram report sent (if chat_id is configured)
 
-## 文档
-- [ ] README.md 中命令示例与实际 CLI 输出一致
-- [ ] 新增命令已写入 Quick Start 或对应章节
-- [ ] HEARTBEAT.md 中队列已更新（完成项归档）
+## Verification Command
 
-## Git
-- [ ] commit message 格式：`feat(#N):` 或 `fix(#N):`
-- [ ] 同一个改动没有分成多个 commit
-- [ ] 没有提交不该进仓库的文件（.env、__pycache__、.venv）
+- [ ] `verification_command` from config.md was run (if configured)
+- [ ] On failure: commit was reverted and pushed
+- [ ] On success: changes were pushed to remote
 
-## 发布
-- [ ] VERSION 文件已更新
-- [ ] git tag 已创建
-- [ ] gh release 已生成
+## Queue Maintenance
+
+- [ ] Queue has at least 5 pending items (run `project_insights.py --refresh --min 5` if needed)
+- [ ] No duplicate entries in queue
+- [ ] `done` entries are not re-sorted back into pending
+
+## Cron Safety
+
+- [ ] `cron_lock` is `false` after run completes
+- [ ] No concurrent runs overlap (cron_lock prevents this)
+- [ ] Cron schedule is correct (`*/30 * * * *` or as configured)
+
+## General
+
+- [ ] No hardcoded personal paths or credentials in skill files
+- [ ] All new scripts pass `python3 -m py_compile`
+- [ ] README.md / SKILL.md reflect current architecture

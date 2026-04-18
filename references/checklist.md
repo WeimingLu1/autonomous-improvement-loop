@@ -1,121 +1,100 @@
-# Pre-Flight Checklist
+# Reference: Testing Checklist
 
-Run this before the first cron trigger to ensure everything works.
+## Pre-flight Verification
 
-## Environment
+Verify your skill installation is healthy before deploying to production.
 
-```bash
-# 1. gh authenticated
-gh auth status
-# Expected: √ Logged in to github.com as YOU
-
-# 2. Project exists and accessible
-ls ~/Projects/PROJECT
-# Expected: project directory exists
-
-# 3. VERSION file exists
-cat ~/Projects/PROJECT/VERSION
-# Expected: e.g. "0.0.1"
-
-# 4. docs/agent/ exists
-ls ~/Projects/PROJECT/docs/agent/
-# Expected: directory exists (even if empty)
-
-# 5. Python venv exists
-ls ~/Projects/PROJECT/.venv/bin/activate
-# Expected: activate script exists
-
-# 6. pytest works
-cd ~/Projects/PROJECT && source .venv/bin/activate && pytest -q
-# Expected: N passed (no failures)
-```
-
-## Skill Scripts
+### 1. Scripts compile cleanly
 
 ```bash
-# 7. Automation scripts exist and are executable
-ls ~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/scripts/
-# Expected: run_status.py project_insights.py verify_cli_docs.py verify_and_revert.py
-
-# 8. Scripts have no syntax errors
 python3 -m py_compile ~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/scripts/*.py
-# Expected: no output
-
-# 9. run_status.py works
-python3 scripts/run_status.py --heartbeat ~/.openclaw/workspace-YOUR_AGENT/HEARTBEAT.md read
-# Expected: last_run_time=never last_run_commit=none last_run_result=unknown
-
-# 10. project_insights.py --help works
-python3 scripts/project_insights.py --help
-# Expected: usage with --project and --heartbeat
 ```
 
-## Cron Job
+Expected: no output = all syntax OK.
+
+### 2. init.py works
 
 ```bash
-# 11. Cron job created
+# Show help
+python3 scripts/init.py --help
+
+# Show status (will show generic since project_kind not configured yet)
+python3 scripts/init.py status .
+
+# Show adopt help
+python3 scripts/init.py adopt --help
+```
+
+### 3. project_insights.py works
+
+```bash
+# Scan once
+python3 scripts/project_insights.py --project . --heartbeat HEARTBEAT.md --language en
+
+# Refresh queue to 5 items
+python3 scripts/project_insights.py --project . --heartbeat HEARTBEAT.md --language en --refresh --min 5
+```
+
+### 4. verify_and_revert.py works
+
+```bash
+python3 scripts/verify_and_revert.py --help
+```
+
+### 5. run_status.py works
+
+```bash
+python3 scripts/run_status.py --heartbeat HEARTBEAT.md read
+```
+
+## Adoption Testing
+
+```bash
+# Test adopt on a real project
+python3 scripts/init.py adopt ~/Projects/YOUR_PROJECT
+
+# Cron should be created
 openclaw cron list
-# Expected: shows your job with correct ID
 
-# 12. Cron job description correct
-# Check: ID, session=isolated, model=YOUR_MODEL, every=30m
-
-# 13. delivery configured (announce → Telegram)
-# Should see: mode=announce, channel=telegram, to=YOUR_CHAT_ID
-
-# 14. timeout set to 3600 (1 hour)
-# Should see: timeoutSeconds: 3600
+# Queue should have at least 5 items
+cat HEARTBEAT.md
 ```
 
-## Workspace Files
+## Per-Project-Type Verification
+
+### Software project
 
 ```bash
-# 15. HEARTBEAT.md exists with Run Status block
-ls ~/.openclaw/workspace-YOUR_AGENT/HEARTBEAT.md
-# Check: contains "## Run Status" near the top
-
-# 16. DEVLOG.md exists
-ls ~/.openclaw/workspace-YOUR_AGENT/DEVLOG.md
-
-# 17. REPORT.md exists
-ls ~/.openclaw/workspace-YOUR_AGENT/REPORT.md
-
-# 18. memory/ directory exists
-ls ~/.openclaw/workspace-YOUR_AGENT/memory/
+verification_command: pytest tests/ -q
 ```
 
-## Telegram
+### Writing project
 
 ```bash
-# 19. Can send test message
-# Try sending a test message to confirm Telegram works:
-# openclaw send --channel telegram --to YOUR_CHAT_ID --message "Test from improvement loop"
+verification_command: python -m spellcheck .
 ```
 
-## Post-Setup Verification
+### Video project
 
-After first cron run completes, verify:
+```bash
+verification_command: ffprobe -v error -show_entries format=duration -i footage.mov
+```
 
-- [ ] GitHub has new commit(s)
-- [ ] GitHub has new tag
-- [ ] GitHub Release created
-- [ ] VERSION file incremented
-- [ ] Telegram received final report (one message per run, not per-step)
-- [ ] docs/agent/ synced and pushed
-- [ ] HEARTBEAT.md updated (task moved from QUEUED to archived)
-- [ ] DEVLOG.md updated (completed item added)
-- [ ] Run Status block updated with pass/fail and commit hash
-- [ ] Queue has new items if queue_scanner found opportunities
+### Generic project
 
-## Common Issues
+```bash
+verification_command:   # empty = manual verification
+```
 
-| Symptom | Fix |
-|---------|-----|
-| `gh release` fails | Run `gh auth login` |
-| pytest import errors | Activate venv: `source .venv/bin/activate` |
-| Telegram no messages | Check chat_id is correct E.164 format |
-| Cron not triggering | Check `openclaw cron list` shows `idle` or `ok`, not `disabled` |
-| delivery empty | Need `--announce --channel telegram --to CHAT_ID` when creating |
-| Job times out | Increase `--timeout-seconds` to 3600 |
-| Agent tries to do everything in one run | Ensure cron message includes "每次运行只完成一件事，然后停止" |
-| rollback_if_unstable fails | Check run_status.py path is correct and writable |
+## Git / CI Integration
+
+```bash
+# Commit new changes
+git add -A && git commit -m "chore: update skill"
+
+# Push to GitHub
+git push
+
+# Publish to ClawHub
+clawhub publish . --slug YOUR_SLUG --version X.Y.Z --changelog "..."
+```

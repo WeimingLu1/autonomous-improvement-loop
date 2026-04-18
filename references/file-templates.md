@@ -1,114 +1,111 @@
-# File Templates
+# Reference: File Templates
 
-## config.md
-
-```markdown
-# Autonomous Improvement Loop — 项目配置
-
-> 安装 skill 后填写此文件，即完成项目绑定。
-> 所有脚本从此文件读取项目路径、仓库、版本文件等配置。
-
-## 项目路径
-project_path: ~/Projects/YOUR_PROJECT
-
-## GitHub 仓库
-repo: https://github.com/OWNER/REPO
-
-## 版本文件
-version_file: ~/Projects/YOUR_PROJECT/VERSION
-
-## 项目内文档目录
-docs_agent_dir: ~/Projects/YOUR_PROJECT/docs/agent
-
-## CLI 名称
-cli_name: your-cli-name
-
-## OpenClaw Agent ID
-agent_id: your-agent-id
-
-## Telegram Chat ID
-chat_id: YOUR_TELEGRAM_CHAT_ID
-
-## Cron 调度
-cron_schedule: "*/30 * * * *"
-cron_timeout: 3600
-```
-
-## HEARTBEAT.md
+## HEARTBEAT.md Template
 
 ```markdown
-# Autonomous Improvement Loop — 队列状态
+# Autonomous Improvement Loop — Queue Status
 
-> Skill: autonomous-improvement-loop | 单 agent × 单项目
-> 配置: config.md
+> Skill: autonomous-improvement-loop | One agent x One project
+> Config: config.md
 
 ---
 
 ## Run Status
 
-| 字段 | 值 |
-|------|----|
-| last_run_time | never |
-| last_run_commit | `none` |
+| Field | Value |
+|-------|-------|
+| last_run_time | — |
+| last_run_commit | — |
 | last_run_result | unknown |
-| last_run_task | none |
+| last_run_task | — |
 | cron_lock | false |
+| mode | bootstrap |
 | rollback_on_fail | true |
 
 ---
 
 ## Queue
 
-> score 由 priority_scorer 计算，用户请求自动 score=100（插队）
-> 排序规则：score 降序，score 相等时按创建时间早的优先
-
-| # | 类型 | score | 内容 | 来源 | 状态 | 创建时间 |
-|---|------|-------|------|------|------|----------|
+| # | Type | Score | Content | Source | Status | Created |
+|---|------|-------|---------|--------|--------|---------|
 
 ---
 
-## Queue 管理规则
+## Queue Management Rules
 
-- 用户请求 → score=100 → 立即插队到 #1
-- cron 运行时（cron_lock=true）→ 用户请求仍入队，agent 拒绝直接修改文件
-- 每次添加条目后，按 score 降序重排序
-- cron 执行步骤：① cron_lock=true → ② 执行任务 → ③ commit+push → ④ announce → ⑤ cron_lock=false
+- **User request** → score=100 → immediately inserted at #1
+- **cron_lock=true** during execution: skip queue edits
+- **After adding**: re-sort by score descending
+- **Cron sequence**: cron_lock → execute → verify/publish → announce → cron_unlock
 ```
 
-## DEVLOG.md
+## config.md Template
+
+```yaml
+project_path: .
+project_kind:           # software | writing | video | research | generic
+project_language: en   # zh = Chinese, en = English
+github_repo: https://github.com/OWNER/REPO
+verification_command:
+publish_command:
+cron_schedule: "*/30 * * * *"
+cron_enabled: true
+```
+
+## Telegram Report Template (English)
 
 ```markdown
-# Autonomous Improvement Loop — 开发日志
+📋 Improvement Report — {project_name}
 
-> 此文件记录 skill 对应项目的所有已完成改进，按完成时间倒序排列。
-> skill = agent × 项目，1:1 绑定。
+Completed: {done_count} task(s)
+Duration: {duration}
+Result: {result}
 
----
+{if failures}:
+⚠️ Failed:
+{list}
+{/if}
 
-## YYYY-MM-DD
+{if unverified}:
+⚠️ Unverified — manual check required
+{/if}
 
-### ✅ 完成项
-
-| # | 任务 | Commit | Release | 备注 |
-|---|------|--------|---------|------|
-
----
-
-*正在记录中...*
+Next: {next_task}
+Round: {iteration}
 ```
 
-## Cron Job Setup
+## Telegram Report Template (Chinese)
+
+```markdown
+📋 项目改进报告 — {project_name}
+
+完成: {done_count} 个任务
+耗时: {duration}
+结果: {result}
+
+{if failures}:
+⚠️ 失败:
+{list}
+{/if}
+
+{if unverified}:
+⚠️ 未验证，需要人工检查
+{/if}
+
+下一任务: {next_task}
+轮次: {iteration}
+```
+
+## Cron Creation (openclaw CLI)
 
 ```bash
 openclaw cron add \
-  --name "Project Improvement Loop" \
+  --name "Autonomous Improvement Loop" \
   --every 30m \
   --session isolated \
   --agent YOUR_AGENT_ID \
-  --model YOUR_MODEL \
+  --timeout-seconds 3600 \
   --announce \
   --channel telegram \
-  --to YOUR_TELEGRAM_CHAT_ID \
-  --timeout-seconds 3600 \
-  --message "Autonomous improvement loop triggered"
+  --to YOUR_CHAT_ID
 ```

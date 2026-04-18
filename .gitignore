@@ -17,6 +17,10 @@ env/
 *.swp
 *.swo
 
-# Local testing
-.healthagent.db
-test_debug.db
+# Local / per-project files
+*.db
+*.sqlite
+*.sqlite3
+
+# Plans (local only — not pushed to GitHub)
+plans/

@@ -452,10 +452,11 @@ def create_cron(
         "--every", f"{schedule_ms // 60000}m",
         "--session", "isolated",
         "--agent", agent_id,
-        "--model", model,
         "--timeout-seconds", str(DEFAULT_TIMEOUT_S),
         "--message", "Autonomous improvement loop triggered",
     ]
+    if model and model not in {"MODEL", "YOUR_MODEL"}:
+        cmd.extend(["--model", model])
     if chat_id:
         cmd.extend(["--announce", "--channel", "telegram", "--to", chat_id])
     r = run(cmd)
@@ -627,7 +628,7 @@ def cmd_adopt(
     agent_id: str,
     chat_id: str | None,
     language: str,
-    model: str = "MODEL",
+    model: str = "",
     force_new_cron: bool = False,
 ) -> None:
     step("🔍 接管已有项目 — 初始化向导")
@@ -641,6 +642,11 @@ def cmd_adopt(
     version_file = detect_version_file(project)
     docs_dir = project / "docs" / "agent"
     cli_name = detect_cli_name(project)
+    try:
+        from project_insights import detect_project_type
+        project_kind = detect_project_type(project)
+    except Exception:
+        project_kind = "generic"
     readiness = check_project_readiness(project)
 
     # Show project info
@@ -649,6 +655,7 @@ def cmd_adopt(
     print(f"  {c('GitHub:', COLOR_BOLD)} {repo or c('未检测到（稍后需手动配置）', COLOR_YELLOW)}")
     print(f"  {c('CLI 名称:', COLOR_BOLD)} {cli_name}")
     print(f"  {c('语言:', COLOR_BOLD)} {'中文' if language == 'zh' else 'English'}")
+    print(f"  {c('项目类型:', COLOR_BOLD)} {project_kind}")
     print(f"  {c('Agent ID:', COLOR_BOLD)} {agent_id or c('未检测到', COLOR_RED)}")
 
     # Show readiness
@@ -716,6 +723,7 @@ def cmd_adopt(
         chat_id=chat_id or "YOUR_TELEGRAM_CHAT_ID",
         language=language,
         cron_job_id=cron_job_id,
+        project_kind=project_kind,
     )
     ok("config.md 已更新")
 
@@ -823,7 +831,7 @@ def cmd_onboard(
     agent_id: str,
     chat_id: str | None,
     language: str,
-    model: str = "MODEL",
+    model: str = "",
 ) -> None:
     step("🆕 从零初始化新项目")
 
@@ -1014,8 +1022,8 @@ def main() -> int:
     adopt_p.add_argument("--language", "--lang", "-l", default=None,
                          choices=["en", "zh"],
                          help="项目输出语言")
-    adopt_p.add_argument("--model", "-m", default="YOUR_MODEL",
-                         help="LLM model for cron sessions")
+    adopt_p.add_argument("--model", "-m", default="",
+                         help="LLM model for cron sessions (留空则使用 OpenClaw 默认模型)")
     adopt_p.add_argument("--force-new-cron", action="store_true",
                          help="强制新建 Cron Job（替换已有的）")
     adopt_p.set_defaults(func=cmd_adopt)
@@ -1027,8 +1035,8 @@ def main() -> int:
     onboard_p.add_argument("--language", "--lang", "-l", default=None,
                           choices=["en", "zh"],
                           help="项目输出语言")
-    onboard_p.add_argument("--model", "-m", default="YOUR_MODEL",
-                          help="LLM model for cron sessions")
+    onboard_p.add_argument("--model", "-m", default="",
+                          help="LLM model for cron sessions (留空则使用 OpenClaw 默认模型)")
     onboard_p.set_defaults(func=cmd_onboard)
 
     status_p = sub.add_parser("status", help="查看项目就绪状态")

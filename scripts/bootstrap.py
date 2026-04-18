@@ -13,6 +13,15 @@ Usage:
     python bootstrap.py --project ~/Projects/MY_PROJECT --skill-dir ~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop --mode detect
 
 The script detects the project state automatically if --mode is omitted.
+
+---
+
+**LEGACY / PYTHON-ONLY NOTE:**
+This helper is kept for backward compatibility with Python software projects
+onboarded before v6. It is Python-specific and does NOT support writing, video,
+or research project types.
+For all new projects and non-Python projects, use `init.py adopt` instead.
+This script may be removed in a future version.
 """
 
 from __future__ import annotations
