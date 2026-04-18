@@ -40,13 +40,23 @@ After adding any entry, re-sort by score descending and write back to HEARTBEAT.
 - Respond to user requests normally
 - User tasks are still queued (not executed directly) — wait for next cron run
 
+## Language
+
+Read `project_language` from `config.md`. Supported values:
+- `en` → all output in English (commit messages, queue entries, Telegram reports, release notes)
+- `zh` → all output in Chinese
+
 ## Commit Format
 
 ```
 feat(#<queue_number>): <short user-visible description>
 ```
 
+When `project_language: zh`, use Chinese for commit messages and release notes.
+
 ## HEARTBEAT.md Queue Table Format
+
+Queue entries use the language set by `project_language` in `config.md`.
 
 ```
 | # | Type | Score | Content | Source | Status | Created |

@@ -24,7 +24,10 @@ agent_id: viya
 ## Telegram Chat ID
 chat_id: 5535183090
 
+## Project Language
+project_language: zh   # "en" = English output, "zh" = Chinese output
+
 ## Cron Schedule
 cron_schedule: "*/30 * * * *"
 cron_timeout: 3600
-cron_job_id: b8143b30-8376-4d59-b48e-fe3c78952f57
+cron_job_id: 307c952c-ea57-418c-bbf5-8d71c8f769e5

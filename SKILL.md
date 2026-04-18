@@ -234,6 +234,9 @@ agent_id: your-agent-id
 ## Telegram Chat ID
 chat_id: YOUR_TELEGRAM_CHAT_ID
 
+## Project Language
+project_language: zh   # "en" for English, "zh" for Chinese
+
 ## Cron Schedule
 cron_schedule: "*/30 * * * *"
 cron_timeout: 3600
@@ -288,6 +291,9 @@ openclaw cron add \
 
 ## Telegram Report Template
 
+**Language**: All text in the report (title, body, commit message, release notes) is generated in the language specified by `project_language` in `config.md`.
+
+**English version:**
 ```
 ✅ 【Completed: Task Name】
 
@@ -304,6 +310,29 @@ Test results:
 pytest N passed
 
 New queue:
+#bug: (count) | #feature: (count remaining)
+
+Commit: HASH
+Release: v0.0.X → URL
+```
+
+**Chinese version (project_language: zh):**
+```
+✅ 【已完成: 任务名称】
+
+这是什么：
+（简单易懂地描述）
+
+为什么重要：
+（对用户有什么实际好处）
+
+怎么用：
+（具体命令或示例）
+
+测试结果：
+pytest N passed
+
+当前队列：
 #bug: (count) | #feature: (count remaining)
 
 Commit: HASH

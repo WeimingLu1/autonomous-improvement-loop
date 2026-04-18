@@ -10,11 +10,13 @@ Usage:
     python queue_scanner.py \
         --project /path/to/project \
         --heartbeat /path/to/HEARTBEAT.md \
+        [--language zh] \
         [--repo https://github.com/OWNER/REPO]
 
 Arguments:
     --project   Project root (required)
     --heartbeat Path to HEARTBEAT.md (required)
+    --language  Output language: "zh" (Chinese) or "en" (English) [default: zh]
     --repo      GitHub repo URL for issue links (default: https://github.com/OWNER/REPO)
 """
 
@@ -50,9 +52,9 @@ def _relative(py_file: Path, root: Path) -> str:
         return str(py_file)
 
 
-# ── Scan buckets (each returns a list of finding strings) ────────────────────
+# ── Bilingual finding templates ────────────────────────────────────────────────
 
-def rule_test_gaps(project: Path) -> list[str]:
+def rule_test_gaps(project: Path, lang: str = "zh") -> list[str]:
     """Rules in rules/ that have no corresponding test file in tests/test_rules/."""
     findings: list[str] = []
     rules_dir = project / "rules"
@@ -64,11 +66,14 @@ def rule_test_gaps(project: Path) -> list[str]:
             continue
         expected = tests_dir / "test_rules" / f"test_{py_file.stem}.py"
         if not expected.exists():
-            findings.append(f"补齐 {py_file.name} 的单元测试（tests/test_rules/test_{py_file.stem}.py）")
+            if lang == "en":
+                findings.append(f"Add unit tests for {py_file.name} (tests/test_rules/test_{py_file.stem}.py)")
+            else:
+                findings.append(f"补齐 {py_file.name} 的单元测试（tests/test_rules/test_{py_file.stem}.py）")
     return findings
 
 
-def todo_findings(project: Path) -> list[str]:
+def todo_findings(project: Path, lang: str = "zh") -> list[str]:
     """TODO/FIXME/HACK comments in src/."""
     findings: list[str] = []
     src_dir = project / "src"
@@ -79,11 +84,14 @@ def todo_findings(project: Path) -> list[str]:
             continue
         for line_no, line in enumerate(py_file.read_text(encoding="utf-8").splitlines(), 1):
             if re.search(r"\b(TODO|FIXME|HACK|XXX)\b", line, re.IGNORECASE):
-                findings.append(f"处理 {_relative(py_file, project)}:{line_no} 的待办注释")
+                if lang == "en":
+                    findings.append(f"Address TODO/FIXME comment at {_relative(py_file, project)}:{line_no}")
+                else:
+                    findings.append(f"处理 {_relative(py_file, project)}:{line_no} 的待办注释")
     return findings
 
 
-def missing_docstrings(project: Path) -> list[str]:
+def missing_docstrings(project: Path, lang: str = "zh") -> list[str]:
     """Python files in src/ that lack a module-level docstring."""
     findings: list[str] = []
     src_dir = project / "src"
@@ -94,11 +102,14 @@ def missing_docstrings(project: Path) -> list[str]:
             continue
         head = py_file.read_text(encoding="utf-8")[:300]
         if '"""' not in head and "'''" not in head:
-            findings.append(f"为 {_relative(py_file, project)} 补齐模块 docstring")
+            if lang == "en":
+                findings.append(f"Add module docstring to {_relative(py_file, project)}")
+            else:
+                findings.append(f"为 {_relative(py_file, project)} 补齐模块 docstring")
     return findings
 
 
-def cli_json_gaps(project: Path) -> list[str]:
+def cli_json_gaps(project: Path, lang: str = "zh") -> list[str]:
     """CLI modules that lack a --json option."""
     findings: list[str] = []
     cli_dir = project / "cli"
@@ -109,11 +120,14 @@ def cli_json_gaps(project: Path) -> list[str]:
             continue
         content = py_file.read_text(encoding="utf-8")
         if '"--json"' not in content and "'--json'" not in content:
-            findings.append(f"为 cli/{py_file.stem} 增加 --json 输出支持")
+            if lang == "en":
+                findings.append(f"Add --json output support to cli/{py_file.stem}")
+            else:
+                findings.append(f"为 cli/{py_file.stem} 增加 --json 输出支持")
     return findings
 
 
-def service_test_gaps(project: Path) -> list[str]:
+def service_test_gaps(project: Path, lang: str = "zh") -> list[str]:
     """Service files in services/ that have no corresponding test in tests/test_services/."""
     findings: list[str] = []
     services_dir = project / "services"
@@ -125,21 +139,24 @@ def service_test_gaps(project: Path) -> list[str]:
             continue
         expected = tests_dir / "test_services" / f"test_{py_file.stem}.py"
         if not expected.exists():
-            findings.append(f"补齐 services/{py_file.stem} 的单元测试（tests/test_services/test_{py_file.stem}.py）")
+            if lang == "en":
+                findings.append(f"Add unit tests for services/{py_file.stem} (tests/test_services/test_{py_file.stem}.py)")
+            else:
+                findings.append(f"补齐 services/{py_file.stem} 的单元测试（tests/test_services/test_{py_file.stem}.py）")
     return findings
 
 
 # ── Core logic ────────────────────────────────────────────────────────────────
 
-def choose_candidate(project: Path, heartbeat: Path) -> str | None:
+def choose_candidate(project: Path, heartbeat: Path, lang: str = "zh") -> str | None:
     """Pick the first new finding from priority buckets, skipping duplicates."""
     existing = existing_heartbeat(heartbeat)
     for bucket in (
-        rule_test_gaps(project),
-        service_test_gaps(project),
-        todo_findings(project),
-        missing_docstrings(project),
-        cli_json_gaps(project),
+        rule_test_gaps(project, lang),
+        service_test_gaps(project, lang),
+        todo_findings(project, lang),
+        missing_docstrings(project, lang),
+        cli_json_gaps(project, lang),
     ):
         for finding in bucket:
             if normalize(finding) not in existing:
@@ -190,10 +207,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Scan project and append one improvement to HEARTBEAT.md")
     parser.add_argument("--project", required=True, type=Path, help="Project root directory")
     parser.add_argument("--heartbeat", required=True, type=Path, help="Path to HEARTBEAT.md")
+    parser.add_argument("--language", default="zh", choices=["en", "zh"], help='Output language: "zh" (Chinese) or "en" (English) [default: zh]')
     parser.add_argument("--repo", default=HEARTBEAT_TEMPLATE, help="GitHub repo for issue links")
     args = parser.parse_args()
 
-    candidate = choose_candidate(args.project, args.heartbeat)
+    candidate = choose_candidate(args.project, args.heartbeat, args.language)
     if not candidate:
         print("queue_scanner: no new improvement candidate found")
         return 0
