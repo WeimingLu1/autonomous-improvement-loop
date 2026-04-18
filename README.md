@@ -2,7 +2,7 @@
 
 **One agent. One project. Cron-driven autonomous improvement queue.**
 
-[![ClawHub](https://img.shields.io/badge/Install-ClawHub-6B57FF?style=flat-square)](https://clawhub.ai/weiminglu1/autonomous-improvement-loop)
+[![ClawHub](https://img.shields.io/badge/Install-ClawHub-6B57FF?style=flat-square)](https://clawhub.ai)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
 ---

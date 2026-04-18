@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import textwrap
@@ -247,6 +248,44 @@ def detect_pytest_available() -> bool:
         return r.returncode == 0
     except Exception:
         return False
+
+
+def detect_any_test_command(project: Path) -> tuple[bool, str]:
+    """Detect whether a runnable verification/test command is available."""
+    runners = [
+        (["python3", "-m", "pytest"], "pytest", None),
+        (["npm", "test"], "npm test", "npm"),
+        (["cargo", "test"], "cargo test", "cargo"),
+        (["go", "test", "./..."], "go test ./...", "go"),
+        (["make", "test"], "make test", "make"),
+    ]
+    for cmd, label, binary in runners:
+        if binary and shutil.which(binary) is None:
+            continue
+        try:
+            r = run(cmd, cwd=project, timeout=10)
+        except FileNotFoundError:
+            continue
+        if r.returncode in (0, 1):
+            return True, label
+    return False, ""
+
+
+def detect_build_config(project: Path) -> str:
+    """Detect likely build/package config for software projects."""
+    candidates = [
+        "pyproject.toml", "setup.py", "setup.cfg",
+        "package.json",
+        "Cargo.toml",
+        "go.mod",
+        "pom.xml", "build.gradle",
+        "Gemfile",
+        "CMakeLists.txt",
+    ]
+    for f in candidates:
+        if (project / f).exists():
+            return f
+    return ""
 
 
 def detect_gh_authenticated() -> bool:
