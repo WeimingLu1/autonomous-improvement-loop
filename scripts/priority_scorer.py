@@ -2,8 +2,8 @@
 """AI priority scorer — generates scoring prompts for the agent's LLM to evaluate.
 
 Usage:
-    python priority_scorer.py --task "补齐 auth.py 的单元测试" --type improve
-    python priority_scorer.py --task "修复登录崩溃" --type bug --evaluate "<LLM response>"
+    python priority_scorer.py --task "Add unit tests for auth.py" --type improve
+    python priority_scorer.py --task "Fix login crash" --type bug --evaluate "<LLM response>"
 
 This script does NOT call the LLM directly. The agent uses its own LLM to evaluate
 the generated prompt. This script generates the prompt and parses the LLM response.
@@ -41,7 +41,7 @@ Output JSON only: {{"score": <number>, "reason": "<one sentence reason>"}}
 def generate_prompt(task_type: str, task_description: str) -> str:
     """Generate the LLM scoring prompt."""
     if task_type == "user_request":
-        return json.dumps({"score": 100, "reason": "用户请求，强制插队"}, ensure_ascii=False)
+        return json.dumps({"score": 100, "reason": "User request, forced to the top of the queue"}, ensure_ascii=False)
     return PROMPT_TEMPLATE.format(task_type=task_type, task_description=task_description)
 
 
@@ -50,7 +50,7 @@ def parse_llm_response(raw: str) -> dict:
     json_match = re.search(r"\{[^{}]*\}", raw, re.DOTALL)
     if json_match:
         return json.loads(json_match.group())
-    return {"score": 50, "reason": "默认分（解析失败）"}
+    return {"score": 50, "reason": "Default score (failed to parse evaluation)"}
 
 
 def score_task_rule_based(task_type: str, task_description: str) -> dict:

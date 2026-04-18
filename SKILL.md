@@ -1,3 +1,8 @@
+---
+name: autonomous-improvement-loop
+description: Continuous autonomous improvement loop for a single project. Use when an agent should repeatedly scan a project, maintain a prioritized queue in HEARTBEAT.md, execute the highest-value task on a cron schedule, verify results, and report progress. Works for software, writing, video, research, and generic projects. Also use when adopting an existing project into a long-running improvement workflow or bootstrapping a new project for ongoing autonomous maintenance.
+---
+
 # Autonomous Improvement Loop — Skill Reference
 
 ## Overview

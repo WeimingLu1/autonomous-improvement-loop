@@ -2,22 +2,22 @@
 """Scan any project and append improvement candidates to HEARTBEAT.md.
 
 This is the core "eyes" of the improvement loop. It auto-detects the project
-type and generates relevant, actionable improvement ideas — regardless of whether
+type and generates relevant, actionable improvement ideas \u2014 regardless of whether
 the project is software, a novel, a video script, or a research paper.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 PROJECT TYPES & THEIR BUCKETS
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 
-software  → test, doc, todo, ux, feature, data, engage
-writing    → plot, character, pace, dialogue, structure, clarity
-video      → script, pacing, visual, continuity, audio, edit
-research   → structure, citation, clarity, method, conclusion
-generic    → structure, clarity, consistency, completeness
+software  \u2192 test, doc, todo, ux, feature, data, engage
+writing    \u2192 plot, character, pace, dialogue, structure, clarity
+video      \u2192 script, pacing, visual, continuity, audio, edit
+research   \u2192 structure, citation, clarity, method, conclusion
+generic    \u2192 structure, clarity, consistency, completeness
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 USAGE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 
 # Scan once and append ONE best candidate
 python project_insights.py --project . --heartbeat HEARTBEAT.md --language en
@@ -35,7 +35,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-# ── Project type detection ─────────────────────────────────────────────────────
+# \u2500\u2500 Project type detection \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 def detect_project_type(project: Path) -> str:
     """Return: software | writing | video | research | generic"""
@@ -81,43 +81,43 @@ def detect_project_type(project: Path) -> str:
     return "generic"
 
 
-# ── Buckets per project type ──────────────────────────────────────────────────
+# \u2500\u2500 Buckets per project type \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 def _software_buckets(lang: str):
     en = lang == "en"
     return [
         ("test", [
-            "Add unit tests for each untested module" if en else "为每个未测试的模块补齐单元测试",
-            "Increase test coverage for edge cases" if en else "为边界情况增加测试覆盖",
-            "Add integration tests for critical user flows" if en else "为关键用户流程增加集成测试",
-            "Ensure all error paths have corresponding tests" if en else "确保所有错误路径都有对应测试",
+            "Add unit tests for each untested module" if en else "\u4e3a\u6bcf\u4e2a\u672a\u6d4b\u8bd5\u7684\u6a21\u5757\u8865\u9f50\u5355\u5143\u6d4b\u8bd5",
+            "Increase test coverage for edge cases" if en else "\u4e3a\u8fb9\u754c\u60c5\u51b5\u589e\u52a0\u6d4b\u8bd5\u8986\u76d6",
+            "Add integration tests for critical user flows" if en else "\u4e3a\u5173\u952e\u7528\u6237\u6d41\u7a0b\u589e\u52a0\u96c6\u6210\u6d4b\u8bd5",
+            "Ensure all error paths have corresponding tests" if en else "\u786e\u4fdd\u6240\u6709\u9519\u8bef\u8def\u5f84\u90fd\u6709\u5bf9\u5e94\u6d4b\u8bd5",
         ]),
         ("doc", [
-            "Add module-level docstrings to undocumented modules" if en else "为未写文档的模块补充 docstring",
-            "Document public API contracts with usage examples" if en else "为公开 API 写清合约和使用示例",
-            "Add inline comments explaining non-obvious logic" if en else "为不直观逻辑增加注释说明",
+            "Add module-level docstrings to undocumented modules" if en else "\u4e3a\u672a\u5199\u6587\u6863\u7684\u6a21\u5757\u8865\u5145 docstring",
+            "Document public API contracts with usage examples" if en else "\u4e3a\u516c\u5f00 API \u5199\u6e05\u5408\u7ea6\u548c\u4f7f\u7528\u793a\u4f8b",
+            "Add inline comments explaining non-obvious logic" if en else "\u4e3a\u4e0d\u76f4\u89c2\u903b\u8f91\u589e\u52a0\u6ce8\u91ca\u8bf4\u660e",
         ]),
         ("todo", [
-            "Address all TODO/FIXME comments in the codebase" if en else "处理代码库中的所有 TODO/FIXME",
-            "Audit deprecated code paths and remove or document them" if en else "审查并移除或标注废弃代码路径",
+            "Address all TODO/FIXME comments in the codebase" if en else "\u5904\u7406\u4ee3\u7801\u5e93\u4e2d\u7684\u6240\u6709 TODO/FIXME",
+            "Audit deprecated code paths and remove or document them" if en else "\u5ba1\u67e5\u5e76\u79fb\u9664\u6216\u6807\u6ce8\u5e9f\u5f03\u4ee3\u7801\u8def\u5f84",
         ]),
         ("ux", [
-            "Improve error messages: show the cause and a suggested fix" if en else "改进错误提示：给出原因和修复建议",
-            "Add a verbose mode (--verbose) for detailed execution info" if en else "增加 verbose 模式（--verbose）输出详细信息",
-            "Add shell completions (bash/zsh/fish) for the CLI" if en else "为 CLI 增加 shell 自动补全（bash/zsh/fish）",
-            "Add a config file (~/.myapp.yaml) for user preferences" if en else "增加配置文件（~/.myapp.yaml）支持用户偏好设置",
+            "Improve error messages: show the cause and a suggested fix" if en else "\u6539\u8fdb\u9519\u8bef\u63d0\u793a\uff1a\u7ed9\u51fa\u539f\u56e0\u548c\u4fee\u590d\u5efa\u8bae",
+            "Add a verbose mode (--verbose) for detailed execution info" if en else "\u589e\u52a0 verbose \u6a21\u5f0f\uff08--verbose\uff09\u8f93\u51fa\u8be6\u7ec6\u4fe1\u606f",
+            "Add shell completions (bash/zsh/fish) for the CLI" if en else "\u4e3a CLI \u589e\u52a0 shell \u81ea\u52a8\u8865\u5168\uff08bash/zsh/fish\uff09",
+            "Add a config file (~/.myapp.yaml) for user preferences" if en else "\u589e\u52a0\u914d\u7f6e\u6587\u4ef6\uff08~/.myapp.yaml\uff09\u652f\u6301\u7528\u6237\u504f\u597d\u8bbe\u7f6e",
         ]),
         ("feature", [
-            "Identify the most requested unimplemented feature and add it" if en else "找出最被期待但未实现的功能并实现",
-            "Add a status command showing current project state at a glance" if en else "增加 status 命令：一览当前项目状态",
+            "Identify the most requested unimplemented feature and add it" if en else "\u627e\u51fa\u6700\u88ab\u671f\u5f85\u4f46\u672a\u5b9e\u73b0\u7684\u529f\u80fd\u5e76\u5b9e\u73b0",
+            "Add a status command showing current project state at a glance" if en else "\u589e\u52a0 status \u547d\u4ee4\uff1a\u4e00\u89c8\u5f53\u524d\u9879\u76ee\u72b6\u6001",
         ]),
         ("data", [
-            "Add an export command for structured data output" if en else "增加 export 命令输出结构化数据",
-            "Add a backup/restore mechanism for project data" if en else "增加项目数据的备份/恢复机制",
+            "Add an export command for structured data output" if en else "\u589e\u52a0 export \u547d\u4ee4\u8f93\u51fa\u7ed3\u6784\u5316\u6570\u636e",
+            "Add a backup/restore mechanism for project data" if en else "\u589e\u52a0\u9879\u76ee\u6570\u636e\u7684\u5907\u4efd/\u6062\u590d\u673a\u5236",
         ]),
         ("engage", [
-            "Add an achievement or milestone system to reward consistency" if en else "增加成就/里程碑系统，奖励持续投入",
-            "Add a streak tracker for consecutive days of work" if en else "增加连续记录追踪，激励保持节奏",
+            "Add an achievement or milestone system to reward consistency" if en else "\u589e\u52a0\u6210\u5c31/\u91cc\u7a0b\u7891\u7cfb\u7edf\uff0c\u5956\u52b1\u6301\u7eed\u6295\u5165",
+            "Add a streak tracker for consecutive days of work" if en else "\u589e\u52a0\u8fde\u7eed\u8bb0\u5f55\u8ffd\u8e2a\uff0c\u6fc0\u52b1\u4fdd\u6301\u8282\u594f",
         ]),
     ]
 
@@ -126,32 +126,32 @@ def _writing_buckets(lang: str):
     en = lang == "en"
     return [
         ("plot", [
-            "Review plot consistency: check for timeline contradictions" if en else "审查情节一致性：检查时间线矛盾",
-            "Identify and resolve any unresolved plot threads from earlier chapters" if en else "找出并解决早期章节遗留的未解情节线索",
-            "Strengthen the central conflict: does it sustain through the middle?" if en else "强化核心冲突：是否能撑过中段？",
-            "Review chapter hooks: does each chapter end with tension?" if en else "审查章节钩子：每个章节结尾是否有悬念？",
+            "Review plot consistency: check for timeline contradictions" if en else "\u5ba1\u67e5\u60c5\u8282\u4e00\u81f4\u6027\uff1a\u68c0\u67e5\u65f6\u95f4\u7ebf\u77db\u76fe",
+            "Identify and resolve any unresolved plot threads from earlier chapters" if en else "\u627e\u51fa\u5e76\u89e3\u51b3\u65e9\u671f\u7ae0\u8282\u9057\u7559\u7684\u672a\u89e3\u60c5\u8282\u7ebf\u7d22",
+            "Strengthen the central conflict: does it sustain through the middle?" if en else "\u5f3a\u5316\u6838\u5fc3\u51b2\u7a81\uff1a\u662f\u5426\u80fd\u6491\u8fc7\u4e2d\u6bb5\uff1f",
+            "Review chapter hooks: does each chapter end with tension?" if en else "\u5ba1\u67e5\u7ae0\u8282\u94a9\u5b50\uff1a\u6bcf\u4e2a\u7ae0\u8282\u7ed3\u5c3e\u662f\u5426\u6709\u60ac\u5ff5\uff1f",
         ]),
         ("character", [
-            "Review character voice consistency: does each character sound distinct?" if en else "审查角色声音一致性：每个角色是否有独特语言风格？",
-            "Audit character motivations: does each major choice stem from established desire/fear?" if en else "审查角色动机：每个重大选择是否源于已有欲望或恐惧？",
-            "Review secondary character arcs: do they change by the end?" if en else "审查次要角色弧线：他们最终有改变吗？",
+            "Review character voice consistency: does each character sound distinct?" if en else "\u5ba1\u67e5\u89d2\u8272\u58f0\u97f3\u4e00\u81f4\u6027\uff1a\u6bcf\u4e2a\u89d2\u8272\u662f\u5426\u6709\u72ec\u7279\u8bed\u8a00\u98ce\u683c\uff1f",
+            "Audit character motivations: does each major choice stem from established desire/fear?" if en else "\u5ba1\u67e5\u89d2\u8272\u52a8\u673a\uff1a\u6bcf\u4e2a\u91cd\u5927\u9009\u62e9\u662f\u5426\u6e90\u4e8e\u5df2\u6709\u6b32\u671b\u6216\u6050\u60e7\uff1f",
+            "Review secondary character arcs: do they change by the end?" if en else "\u5ba1\u67e5\u6b21\u8981\u89d2\u8272\u5f27\u7ebf\uff1a\u4ed6\u4eec\u6700\u7ec8\u6709\u6539\u53d8\u5417\uff1f",
         ]),
         ("pace", [
-            "Identify the slowest 20% of scenes: can they be cut or tightened?" if en else "找出最拖沓的 20% 场景：能否精简？",
-            "Review the 'sagging middle': is the middle third compelling?" if en else "审查'塌陷中部'：中段三分之一是否吸引？",
-            "Check that the opening chapter hooks immediately" if en else "检查开头章节是否立刻抓住读者",
+            "Identify the slowest 20% of scenes: can they be cut or tightened?" if en else "\u627e\u51fa\u6700\u62d6\u6c93\u7684 20% \u573a\u666f\uff1a\u80fd\u5426\u7cbe\u7b80\uff1f",
+            "Review the 'sagging middle': is the middle third compelling?" if en else "\u5ba1\u67e5'\u584c\u9677\u4e2d\u90e8'\uff1a\u4e2d\u6bb5\u4e09\u5206\u4e4b\u4e00\u662f\u5426\u5438\u5f15\uff1f",
+            "Check that the opening chapter hooks immediately" if en else "\u68c0\u67e5\u5f00\u5934\u7ae0\u8282\u662f\u5426\u7acb\u523b\u6293\u4f4f\u8bfb\u8005",
         ]),
         ("dialogue", [
-            "Read each chapter's dialogue aloud: does it sound natural?" if en else "朗读每章对话：听起来自然吗？",
-            "Replace generic dialogue with character-specific voice" if en else "用角色特有的声音替换通用对话",
+            "Read each chapter's dialogue aloud: does it sound natural?" if en else "\u6717\u8bfb\u6bcf\u7ae0\u5bf9\u8bdd\uff1a\u542c\u8d77\u6765\u81ea\u7136\u5417\uff1f",
+            "Replace generic dialogue with character-specific voice" if en else "\u7528\u89d2\u8272\u7279\u6709\u7684\u58f0\u97f3\u66ff\u6362\u901a\u7528\u5bf9\u8bdd",
         ]),
         ("structure", [
-            "Check that each scene has a clear objective, conflict, and outcome" if en else "检查每个场景是否有清晰的目标、冲突和结果",
-            "Identify scenes that could be combined or cut entirely" if en else "找出可以合并或完全删除的场景",
+            "Check that each scene has a clear objective, conflict, and outcome" if en else "\u68c0\u67e5\u6bcf\u4e2a\u573a\u666f\u662f\u5426\u6709\u6e05\u6670\u7684\u76ee\u6807\u3001\u51b2\u7a81\u548c\u7ed3\u679c",
+            "Identify scenes that could be combined or cut entirely" if en else "\u627e\u51fa\u53ef\u4ee5\u5408\u5e76\u6216\u5b8c\u5168\u5220\u9664\u7684\u573a\u666f",
         ]),
         ("clarity", [
-            "Replace telling with showing: find instances of summary rather than scene" if en else "把叙述换成展示：找出概括而非场景化的段落",
-            "Check that each paragraph has a clear controlling idea" if en else "检查每个段落是否有清晰的中心思想",
+            "Replace telling with showing: find instances of summary rather than scene" if en else "\u628a\u53d9\u8ff0\u6362\u6210\u5c55\u793a\uff1a\u627e\u51fa\u6982\u62ec\u800c\u975e\u573a\u666f\u5316\u7684\u6bb5\u843d",
+            "Check that each paragraph has a clear controlling idea" if en else "\u68c0\u67e5\u6bcf\u4e2a\u6bb5\u843d\u662f\u5426\u6709\u6e05\u6670\u7684\u4e2d\u5fc3\u601d\u60f3",
         ]),
     ]
 
@@ -160,29 +160,29 @@ def _video_buckets(lang: str):
     en = lang == "en"
     return [
         ("script", [
-            "Review scene objectives: does each scene have a clear purpose?" if en else "审查场景目标：每个场景是否有清晰目的？",
-            "Review the cold open: does it hook in the first 30 seconds?" if en else "审查开头：前 30 秒是否抓住观众？",
-            "Add camera direction notes to action scenes" if en else "为动作场景增加摄影指导备注",
+            "Review scene objectives: does each scene have a clear purpose?" if en else "\u5ba1\u67e5\u573a\u666f\u76ee\u6807\uff1a\u6bcf\u4e2a\u573a\u666f\u662f\u5426\u6709\u6e05\u6670\u76ee\u7684\uff1f",
+            "Review the cold open: does it hook in the first 30 seconds?" if en else "\u5ba1\u67e5\u5f00\u5934\uff1a\u524d 30 \u79d2\u662f\u5426\u6293\u4f4f\u89c2\u4f17\uff1f",
+            "Add camera direction notes to action scenes" if en else "\u4e3a\u52a8\u4f5c\u573a\u666f\u589e\u52a0\u6444\u5f71\u6307\u5bfc\u5907\u6ce8",
         ]),
         ("pacing", [
-            "Map the emotional arc beat-by-beat: is there enough variation?" if en else "逐 Beat 地图情感弧线：变化够吗？",
-            "Review the runtime: does it match the intended format/length?" if en else "审查时长：是否符合目标格式/长度？",
+            "Map the emotional arc beat-by-beat: is there enough variation?" if en else "\u9010 Beat \u5730\u56fe\u60c5\u611f\u5f27\u7ebf\uff1a\u53d8\u5316\u591f\u5417\uff1f",
+            "Review the runtime: does it match the intended format/length?" if en else "\u5ba1\u67e5\u65f6\u957f\uff1a\u662f\u5426\u7b26\u5408\u76ee\u6807\u683c\u5f0f/\u957f\u5ea6\uff1f",
         ]),
         ("visual", [
-            "Review shot list for visual variety: avoid repetitive shot types" if en else "审查镜头表：避免重复的镜头类型",
-            "Check that key visual moments are staged for maximum impact" if en else "检查关键视觉时刻是否被设计得最具冲击力",
+            "Review shot list for visual variety: avoid repetitive shot types" if en else "\u5ba1\u67e5\u955c\u5934\u8868\uff1a\u907f\u514d\u91cd\u590d\u7684\u955c\u5934\u7c7b\u578b",
+            "Check that key visual moments are staged for maximum impact" if en else "\u68c0\u67e5\u5173\u952e\u89c6\u89c9\u65f6\u523b\u662f\u5426\u88ab\u8bbe\u8ba1\u5f97\u6700\u5177\u51b2\u51fb\u529b",
         ]),
         ("continuity", [
-            "Create a continuity log for props, costumes, and set elements" if en else "为道具、服装和布景元素建立连续性日志",
-            "Review timeline consistency: do time-of-day cues stay coherent?" if en else "审查时间线一致性：日夜线索是否连贯？",
+            "Create a continuity log for props, costumes, and set elements" if en else "\u4e3a\u9053\u5177\u3001\u670d\u88c5\u548c\u5e03\u666f\u5143\u7d20\u5efa\u7acb\u8fde\u7eed\u6027\u65e5\u5fd7",
+            "Review timeline consistency: do time-of-day cues stay coherent?" if en else "\u5ba1\u67e5\u65f6\u95f4\u7ebf\u4e00\u81f4\u6027\uff1a\u65e5\u591c\u7ebf\u7d22\u662f\u5426\u8fde\u8d2f\uff1f",
         ]),
         ("audio", [
-            "Review audio cue placement: do sound effects support the visuals?" if en else "审查音效cue位置：音效是否配合画面？",
-            "Check that music choices reinforce the emotional tone" if en else "检查音乐选择是否强化情感基调",
+            "Review audio cue placement: do sound effects support the visuals?" if en else "\u5ba1\u67e5\u97f3\u6548cue\u4f4d\u7f6e\uff1a\u97f3\u6548\u662f\u5426\u914d\u5408\u753b\u9762\uff1f",
+            "Check that music choices reinforce the emotional tone" if en else "\u68c0\u67e5\u97f3\u4e50\u9009\u62e9\u662f\u5426\u5f3a\u5316\u60c5\u611f\u57fa\u8c03",
         ]),
         ("edit", [
-            "Review cuts: do they feel motivated or arbitrary?" if en else "审查切换：是有动机还是随意？",
-            "Review the final 30 seconds: does it end with impact?" if en else "审查最后 30 秒：是否有冲击力结尾？",
+            "Review cuts: do they feel motivated or arbitrary?" if en else "\u5ba1\u67e5\u5207\u6362\uff1a\u662f\u6709\u52a8\u673a\u8fd8\u662f\u968f\u610f\uff1f",
+            "Review the final 30 seconds: does it end with impact?" if en else "\u5ba1\u67e5\u6700\u540e 30 \u79d2\uff1a\u662f\u5426\u6709\u51b2\u51fb\u529b\u7ed3\u5c3e\uff1f",
         ]),
     ]
 
@@ -191,25 +191,25 @@ def _research_buckets(lang: str):
     en = lang == "en"
     return [
         ("structure", [
-            "Verify the paper structure: abstract → intro → method → results → discussion" if en else "核查论文结构：摘要→引言→方法→结果→讨论",
-            "Ensure the abstract is self-contained and summaries all sections" if en else "确保摘要独立完整，概括所有部分",
+            "Verify the paper structure: abstract \u2192 intro \u2192 method \u2192 results \u2192 discussion" if en else "\u6838\u67e5\u8bba\u6587\u7ed3\u6784\uff1a\u6458\u8981\u2192\u5f15\u8a00\u2192\u65b9\u6cd5\u2192\u7ed3\u679c\u2192\u8ba8\u8bba",
+            "Ensure the abstract is self-contained and summaries all sections" if en else "\u786e\u4fdd\u6458\u8981\u72ec\u7acb\u5b8c\u6574\uff0c\u6982\u62ec\u6240\u6709\u90e8\u5206",
         ]),
         ("citation", [
-            "Add missing citations: check for uncited references and unlisted sources" if en else "补充遗漏引用：检查未引用的参考文献和未列出来源",
-            "Ensure citations are up-to-date: add recent related work" if en else "确保引用最新：补充近年相关工作",
-            "Check that all figures and tables are cited in the text" if en else "检查所有图表是否在正文中被引用",
+            "Add missing citations: check for uncited references and unlisted sources" if en else "\u8865\u5145\u9057\u6f0f\u5f15\u7528\uff1a\u68c0\u67e5\u672a\u5f15\u7528\u7684\u53c2\u8003\u6587\u732e\u548c\u672a\u5217\u51fa\u6765\u6e90",
+            "Ensure citations are up-to-date: add recent related work" if en else "\u786e\u4fdd\u5f15\u7528\u6700\u65b0\uff1a\u8865\u5145\u8fd1\u5e74\u76f8\u5173\u5de5\u4f5c",
+            "Check that all figures and tables are cited in the text" if en else "\u68c0\u67e5\u6240\u6709\u56fe\u8868\u662f\u5426\u5728\u6b63\u6587\u4e2d\u88ab\u5f15\u7528",
         ]),
         ("clarity", [
-            "Replace jargon with accessible language where possible" if en else "在可能的地方用通俗语言替换术语",
-            "Check that all abbreviations are defined on first use" if en else "检查所有缩写是否在首次使用时定义",
+            "Replace jargon with accessible language where possible" if en else "\u5728\u53ef\u80fd\u7684\u5730\u65b9\u7528\u901a\u4fd7\u8bed\u8a00\u66ff\u6362\u672f\u8bed",
+            "Check that all abbreviations are defined on first use" if en else "\u68c0\u67e5\u6240\u6709\u7f29\u5199\u662f\u5426\u5728\u9996\u6b21\u4f7f\u7528\u65f6\u5b9a\u4e49",
         ]),
         ("method", [
-            "Verify methodology is described in enough detail to reproduce" if en else "核实方法论描述足够详细，可复现",
-            "Check that limitations are acknowledged transparently" if en else "检查局限性是否被透明承认",
+            "Verify methodology is described in enough detail to reproduce" if en else "\u6838\u5b9e\u65b9\u6cd5\u8bba\u63cf\u8ff0\u8db3\u591f\u8be6\u7ec6\uff0c\u53ef\u590d\u73b0",
+            "Check that limitations are acknowledged transparently" if en else "\u68c0\u67e5\u5c40\u9650\u6027\u662f\u5426\u88ab\u900f\u660e\u627f\u8ba4",
         ]),
         ("conclusion", [
-            "Verify that conclusions are supported by the data presented" if en else "核实结论由所呈数据支撑",
-            "Check that implications are discussed without overgeneralizing" if en else "检查是否讨论意义而不过度泛化",
+            "Verify that conclusions are supported by the data presented" if en else "\u6838\u5b9e\u7ed3\u8bba\u7531\u6240\u5448\u6570\u636e\u652f\u6491",
+            "Check that implications are discussed without overgeneralizing" if en else "\u68c0\u67e5\u662f\u5426\u8ba8\u8bba\u610f\u4e49\u800c\u4e0d\u8fc7\u5ea6\u6cdb\u5316",
         ]),
     ]
 
@@ -218,24 +218,24 @@ def _generic_buckets(lang: str):
     en = lang == "en"
     return [
         ("structure", [
-            "Review overall project structure: is the hierarchy logical and navigable?" if en else "审查整体项目结构：层次是否逻辑清晰？",
-            "Identify any orphaned or unlinked content that should be integrated" if en else "找出孤立或未链接的内容，应整合",
+            "Review overall project structure: is the hierarchy logical and navigable?" if en else "\u5ba1\u67e5\u6574\u4f53\u9879\u76ee\u7ed3\u6784\uff1a\u5c42\u6b21\u662f\u5426\u903b\u8f91\u6e05\u6670\uff1f",
+            "Identify any orphaned or unlinked content that should be integrated" if en else "\u627e\u51fa\u5b64\u7acb\u6216\u672a\u94fe\u63a5\u7684\u5185\u5bb9\uff0c\u5e94\u6574\u5408",
         ]),
         ("clarity", [
-            "Audit terminology consistency across all documents" if en else "审查所有文档的术语一致性",
-            "Review any ambiguous or vague statements and make them precise" if en else "审查模糊陈述，使其精确",
+            "Audit terminology consistency across all documents" if en else "\u5ba1\u67e5\u6240\u6709\u6587\u6863\u7684\u672f\u8bed\u4e00\u81f4\u6027",
+            "Review any ambiguous or vague statements and make them precise" if en else "\u5ba1\u67e5\u6a21\u7cca\u9648\u8ff0\uff0c\u4f7f\u5176\u7cbe\u786e",
         ]),
         ("consistency", [
-            "Check naming conventions: are they applied uniformly?" if en else "检查命名规范：是否统一应用？",
-            "Review tone and voice: is it consistent throughout?" if en else "审查语气和风格：全文一致吗？",
+            "Check naming conventions: are they applied uniformly?" if en else "\u68c0\u67e5\u547d\u540d\u89c4\u8303\uff1a\u662f\u5426\u7edf\u4e00\u5e94\u7528\uff1f",
+            "Review tone and voice: is it consistent throughout?" if en else "\u5ba1\u67e5\u8bed\u6c14\u548c\u98ce\u683c\uff1a\u5168\u6587\u4e00\u81f4\u5417\uff1f",
         ]),
         ("completeness", [
-            "Identify sections that end abruptly and need development" if en else "找出戛然而止的章节，需要充实",
-            "Review the outline: are there gaps in coverage?" if en else "审查大纲：覆盖是否有空白？",
+            "Identify sections that end abruptly and need development" if en else "\u627e\u51fa\u621b\u7136\u800c\u6b62\u7684\u7ae0\u8282\uff0c\u9700\u8981\u5145\u5b9e",
+            "Review the outline: are there gaps in coverage?" if en else "\u5ba1\u67e5\u5927\u7eb2\uff1a\u8986\u76d6\u662f\u5426\u6709\u7a7a\u767d\uff1f",
         ]),
         ("workflow", [
-            "Identify manual steps that could be automated or templated" if en else "找出可以自动化或模板化的手动步骤",
-            "Check that key decisions and their rationale are documented" if en else "检查关键决策和理由是否被记录",
+            "Identify manual steps that could be automated or templated" if en else "\u627e\u51fa\u53ef\u4ee5\u81ea\u52a8\u5316\u6216\u6a21\u677f\u5316\u7684\u624b\u52a8\u6b65\u9aa4",
+            "Check that key decisions and their rationale are documented" if en else "\u68c0\u67e5\u5173\u952e\u51b3\u7b56\u548c\u7406\u7531\u662f\u5426\u88ab\u8bb0\u5f55",
         ]),
     ]
 
@@ -250,7 +250,7 @@ def get_buckets(project_type: str, lang: str):
     }[project_type](lang)
 
 
-# ── Core queue logic ──────────────────────────────────────────────────────────
+# \u2500\u2500 Core queue logic \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 def _normalize(text: str) -> str:
     return re.sub(r'\s+', ' ', text.strip())
@@ -295,27 +295,27 @@ def choose_best_candidate(project: Path, heartbeat: Path, lang: str) -> str | No
 
 def score_finding(finding: str) -> int:
     fl = finding.lower()
-    if any(k in fl for k in ['单元测试', '补齐', 'missing', 'undocumented']):
+    if any(k in fl for k in ['\u5355\u5143\u6d4b\u8bd5', '\u8865\u9f50', 'missing', 'undocumented']):
         return 50
-    if any(k in fl for k in ['docstring', 'document', '文档', 'comment']):
+    if any(k in fl for k in ['docstring', 'document', '\u6587\u6863', 'comment']):
         return 45
-    if any(k in fl for k in ['plot', 'character', 'pacing', 'pace', '情节', '角色', '节奏', 'voice']):
+    if any(k in fl for k in ['plot', 'character', 'pacing', 'pace', '\u60c5\u8282', '\u89d2\u8272', '\u8282\u594f', 'voice']):
         return 65
-    if any(k in fl for k in ['script', 'scene', 'shot', 'transition', '镜头', '场景', '脚本']):
+    if any(k in fl for k in ['script', 'scene', 'shot', 'transition', '\u955c\u5934', '\u573a\u666f', '\u811a\u672c']):
         return 65
-    if any(k in fl for k in ['citation', 'cite', 'reference', '引用', '文献']):
+    if any(k in fl for k in ['citation', 'cite', 'reference', '\u5f15\u7528', '\u6587\u732e']):
         return 65
-    if any(k in fl for k in ['insight', '智能', 'predict', 'detect', '检测']):
+    if any(k in fl for k in ['insight', '\u667a\u80fd', 'predict', 'detect', '\u68c0\u6d4b']):
         return 72
-    if any(k in fl for k in ['export', 'import', 'backup', '导入', '导出']):
+    if any(k in fl for k in ['export', 'import', 'backup', '\u5bfc\u5165', '\u5bfc\u51fa']):
         return 65
-    if any(k in fl for k in ['achievement', 'streak', '成就', '连续', 'milestone']):
+    if any(k in fl for k in ['achievement', 'streak', '\u6210\u5c31', '\u8fde\u7eed', 'milestone']):
         return 68
-    if any(k in fl for k in ['suggest', 'compare', 'undo', 'wizard', '建议', '撤销', '对比']):
+    if any(k in fl for k in ['suggest', 'compare', 'undo', 'wizard', '\u5efa\u8bae', '\u64a4\u9500', '\u5bf9\u6bd4']):
         return 70
-    if any(k in fl for k in ['error', 'verbose', 'config', 'confirm', '错误', '详细']):
+    if any(k in fl for k in ['error', 'verbose', 'config', 'confirm', '\u9519\u8bef', '\u8be6\u7ec6']):
         return 55
-    if any(k in fl for k in ['structure', 'consistency', 'completeness', '结构', '一致', '完整']):
+    if any(k in fl for k in ['structure', 'consistency', 'completeness', '\u7ed3\u6784', '\u4e00\u81f4', '\u5b8c\u6574']):
         return 60
     return 60
 
@@ -384,7 +384,7 @@ def refresh_queue(project: Path, heartbeat: Path, lang: str, min_items: int) -> 
     return added
 
 
-# ── CLI ────────────────────────────────────────────────────────────────────────
+# \u2500\u2500 CLI \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 def main() -> int:
     parser = argparse.ArgumentParser(

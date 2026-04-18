@@ -120,20 +120,20 @@ def main() -> int:
     print("=" * 60)
 
     if missing_in_readme:
-        print(f"\n⚠️  CLI 有但 README 缺失 ({len(missing_in_readme)}):")
+        print(f"\n⚠️  In CLI but missing from README ({len(missing_in_readme)}):")
         for cmd in missing_in_readme:
             print(f"  - {args.cli_name} {cmd}")
 
     if stale_in_readme:
-        print(f"\n⚠️  README 有但 CLI 缺失 ({len(stale_in_readme)}):")
+        print(f"\n⚠️  In README but missing from CLI ({len(stale_in_readme)}):")
         for cmd in stale_in_readme:
             print(f"  - {args.cli_name} {cmd}")
 
     if missing_in_readme or stale_in_readme:
-        print("\n❌ CLI 文档校验失败")
+        print("\n❌ CLI documentation check failed")
         return 1
 
-    print("\n✅ CLI 和 README 对齐")
+    print("\n✅ CLI and README are in sync")
     return 0
 
 

@@ -22,5 +22,8 @@ env/
 *.sqlite
 *.sqlite3
 
-# Plans (local only — not pushed to GitHub)
+# Local working files (not pushed to GitHub / ClawHub)
 plans/
+DEVLOG.md
+TODO.md
+specs/

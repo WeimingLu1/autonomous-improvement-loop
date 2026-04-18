@@ -43,13 +43,16 @@
 
 ```yaml
 project_path: .
-project_kind:           # software | writing | video | research | generic
-project_language: en   # zh = Chinese, en = English
-github_repo: https://github.com/OWNER/REPO
+project_kind: generic   # software | writing | video | research | generic
+repo: https://github.com/OWNER/REPO
+agent_id: YOUR_AGENT_ID
+chat_id: YOUR_TELEGRAM_CHAT_ID
+project_language:      # optional: zh = Chinese, en = English, empty = follow agent preference
 verification_command:
 publish_command:
 cron_schedule: "*/30 * * * *"
-cron_enabled: true
+cron_timeout: 3600
+cron_job_id:
 ```
 
 ## Telegram Report Template (English)
@@ -74,27 +77,8 @@ Next: {next_task}
 Round: {iteration}
 ```
 
-## Telegram Report Template (Chinese)
-
-```markdown
-📋 项目改进报告 — {project_name}
-
-完成: {done_count} 个任务
-耗时: {duration}
-结果: {result}
-
-{if failures}:
-⚠️ 失败:
-{list}
-{/if}
-
-{if unverified}:
-⚠️ 未验证，需要人工检查
-{/if}
-
-下一任务: {next_task}
-轮次: {iteration}
-```
+If `project_language` is empty, runtime output follows the agent's language preference first, then project-language detection.
+If `project_language: zh`, the same report is emitted in Chinese at runtime.
 
 ## Cron Creation (openclaw CLI)
 

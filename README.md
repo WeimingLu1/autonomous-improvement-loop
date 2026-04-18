@@ -129,16 +129,26 @@ verification_command: python -m mypaper.check
 
 ```yaml
 project_path: .
-project_kind:           # auto-detected; or: software | writing | video | research | generic
-project_language: en   # zh = Chinese queue output, en = English
-github_repo: https://github.com/OWNER/REPO
+project_kind: generic   # software | writing | video | research | generic
+repo: https://github.com/OWNER/REPO
+agent_id: YOUR_AGENT_ID
+chat_id: YOUR_TELEGRAM_CHAT_ID
+project_language:      # optional: zh = Chinese queue output, en = English, empty = follow agent preference
 
 verification_command:   # empty = no auto-verification
 publish_command:        # optional: runs after successful task
 
 cron_schedule: "*/30 * * * *"
-cron_enabled: true
+cron_timeout: 3600
+cron_job_id:
 ```
+
+Language resolution order is:
+1. explicit `--language`
+2. configured `project_language`
+3. agent language preference
+4. project content detection
+5. English
 
 ---
 
