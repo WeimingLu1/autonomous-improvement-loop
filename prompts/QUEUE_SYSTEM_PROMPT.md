@@ -44,7 +44,7 @@ After adding any entry, re-sort by score descending and write back to HEARTBEAT.
 ### Queue Minimum
 After completing a task, ensure the queue has at least 5 pending items by running:
 ```bash
-python scripts/queue_scanner.py \
+python scripts/project_insights.py \
   --project "$(project_path)" \
   --heartbeat HEARTBEAT.md \
   --language "$(project_language)" \

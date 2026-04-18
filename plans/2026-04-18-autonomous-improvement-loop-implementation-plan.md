@@ -114,7 +114,7 @@ git commit -m "feat(autonomous-improvement-loop): add config.md"
 ### ⑤ commit + push + rollback_if_unstable
 ```bash
 git add . && git commit -m "feat(#N): 简短描述" && git push
-python scripts/rollback_if_unstable.py --project . --heartbeat HEARTBEAT.md --task "<task>"
+python scripts/verify_and_revert.py --project . --heartbeat HEARTBEAT.md --task "<task>"
 ```
 
 ### ⑥ 文档同步
@@ -142,7 +142,7 @@ python scripts/run_status.py --heartbeat HEARTBEAT.md write --commit $HASH --res
 
 ### ⑨ announce 汇报给 Telegram
 
-### ⑩ queue_scanner.py 追加 1 个候选
+### ⑩ project_insights.py 追加 1 个候选
 
 ---
 
@@ -352,10 +352,10 @@ git commit -m "feat(autonomous-improvement-loop): add cron_lock to run_status"
 
 ---
 
-## Task 6: 更新 `scripts/queue_scanner.py`（接入 priority_scorer）
+## Task 6: 更新 `scripts/project_insights.py`（接入 priority_scorer）
 
 **Files:**
-- Modify: `~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/scripts/queue_scanner.py`
+- Modify: `~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/scripts/project_insights.py`
 
 - [ ] **Step 1: 在 `append_candidate` 中调用 priority_scorer**
 
@@ -384,7 +384,7 @@ def append_candidate(heartbeat: Path, repo: str, finding: str) -> bool:
 - [ ] **Step 2: Commit**
 
 ```bash
-git add skills/autonomous-improvement-loop/scripts/queue_scanner.py
+git add skills/autonomous-improvement-loop/scripts/project_insights.py
 git commit -m "feat(autonomous-improvement-loop): integrate priority_scorer into queue_scanner"
 ```
 
@@ -532,9 +532,9 @@ git commit -m "docs(autonomous-improvement-loop): update file templates for new 
 - [ ] `python3 -m py_compile skills/autonomous-improvement-loop/scripts/*.py`（全部无错误）
 - [ ] `python3 skills/autonomous-improvement-loop/scripts/run_status.py --help`
 - [ ] `python3 skills/autonomous-improvement-loop/scripts/priority_scorer.py --help`
-- [ ] `python3 skills/autonomous-improvement-loop/scripts/queue_scanner.py --help`
+- [ ] `python3 skills/autonomous-improvement-loop/scripts/project_insights.py --help`
 - [ ] `python3 skills/autonomous-improvement-loop/scripts/verify_cli_docs.py --help`
-- [ ] `python3 skills/autonomous-improvement-loop/scripts/rollback_if_unstable.py --help`
+- [ ] `python3 skills/autonomous-improvement-loop/scripts/verify_and_revert.py --help`
 
 ## Task 12: 最终检查
 

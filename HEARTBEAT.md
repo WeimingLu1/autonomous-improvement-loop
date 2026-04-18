@@ -26,11 +26,6 @@
 
 | # | Type | Score | Content | Source | Status | Created |
 |---|------|-------|---------|--------|--------|---------|
-| 1 | improve | 65 | [[Improve]] 审查情节一致性：检查时间线矛盾 | scanner | pending | 2026-04-18 |
-| 2 | improve | 65 | [[Improve]] 找出并解决早期章节遗留的未解情节线索 | scanner | pending | 2026-04-18 |
-| 3 | improve | 60 | [[Improve]] 强化核心冲突：是否能撑过中段？ | scanner | pending | 2026-04-18 |
-| 4 | improve | 60 | [[Improve]] 审查章节钩子：每个章节结尾是否有悬念？ | scanner | pending | 2026-04-18 |
-| 5 | improve | 65 | [[Improve]] 审查角色声音一致性：每个角色是否有独特语言风格？ | scanner | pending | 2026-04-18 |
 
 ---
 

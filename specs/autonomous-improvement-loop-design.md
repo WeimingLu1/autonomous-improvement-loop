@@ -184,7 +184,7 @@ cron 触发（每 30 分钟，isolated session，1 小时 timeout）
 ⑩ announce 汇报给用户当前 session
     │
     ▼
-⑪ queue_scanner.py（1 个新候选）
+⑪ project_insights.py（1 个新候选）
     │
     ▼
 ⑫ memory 更新
@@ -224,9 +224,9 @@ git add VERSION && git commit -m "chore: bump version" && git push
 | 脚本 | 作用 |
 |------|------|
 | `run_status.py` | 读写 Run Status（含 cron_lock） |
-| `queue_scanner.py` | 扫描项目，追加 1 个候选到队列 |
+| `project_insights.py` | 扫描项目，追加 1 个候选到队列 |
 | `verify_cli_docs.py` | 校验 CLI vs README 一致性 |
-| `rollback_if_unstable.py` | push → pytest → 失败自动 git revert |
+| `verify_and_revert.py` | push → verification_command → 失败自动 git revert |
 | `priority_scorer.py` | AI 优先级评分（新增）|
 
 ---
@@ -277,10 +277,10 @@ autonomous-improvement-loop/
 │   └── autonomous-improvement-loop-design.md
 ├── scripts/
 │   ├── run_status.py           # 读写 Run Status（含 cron_lock）
-│   ├── queue_scanner.py        # 扫描项目，追加 1 个候选
+│   ├── project_insights.py        # 扫描项目，追加 1 个候选
 │   ├── priority_scorer.py      # AI 优先级评分
 │   ├── verify_cli_docs.py      # 校验 CLI vs README
-│   └── rollback_if_unstable.py # push → pytest → 自动回滚
+│   └── verify_and_revert.py # push → verification_command → 自动回滚
 ├── references/
 │   ├── file-templates.md
 │   └── checklist.md

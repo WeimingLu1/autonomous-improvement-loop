@@ -35,7 +35,7 @@ cd ~/Projects/PROJECT && source .venv/bin/activate && pytest -q
 ```bash
 # 7. Automation scripts exist and are executable
 ls ~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/scripts/
-# Expected: run_status.py queue_scanner.py verify_cli_docs.py rollback_if_unstable.py
+# Expected: run_status.py project_insights.py verify_cli_docs.py verify_and_revert.py
 
 # 8. Scripts have no syntax errors
 python3 -m py_compile ~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/scripts/*.py
@@ -45,8 +45,8 @@ python3 -m py_compile ~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improve
 python3 scripts/run_status.py --heartbeat ~/.openclaw/workspace-YOUR_AGENT/HEARTBEAT.md read
 # Expected: last_run_time=never last_run_commit=none last_run_result=unknown
 
-# 10. queue_scanner.py --help works
-python3 scripts/queue_scanner.py --help
+# 10. project_insights.py --help works
+python3 scripts/project_insights.py --help
 # Expected: usage with --project and --heartbeat
 ```
 

@@ -5,7 +5,7 @@
 - [ ] Task 3: DEVLOG.md
 - [ ] Task 4: priority_scorer.py
 - [ ] Task 5: run_status.py（加入cron_lock）
-- [ ] Task 6: queue_scanner.py（接入priority_scorer）
+- [ ] Task 6: project_insights.py（接入priority_scorer）
 - [ ] Task 7: QUEUE_SYSTEM_PROMPT.md
 - [ ] Task 8: CLEANUP_CHECKLIST.md
 - [ ] Task 9: SKILL.md（重写）
