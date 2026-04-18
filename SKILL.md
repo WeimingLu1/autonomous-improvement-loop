@@ -151,6 +151,22 @@ score = 30-49               → Internal improvement (tests, docs)
 Tiebreaker: older creation time wins
 ```
 
+### Queue Minimum Size
+
+After each cron execution, the loop **ensures the queue has at least 5 pending items** by running `refresh_queue` (queue_scanner --refresh --min 5). This keeps the backlog healthy even when many small tasks get done in sequence.
+
+The scanner draws from **10 creative buckets**, not just code hygiene:
+- `test` / `service` — missing unit tests
+- `todo` / `doc` — code cleanliness
+- `cli` — missing CLI features (--json, completions)
+- `ux` — user experience improvements
+- `feature` — new feature ideas
+- `intelligence` — smart/AI-adjacent features (insights, predictions, anomaly detection)
+- `data` — import/export/integration
+- `engage` — retention & engagement (achievements, streaks, health scores)
+
+Higher-impact buckets (intelligence, engage, feature) score 65-72; internal improvements score 45-55.
+
 ### cron_lock — How Serialization Works
 
 | Step | User | Cron |
@@ -199,7 +215,8 @@ Tiebreaker: older creation time wins
        │
 ⑪ Announce to Telegram
        │
-⑫ queue_scanner.py (append 1 new candidate if found)
+⑫ refresh_queue.py (queue_scanner --refresh --min 5)
+       │     └─ keeps adding candidates until queue has ≥5 pending items
        │
 ⑬ Update memory/YYYY-MM-DD.md
        │
@@ -393,7 +410,7 @@ clawhub uninstall autonomous-improvement-loop
 | `bootstrap.py` | **Onboarding wizard** — detects project state, generates bootstrap queue for new projects, scans existing projects for improvement candidates | `--project . --skill-dir . --report` / `--project . --skill-dir .` |
 | `run_status.py` | Read/write Run Status (incl. cron_lock, mode) | `--heartbeat HEARTBEAT.md read` |
 | `priority_scorer.py` | Generate AI scoring prompt (rule fallback) | `--task "..." --type improve` |
-| `queue_scanner.py` | Scan project, append 1 new candidate | `--project . --heartbeat HEARTBEAT.md` |
+| `queue_scanner.py` | Scan project + append 1 candidate (--scan); or refresh queue to ≥5 items (--refresh) | `--project . --heartbeat HEARTBEAT.md [--language zh] [--refresh --min 5]` |
 | `verify_cli_docs.py` | Check CLI vs README alignment | `--project . [--cli-name health]` |
 | `rollback_if_unstable.py` | Push → pytest → auto git revert on fail | `--project . --heartbeat HEARTBEAT.md --task "..."` |
 

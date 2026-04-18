@@ -9,10 +9,10 @@
 
 | Field | Value |
 |-------|-------|
-| last_run_time | 2026-04-18T11:55:00Z |
-| last_run_commit | 658e06f |
+| last_run_time | 2026-04-18T11:59:00Z |
+| last_run_commit | 59e9b23 |
 | last_run_result | success |
-| last_run_task | #8 Add module docstring to cli/advise.py |
+| last_run_task | #9 为 src/health_agent/cli/check.py 补齐模块 docstring |
 | cron_lock | false |
 | mode | normal |
 | rollback_on_fail | true |
@@ -34,7 +34,7 @@
 | 6 | improve | 50 | [[Improve] Complete activity_rules.py unit tests](https://github.com/WeimingLu1/HealthAgent) | scanner | done | 2026-04-18 |
 | 7 | improve | 50 | [[Improve] Complete base.py unit tests](https://github.com/WeimingLu1/HealthAgent) | scanner | done | 2026-04-18 |
 | 8 | improve | 50 | [[Improve] Add module docstring to cli/advise.py](https://github.com/WeimingLu1/HealthAgent) | scanner | done | 2026-04-18 |
-| 9 | improve | 50 | [[Improve]] 为 src/health_agent/cli/check.py 补齐模块 docstring | scanner | pending | 2026-04-18 |
+| 9 | improve | 50 | [[Improve]] 为 src/health_agent/cli/check.py 补齐模块 docstring | scanner | done | 2026-04-18 |
 
 ---
 
