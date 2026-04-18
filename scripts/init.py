@@ -82,6 +82,15 @@ def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, **kwargs)
 
 
+def ask(prompt: str, default: str | None = None) -> str:
+    """TTY-friendly prompt with safe default for non-interactive runs."""
+    if not sys.stdin.isatty():
+        return default or ""
+    suffix = f" [{default}]" if default not in (None, "") else ""
+    value = input(f"{prompt}{suffix}: ").strip()
+    return value or (default or "")
+
+
 def read_file(p: Path) -> str:
     return p.read_text(encoding="utf-8")
 
@@ -216,20 +225,15 @@ def detect_telegram_chat_id() -> str | None:
 
 def detect_existing_cron() -> str | None:
     """Check if a cron job for autonomous-improvement-loop already exists."""
-    r = run(["openclaw", "cron", "list", "--json"], timeout=15)
+    r = run(["openclaw", "cron", "list"], timeout=15)
     if r.returncode != 0:
         return None
-    try:
-        crons = json.loads(r.stdout) if r.stdout.strip().startswith("[") else []
-        # The output format varies; try to extract IDs
-        for line in r.stdout.strip().splitlines():
-            if "autonomous" in line.lower() or "improvement" in line.lower():
-                m = re.search(r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", line)
-                if m:
-                    return m.group(0)
-        return None
-    except Exception:
-        return None
+    for line in r.stdout.strip().splitlines():
+        if "autonomous" in line.lower() or "improvement" in line.lower():
+            m = re.search(r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", line)
+            if m:
+                return m.group(0)
+    return None
 
 
 def detect_pytest_available() -> bool:
@@ -348,23 +352,23 @@ def read_current_config() -> dict[str, str]:
 def create_cron(
     agent_id: str,
     model: str,
-    chat_id: str,
+    chat_id: str | None,
     schedule_ms: int = DEFAULT_SCHEDULE_MS,
 ) -> str:
     """Create a new cron job and return its ID."""
-    r = run([
+    cmd = [
         "openclaw", "cron", "add",
         "--name", "Autonomous Improvement Loop",
         "--every", f"{schedule_ms // 60000}m",
         "--session", "isolated",
         "--agent", agent_id,
         "--model", model,
-        "--announce",
-        "--channel", "telegram",
-        "--to", chat_id,
         "--timeout-seconds", str(DEFAULT_TIMEOUT_S),
         "--message", "Autonomous improvement loop triggered",
-    ])
+    ]
+    if chat_id:
+        cmd.extend(["--announce", "--channel", "telegram", "--to", chat_id])
+    r = run(cmd)
     if r.returncode != 0:
         raise RuntimeError(f"Failed to create cron: {r.stderr}")
     # Extract cron ID from output
@@ -378,7 +382,37 @@ def create_cron(
 
 
 def delete_cron(cron_id: str) -> None:
-    run(["openclaw", "cron", "delete", cron_id])
+    run(["openclaw", "cron", "rm", cron_id])
+
+
+def seed_queue(project: Path, mode: str, language: str) -> None:
+    """Populate initial queue after init so the user gets value immediately."""
+    if mode == "bootstrap":
+        run(
+            [
+                sys.executable,
+                str(HERE / "bootstrap.py"),
+                "--project", str(project),
+                "--skill-dir", str(SKILL_DIR),
+                "--mode", "detect",
+            ],
+            cwd=SKILL_DIR,
+            timeout=120,
+        )
+        return
+
+    run(
+        [
+            sys.executable,
+            str(HERE / "queue_scanner.py"),
+            "--project", str(project),
+            "--heartbeat", str(HEARTBEAT),
+            "--language", language,
+            "--refresh", "--min", "5",
+        ],
+        cwd=SKILL_DIR,
+        timeout=120,
+    )
 
 
 # ── HEARTBEAT queue initialization ─────────────────────────────────────────────
@@ -430,12 +464,82 @@ def init_queue_heartbeat(mode: str, language: str) -> None:
     write_file(HEARTBEAT, content)
 
 
+def pending_queue_rows() -> list[dict[str, str]]:
+    if not HEARTBEAT.exists():
+        return []
+    rows: list[dict[str, str]] = []
+    for line in read_file(HEARTBEAT).splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|") or stripped.startswith("|---"):
+            continue
+        m = re.match(
+            r"^\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|",
+            stripped,
+        )
+        if not m:
+            continue
+        num, kind, score, desc, source, status, created = m.groups()
+        if status.strip().lower() == "pending":
+            rows.append(
+                {
+                    "num": num,
+                    "kind": kind.strip(),
+                    "score": score.strip(),
+                    "desc": desc.strip(),
+                    "source": source.strip(),
+                    "status": status.strip(),
+                    "created": created.strip(),
+                }
+            )
+    return rows
+
+
+def write_pending_queue(rows: list[dict[str, str]]) -> None:
+    content = read_file(HEARTBEAT)
+    table = [
+        "| # | Type | Score | Content | Source | Status | Created |",
+        "|---|------|-------|---------|--------|--------|---------|",
+    ]
+    for i, row in enumerate(rows, 1):
+        table.append(
+            f"| {i} | {row['kind']} | {row['score']} | {row['desc']} | {row['source']} | pending | {row['created']} |"
+        )
+    content = re.sub(
+        r"(\n## Queue\n\n)[\s\S]*?(\n---\n)",
+        "\\1" + "\n".join(table) + "\n\\2",
+        content,
+    )
+    write_file(HEARTBEAT, content)
+
+
+def update_run_status_mode(mode: str) -> None:
+    if not HEARTBEAT.exists():
+        return
+    content = read_file(HEARTBEAT)
+    content = re.sub(r"(\| mode \| )([^|]+)( \|)", rf"\1{mode}\3", content)
+    write_file(HEARTBEAT, content)
+
+
+def dedupe_pending_rows(rows: list[dict[str, str]]) -> tuple[list[dict[str, str]], int]:
+    seen: set[str] = set()
+    deduped: list[dict[str, str]] = []
+    removed = 0
+    for row in rows:
+        key = re.sub(r"\s+", " ", row["desc"]).strip().lower()
+        if key in seen:
+            removed += 1
+            continue
+        seen.add(key)
+        deduped.append(row)
+    return deduped, removed
+
+
 # ── Adopt: 接管已有项目 ─────────────────────────────────────────────────────────
 
 def cmd_adopt(
     project: Path,
     agent_id: str,
-    chat_id: str,
+    chat_id: str | None,
     language: str,
     model: str = "minimax-portal/MiniMax-M2.7",
     force_new_cron: bool = False,
@@ -451,8 +555,6 @@ def cmd_adopt(
     version_file = detect_version_file(project)
     docs_dir = project / "docs" / "agent"
     cli_name = detect_cli_name(project)
-    pytest_ok = detect_pytest_available()
-    gh_ok = detect_gh_authenticated()
     readiness = check_project_readiness(project)
 
     # Show project info
@@ -482,11 +584,11 @@ def cmd_adopt(
     if existing_cron and not force_new_cron:
         ok(f"已有 Cron Job: {existing_cron}")
         cron_job_id = existing_cron
-        use_existing = input(f"  {c('使用现有 Cron 还是新建?', COLOR_BOLD)} [使用现有(s)/新建(n)/删除并新建(d)]: ").strip().lower()
-        if use_existing == "n":
-            delete_cron(existing_cron)
-            existing_cron = None
-        elif use_existing == "d":
+        use_existing = ask(
+            f"  {c('Cron 处理方式（s=继续使用, r=删除并重建）', COLOR_BOLD)}",
+            "s",
+        ).lower()
+        if use_existing == "r":
             delete_cron(existing_cron)
             existing_cron = None
             print("  已删除旧 Cron，将创建新的。")
@@ -502,7 +604,7 @@ def cmd_adopt(
             sys.exit(1)
         if not chat_id:
             warn("Telegram Chat ID 未设置，Cron 不会发送通知。继续？[y/N]")
-            if input("  > ").strip().lower() != "y":
+            if ask("  >", "n").lower() != "y":
                 sys.exit(0)
 
         step("⏰ 创建 Cron Job")
@@ -531,11 +633,35 @@ def cmd_adopt(
     )
     ok("config.md 已更新")
 
-    # Init heartbeat
+    # Queue handling for old managed projects
     mode = "bootstrap" if new_items > 3 else "normal"
-    step("📋 初始化 HEARTBEAT.md")
-    init_queue_heartbeat(mode=mode, language=language)
-    ok(f"HEARTBEAT.md 已初始化（模式: {mode}）")
+    current_rows = pending_queue_rows()
+    if current_rows:
+        step("📦 检测到已有队列")
+        deduped_rows, removed = dedupe_pending_rows(current_rows)
+        default_action = "c" if removed else "k"
+        action = ask("  队列处理方式（k=保留, c=去重保留, r=清空重建）", default_action).lower()
+        if action == "r":
+            init_queue_heartbeat(mode=mode, language=language)
+            ok(f"HEARTBEAT.md 已重建（模式: {mode}）")
+        elif action == "c":
+            write_pending_queue(deduped_rows)
+            update_run_status_mode(mode)
+            ok(f"队列已去重，移除 {removed} 条重复项")
+        else:
+            update_run_status_mode(mode)
+            ok("保留现有队列，仅更新运行模式")
+    else:
+        step("📋 初始化 HEARTBEAT.md")
+        init_queue_heartbeat(mode=mode, language=language)
+        ok(f"HEARTBEAT.md 已初始化（模式: {mode}）")
+
+    step("🧠 生成初始队列")
+    if len(pending_queue_rows()) < 5:
+        seed_queue(project=project, mode=mode, language=language)
+        ok("初始队列已生成/补足")
+    else:
+        ok("现有队列已足够，无需补足")
 
     # Done
     print(textwrap.dedent(f"""
@@ -565,7 +691,7 @@ def cmd_adopt(
 def cmd_onboard(
     project: Path,
     agent_id: str,
-    chat_id: str,
+    chat_id: str | None,
     language: str,
     model: str = "minimax-portal/MiniMax-M2.7",
 ) -> None:
@@ -590,7 +716,7 @@ def cmd_onboard(
     语言: {'中文' if language == 'zh' else 'English'}
     """))
 
-    if input("\n  继续? [y/N]: ").strip().lower() != "y":
+    if ask("\n  继续?", "n").lower() != "y":
         print("取消。")
         sys.exit(0)
 
@@ -651,7 +777,7 @@ health --help
         ok("Git 仓库已初始化")
 
     # GitHub repo (optional)
-    gh_remote = input("\n  GitHub repo URL（可选，直接回车跳过）: ").strip()
+    gh_remote = ask("\n  GitHub repo URL（可选，直接回车跳过）")
     if gh_remote:
         run(["git", "remote", "add", "origin", gh_remote], cwd=project)
         ok(f"Git remote 已设置: {gh_remote}")
@@ -723,17 +849,31 @@ def cmd_status(project: Path) -> None:
     # Queue status
     if HEARTBEAT.exists():
         content = read_file(HEARTBEAT)
-        pending = re.findall(r"\|\s*(\d+)\s*\|[^|]*\|[^|]*\|\s*pending\s*\|", content)
-        print(f"  队列待处理任务: {len(pending)} 项")
-        if pending:
-            for m in re.finditer(r"\|\s*(\d+)\s*\|\s*(\w+)\s*\|\s*(\d+)\s*\|\s*([^\|]+?)\s*\|", content):
-                num, kind, score, desc = m.groups()
-                print(f"    #{num} [{score}] {desc.strip()}")
+        pending_rows: list[tuple[str, str, str, str]] = []
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("|") or stripped.startswith("|---"):
+                continue
+            m = re.match(
+                r"^\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|",
+                stripped,
+            )
+            if not m:
+                continue
+            num, kind, score, desc, _source, status = m.groups()
+            if status.strip().lower() == "pending":
+                pending_rows.append((num, kind.strip(), score, desc.strip()))
+
+        print(f"  队列待处理任务: {len(pending_rows)} 项")
+        for num, kind, score, desc in pending_rows[:10]:
+            print(f"    #{num} [{kind}/{score}] {desc}")
+        if len(pending_rows) > 10:
+            print(f"    ... 其余 {len(pending_rows) - 10} 项省略")
 
     # Cron status
     cron_id = config.get("cron_job_id") or detect_existing_cron()
     if cron_id:
-        r = run(["openclaw", "cron", "list", "--json"], timeout=10)
+        r = run(["openclaw", "cron", "list"], timeout=10)
         status_text = "active"
         if r.returncode == 0 and cron_id in r.stdout:
             status_text = c("active", COLOR_GREEN)
@@ -834,7 +974,25 @@ def main() -> int:
             args.language = DEFAULT_LANGUAGE
 
     try:
-        args.func(args)
+        if args.command == "adopt":
+            cmd_adopt(
+                project=args.project,
+                agent_id=args.agent,
+                chat_id=args.chat_id,
+                language=args.language,
+                model=args.model,
+                force_new_cron=args.force_new_cron,
+            )
+        elif args.command == "onboard":
+            cmd_onboard(
+                project=args.project,
+                agent_id=args.agent,
+                chat_id=args.chat_id,
+                language=args.language,
+                model=args.model,
+            )
+        elif args.command == "status":
+            cmd_status(args.project)
     except KeyboardInterrupt:
         print("\n\n取消。")
         return 130

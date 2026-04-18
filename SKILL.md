@@ -241,7 +241,7 @@ python scripts/init.py adopt ~/Projects/YOUR_PROJECT
 3. Checks project readiness (VERSION, pytest, git, README)
 4. Writes `config.md`
 5. Detects or creates Cron Job (every 30 min, isolated session)
-6. Initializes `HEARTBEAT.md`
+6. Initializes `HEARTBEAT.md`, or preserves/deduplicates an existing queue for partially-managed projects
 7. Prints a full status report
 
 ```bash
