@@ -13,7 +13,7 @@
 ## Task 1: 创建 `config.md`（项目配置文件）
 
 **Files:**
-- Create: `~/.openclaw/workspace-viya/skills/autonomous-improvement-loop/config.md`
+- Create: `~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/config.md`
 
 - [ ] **Step 1: 写入 config.md**
 
@@ -23,22 +23,22 @@
 > 安装 skill 后填写此文件，即完成项目绑定。
 
 ## 项目路径
-project_path: ~/Projects/HealthAgent
+project_path: ~/Projects/YOUR_PROJECT
 
 ## GitHub 仓库（用于 gh release 和 issue 链接）
-repo: https://github.com/WeimingLu1/HealthAgent
+repo: https://github.com/OWNER/REPO
 
 ## 版本文件（项目根目录）
-version_file: ~/Projects/HealthAgent/VERSION
+version_file: ~/Projects/YOUR_PROJECT/VERSION
 
 ## 文档目录（项目内的 agent 文档）
-docs_agent_dir: ~/Projects/HealthAgent/docs/agent
+docs_agent_dir: ~/Projects/YOUR_PROJECT/docs/agent
 
 ## OpenClaw Agent ID
-agent_id: viya
+agent_id: YOUR_AGENT_ID
 
 ## Telegram Chat ID（用于 announce）
-chat_id: 5535183090
+chat_id: YOUR_CHAT_ID
 
 ## CLI 名称
 cli_name: health
@@ -60,7 +60,7 @@ git commit -m "feat(autonomous-improvement-loop): add config.md"
 ## Task 2: 重写 `HEARTBEAT.md`（新队列格式 + Run Status）
 
 **Files:**
-- Create: `~/.openclaw/workspace-viya/skills/autonomous-improvement-loop/HEARTBEAT.md`
+- Create: `~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/HEARTBEAT.md`
 
 - [ ] **Step 1: 写入 HEARTBEAT.md（初始状态）**
 
@@ -119,7 +119,7 @@ python scripts/rollback_if_unstable.py --project . --heartbeat HEARTBEAT.md --ta
 
 ### ⑥ 文档同步
 ```bash
-python scripts/verify_cli_docs.py --project . --cli-name health
+python scripts/verify_cli_docs.py --project . --cli-name MYAPP
 # 若不一致，修复 README 后重新 commit + push
 ```
 
@@ -159,7 +159,7 @@ python scripts/run_status.py --heartbeat HEARTBEAT.md write --commit $HASH --res
 ## Task 3: 重写 `DEVLOG.md`
 
 **Files:**
-- Create: `~/.openclaw/workspace-viya/skills/autonomous-improvement-loop/DEVLOG.md`
+- Create: `~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/DEVLOG.md`
 
 - [ ] **Step 1: 写入 DEVLOG.md（初始状态）**
 
@@ -189,7 +189,7 @@ python scripts/run_status.py --heartbeat HEARTBEAT.md write --commit $HASH --res
 ## Task 4: 写 `scripts/priority_scorer.py`（LLM 优先级评分）
 
 **Files:**
-- Create: `~/.openclaw/workspace-viya/skills/autonomous-improvement-loop/scripts/priority_scorer.py`
+- Create: `~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/scripts/priority_scorer.py`
 
 > **重要设计决策**：脚本**不直接调 LLM API**，而是输出一个结构化的评分 prompt，让调用者（agent）用自己的 LLM 计算后传回分数。这样 skill 不需要知道具体 API key 或 base URL，实现真正的项目无关性。
 
@@ -306,7 +306,7 @@ def score_task(task_type: str, task_description: str) -> dict:
 ## Task 5: 更新 `scripts/run_status.py`（加入 cron_lock 支持）
 
 **Files:**
-- Modify: `~/.openclaw/workspace-viya/skills/autonomous-improvement-loop/scripts/run_status.py`
+- Modify: `~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/scripts/run_status.py`
 
 - [ ] **Step 1: 添加 --cron-lock 参数**
 
@@ -355,7 +355,7 @@ git commit -m "feat(autonomous-improvement-loop): add cron_lock to run_status"
 ## Task 6: 更新 `scripts/queue_scanner.py`（接入 priority_scorer）
 
 **Files:**
-- Modify: `~/.openclaw/workspace-viya/skills/autonomous-improvement-loop/scripts/queue_scanner.py`
+- Modify: `~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/scripts/queue_scanner.py`
 
 - [ ] **Step 1: 在 `append_candidate` 中调用 priority_scorer**
 
@@ -393,7 +393,7 @@ git commit -m "feat(autonomous-improvement-loop): integrate priority_scorer into
 ## Task 7: 写 `prompts/QUEUE_SYSTEM_PROMPT.md`（队列系统行为规范）
 
 **Files:**
-- Create: `~/.openclaw/workspace-viya/skills/autonomous-improvement-loop/prompts/QUEUE_SYSTEM_PROMPT.md`
+- Create: `~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/prompts/QUEUE_SYSTEM_PROMPT.md`
 
 - [ ] **Step 1: 写入 QUEUE_SYSTEM_PROMPT.md**
 
@@ -448,7 +448,7 @@ feat(#<队列编号>): <用户可见的简短描述>
 ## Task 8: 写 `prompts/CLEANUP_CHECKLIST.md`（提交前自查）
 
 **Files:**
-- Create: `~/.openclaw/workspace-viya/skills/autonomous-improvement-loop/prompts/CLEANUP_CHECKLIST.md`
+- Create: `~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/prompts/CLEANUP_CHECKLIST.md`
 
 - [ ] **Step 1: 写入 CLEANUP_CHECKLIST.md**
 
@@ -489,7 +489,7 @@ feat(#<队列编号>): <用户可见的简短描述>
 ## Task 9: 重写 `SKILL.md`（整合新设计）
 
 **Files:**
-- Rewrite: `~/.openclaw/workspace-viya/skills/autonomous-improvement-loop/SKILL.md`
+- Rewrite: `~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/SKILL.md`
 
 **覆盖所有新组件：**
 - config.md 用法（安装时填写）
@@ -514,7 +514,7 @@ git commit -m "docs(autonomous-improvement-loop): rewrite SKILL.md with new queu
 ## Task 10: 更新 `references/file-templates.md`
 
 **Files:**
-- Modify: `~/.openclaw/workspace-viya/skills/autonomous-improvement-loop/references/file-templates.md`
+- Modify: `~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/references/file-templates.md`
 
 - [ ] 更新 HEARTBEAT.md 模板（Queue 表格式 + cron_lock）
 - [ ] 更新 Devlog、Report 模板
@@ -538,7 +538,7 @@ git commit -m "docs(autonomous-improvement-loop): update file templates for new 
 
 ## Task 12: 最终检查
 
-- [ ] 无残留 hardcoded HealthAgent 路径（所有路径均通过 config.md 注入）
+- [ ] 无残留 hardcoded YOUR_PROJECT 路径（所有路径均通过 config.md 注入）
 - [ ] `config.md` 存在且可填写
 - [ ] `prompts/QUEUE_SYSTEM_PROMPT.md` 内容覆盖 cron_lock 行为
 - [ ] 更新 SPEC.md 状态为"已确认并开始实现"
@@ -553,7 +553,7 @@ git commit -m "feat(autonomous-improvement-loop): add automation scripts"
 ## Task 12: 最终检查 + 更新 SPEC.md 为已确认状态
 
 - [ ] 将 `specs/autonomous-improvement-loop-design.md` 的状态改为"已确认"
-- [ ] 所有文件路径正确，无残留 hardcoded HealthAgent 路径
+- [ ] 所有文件路径正确，无残留 hardcoded YOUR_PROJECT 路径
 - [ ] `config.md` 中所有字段已填写（当前开发阶段可先用 placeholder）
 
 ```bash

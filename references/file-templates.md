@@ -105,7 +105,7 @@ openclaw cron add \
   --every 30m \
   --session isolated \
   --agent YOUR_AGENT_ID \
-  --model minimax-portal/MiniMax-M2.7 \
+  --model YOUR_MODEL \
   --announce \
   --channel telegram \
   --to YOUR_TELEGRAM_CHAT_ID \

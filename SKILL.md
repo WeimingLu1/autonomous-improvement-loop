@@ -70,7 +70,7 @@ When the project is too new for AI management, the agent will:
 4. **Wait** — cron keeps firing, agent keeps checking readiness, does nothing until ready
 5. **Auto-switch** — once project passes readiness check, agent automatically enters Normal Loop
 
-**Example bootstrap queue for a new Python CLI project:**
+**Example bootstrap queue for a new project:**
 
 | # | Type | Task | Why needed |
 |---|------|------|-------------|
@@ -163,7 +163,7 @@ The scanner draws from **10 creative buckets**, not just code hygiene:
 - `feature` — new feature ideas
 - `intelligence` — smart/AI-adjacent features (insights, predictions, anomaly detection)
 - `data` — import/export/integration
-- `engage` — retention & engagement (achievements, streaks, health scores)
+- `engage` — retention & engagement (achievements, streaks, app scores)
 
 Higher-impact buckets (intelligence, engage, feature) score 65-72; internal improvements score 45-55.
 
@@ -374,7 +374,7 @@ clawhub uninstall autonomous-improvement-loop
 | `run_status.py` | Read/write Run Status (incl. cron_lock, mode) | `--heartbeat HEARTBEAT.md read` |
 | `priority_scorer.py` | Generate AI scoring prompt (rule fallback) | `--task "..." --type improve` |
 | `queue_scanner.py` | Scan project + append 1 candidate (--scan); or refresh queue to ≥5 items (--refresh) | `--project . --heartbeat HEARTBEAT.md [--language zh] [--refresh --min 5]` |
-| `verify_cli_docs.py` | Check CLI vs README alignment | `--project . [--cli-name health]` |
+| `verify_cli_docs.py` | Check CLI vs README alignment | `--project . --cli-name MYAPP` |
 | `rollback_if_unstable.py` | Push → pytest → auto git revert on fail | `--project . --heartbeat HEARTBEAT.md --task "..."` |
 
 ---

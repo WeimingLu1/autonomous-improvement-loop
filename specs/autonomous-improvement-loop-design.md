@@ -45,7 +45,7 @@
 
 ## 2. 队列系统（HEARTBEAT.md）
 
-队列文件位于 skill 目录内：`~/.openclaw/workspace-viya/skills/autonomous-improvement-loop/HEARTBEAT.md`
+队列文件位于 skill 目录内：`~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/HEARTBEAT.md`
 
 ### 2.1 条目结构
 
@@ -239,22 +239,22 @@ skill 目录下的 `config.md` 是唯一的项目配置：
 # Autonomous Improvement Loop — 项目配置
 
 ## 项目路径
-project_path: ~/Projects/HealthAgent
+project_path: ~/Projects/YOUR_PROJECT
 
 ## GitHub 仓库
-repo: https://github.com/WeimingLu1/HealthAgent
+repo: https://github.com/OWNER/REPO
 
 ## 版本文件
-version_file: ~/Projects/HealthAgent/VERSION
+version_file: ~/Projects/YOUR_PROJECT/VERSION
 
 ## 文档目录
-docs_agent_dir: ~/Projects/HealthAgent/docs/agent
+docs_agent_dir: ~/Projects/YOUR_PROJECT/docs/agent
 
 ## OpenClaw Agent ID
-agent_id: viya
+agent_id: YOUR_AGENT_ID
 
 ## Telegram Chat ID
-chat_id: 5535183090
+chat_id: YOUR_CHAT_ID
 
 ## Cron 配置
 cron_schedule: "*/30 * * * *"
@@ -295,7 +295,7 @@ autonomous-improvement-loop/
 
 skill 所有状态文件都在 skill 目录内，**不污染项目目录**。
 
-项目目录（`~/Projects/HealthAgent/`）仅存放：
+项目目录（`~/Projects/YOUR_PROJECT/`）仅存放：
 - 项目的业务代码
 - `docs/agent/`（由 cron 执行时同步更新）
 

@@ -239,7 +239,7 @@ def engagement_features(project: Path, lang: str = "zh") -> list[str]:
             "Add achievement badges: 'First Log', '7-day streak', 'Marathon month'",
             "Add motivational messages when user maintains a good streak",
             "Add daily check-in reminder via system notification",
-            "Add `MYAPP score` command: give an overall health score 0-100",
+            "Add `MYAPP score` command: give an overall app score 0-100",
             "Add leaderboard: track personal bests across time periods",
         ])
     else:

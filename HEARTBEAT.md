@@ -26,14 +26,14 @@
 
 | # | Type | Score | Content | Source | Status | Created |
 |---|------|-------|---------|--------|--------|---------|
-| 1 | feature | 78 | [[Feature] Export report includes rule signals and advice](https://github.com/WeimingLu1/HealthAgent) | user | done | 2026-04-18 |
-| 2 | feature | 65 | [[Feature] Enhanced measurement/sleep/exercise trend summaries](https://github.com/WeimingLu1/HealthAgent) | system | done | 2026-04-18 |
-| 3 | feature | 65 | [[Feature] Profile preferences/goals affect rules and advice generation](https://github.com/WeimingLu1/HealthAgent) | system | done | 2026-04-18 |
-| 4 | feature | 65 | [[Feature] In-project progress/status commands](https://github.com/WeimingLu1/HealthAgent) | system | done | 2026-04-18 |
-| 5 | improve | 50 | [[Improve] Complete rules/ unit tests](https://github.com/WeimingLu1/HealthAgent) | system | done | 2026-04-18 |
-| 6 | improve | 50 | [[Improve] Complete activity_rules.py unit tests](https://github.com/WeimingLu1/HealthAgent) | scanner | done | 2026-04-18 |
-| 7 | improve | 50 | [[Improve] Complete base.py unit tests](https://github.com/WeimingLu1/HealthAgent) | scanner | done | 2026-04-18 |
-| 8 | improve | 50 | [[Improve] Add module docstring to cli/advise.py](https://github.com/WeimingLu1/HealthAgent) | scanner | done | 2026-04-18 |
+| 1 | feature | 78 | [[Feature] Export report includes rule signals and advice](https://github.com/OWNER/REPO) | user | done | 2026-04-18 |
+| 2 | feature | 65 | [[Feature] Enhanced measurement/sleep/exercise trend summaries](https://github.com/OWNER/REPO) | system | done | 2026-04-18 |
+| 3 | feature | 65 | [[Feature] Profile preferences/goals affect rules and advice generation](https://github.com/OWNER/REPO) | system | done | 2026-04-18 |
+| 4 | feature | 65 | [[Feature] In-project progress/status commands](https://github.com/OWNER/REPO) | system | done | 2026-04-18 |
+| 5 | improve | 50 | [[Improve] Complete rules/ unit tests](https://github.com/OWNER/REPO) | system | done | 2026-04-18 |
+| 6 | improve | 50 | [[Improve] Complete activity_rules.py unit tests](https://github.com/OWNER/REPO) | scanner | done | 2026-04-18 |
+| 7 | improve | 50 | [[Improve] Complete base.py unit tests](https://github.com/OWNER/REPO) | scanner | done | 2026-04-18 |
+| 8 | improve | 50 | [[Improve] Add module docstring to cli/advise.py](https://github.com/OWNER/REPO) | scanner | done | 2026-04-18 |
 | 9 | improve | 50 | [[Improve]] 为 src/health_agent/cli/check.py 补齐模块 docstring | scanner | done | 2026-04-18 |
 
 ---

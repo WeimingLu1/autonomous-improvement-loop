@@ -34,15 +34,15 @@ cd ~/Projects/PROJECT && source .venv/bin/activate && pytest -q
 
 ```bash
 # 7. Automation scripts exist and are executable
-ls ~/.openclaw/workspace-viya/skills/autonomous-improvement-loop/scripts/
+ls ~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/scripts/
 # Expected: run_status.py queue_scanner.py verify_cli_docs.py rollback_if_unstable.py
 
 # 8. Scripts have no syntax errors
-python3 -m py_compile ~/.openclaw/workspace-viya/skills/autonomous-improvement-loop/scripts/*.py
+python3 -m py_compile ~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop/scripts/*.py
 # Expected: no output
 
 # 9. run_status.py works
-python3 scripts/run_status.py --heartbeat ~/.openclaw/workspace-viya/HEARTBEAT.md read
+python3 scripts/run_status.py --heartbeat ~/.openclaw/workspace-YOUR_AGENT/HEARTBEAT.md read
 # Expected: last_run_time=never last_run_commit=none last_run_result=unknown
 
 # 10. queue_scanner.py --help works
@@ -71,17 +71,17 @@ openclaw cron list
 
 ```bash
 # 15. HEARTBEAT.md exists with Run Status block
-ls ~/.openclaw/workspace-viya/HEARTBEAT.md
+ls ~/.openclaw/workspace-YOUR_AGENT/HEARTBEAT.md
 # Check: contains "## Run Status" near the top
 
 # 16. DEVLOG.md exists
-ls ~/.openclaw/workspace-viya/DEVLOG.md
+ls ~/.openclaw/workspace-YOUR_AGENT/DEVLOG.md
 
 # 17. REPORT.md exists
-ls ~/.openclaw/workspace-viya/REPORT.md
+ls ~/.openclaw/workspace-YOUR_AGENT/REPORT.md
 
 # 18. memory/ directory exists
-ls ~/.openclaw/workspace-viya/memory/
+ls ~/.openclaw/workspace-YOUR_AGENT/memory/
 ```
 
 ## Telegram

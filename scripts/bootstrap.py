@@ -8,9 +8,9 @@ This script handles two scenarios:
      detected improvement opportunities
 
 Usage:
-    python bootstrap.py --project ~/Projects/MY_PROJECT --skill-dir ~/.openclaw/workspace-viya/skills/autonomous-improvement-loop --mode new
-    python bootstrap.py --project ~/Projects/MY_PROJECT --skill-dir ~/.openclaw/workspace-viya/skills/autonomous-improvement-loop --mode existing
-    python bootstrap.py --project ~/Projects/MY_PROJECT --skill-dir ~/.openclaw/workspace-viya/skills/autonomous-improvement-loop --mode detect
+    python bootstrap.py --project ~/Projects/MY_PROJECT --skill-dir ~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop --mode new
+    python bootstrap.py --project ~/Projects/MY_PROJECT --skill-dir ~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop --mode existing
+    python bootstrap.py --project ~/Projects/MY_PROJECT --skill-dir ~/.openclaw/workspace-YOUR_AGENT/skills/autonomous-improvement-loop --mode detect
 
 The script detects the project state automatically if --mode is omitted.
 """

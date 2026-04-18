@@ -13,7 +13,7 @@ Usage:
         --project /path/to/project \
         --heartbeat /path/to/HEARTBEAT.md \
         --task "<task description>" \
-        [--cli-name health] \
+        [--cli-name MYAPP] \
         [--run-status-bin /path/to/run_status.py]
 
 Arguments:

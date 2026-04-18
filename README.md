@@ -41,10 +41,10 @@ clawhub install autonomous-improvement-loop
 
 ```bash
 # 接管已有项目（保留现有队列）
-python scripts/init.py adopt ~/Projects/YOUR_PROJECT --agent viya --chat-id YOUR_CHAT_ID --language zh
+python scripts/init.py adopt ~/Projects/YOUR_PROJECT --agent YOUR_AGENT_ID --chat-id YOUR_CHAT_ID --language zh
 
 # 新项目引导
-python scripts/init.py onboard ~/Projects/YOUR_PROJECT --agent viya --chat-id YOUR_CHAT_ID --language zh
+python scripts/init.py onboard ~/Projects/YOUR_PROJECT --agent YOUR_AGENT_ID --chat-id YOUR_CHAT_ID --language zh
 
 # 查看项目状态
 python scripts/init.py status ~/Projects/YOUR_PROJECT
@@ -151,8 +151,8 @@ clawhub install autonomous-improvement-loop
 
 # 3. One-command adopt
 python scripts/init.py adopt ~/Projects/YOUR_PROJECT \
-  --agent viya \
-  --chat-id 5535183090 \
+  --agent YOUR_AGENT_ID \
+  --chat-id YOUR_CHAT_ID \
   --language zh
 ```
 
@@ -164,8 +164,8 @@ repo: https://github.com/OWNER/REPO
 version_file: ~/Projects/YOUR_PROJECT/VERSION
 docs_agent_dir: ~/Projects/YOUR_PROJECT/docs/agent
 cli_name: your-cli
-agent_id: viya
-chat_id: "5535183090"
+agent_id: YOUR_AGENT_ID
+chat_id: "YOUR_CHAT_ID"
 project_language: zh          # "zh" = Chinese output, "en" = English
 cron_schedule: "*/30 * * * *"
 cron_timeout: 3600

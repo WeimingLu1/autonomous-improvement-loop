@@ -14,9 +14,9 @@
 | 1 | skill 基础构建 v1.0 | — | — | 最初版本（clawhub publish） |
 | 2 | skill v2.0: queue_scanner + verify_cli_docs + rollback_if_unstable | — | — | 三个自动化脚本 |
 | 3 | skill v3.0: 完整重构 | — | — | autonomous-improvement-loop 完整重构：AI 优先级队列、cron_lock、LLM 评分、SKILL.md 重写 |
-| 4 | HealthAgent 项目清理 | — | — | 删除 docs/agent/、清理 README.md 旧流程 |
+| 4 | YOUR_PROJECT 项目清理 | — | — | 删除 docs/agent/、清理 README.md 旧流程 |
 
-### 📋 HealthAgent 当前队列
+### 📋 YOUR_PROJECT 当前队列
 
 | # | 任务 | score | 状态 |
 |---|------|-------|------|
