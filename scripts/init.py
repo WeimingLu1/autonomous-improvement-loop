@@ -191,26 +191,31 @@ def detect_cli_name(project: Path) -> str:
 
 
 def detect_openclaw_agent_id() -> str | None:
-    """Read agent id from openclaw config."""
-    r = run(["openclaw", "status", "--json"], timeout=10)
-    if r.returncode == 0:
+    """Read agent id from openclaw config or workspace."""
+    # Prefer current skill workspace path (e.g. .../.openclaw/workspace-viya/...)
+    for parent in HERE.parents:
+        if parent.name.startswith("workspace-"):
+            return parent.name.replace("workspace-", "")
+
+    workspace = Path.home() / ".openclaw"
+    # Fallback: existing config in this skill
+    if CONFIG_FILE.exists():
+        m = re.search(r"^agent_id:\s*([^#\n]+)", read_file(CONFIG_FILE), re.MULTILINE)
+        if m:
+            return m.group(1).strip()
+
+    # Last-resort: any workspace dir name first found
+    for d in sorted(workspace.iterdir()):
+        if d.is_dir() and d.name.startswith("workspace-"):
+            return d.name.replace("workspace-", "")
+    # Try reading openclaw config (be fast, don't run CLI)
+    config_path = workspace / "openclaw.json"
+    if config_path.exists():
         try:
-            data = json.loads(r.stdout)
-            return data.get("agent", {}).get("id") or data.get("agentId")
+            data = json.loads(config_path.read_text(encoding="utf-8", errors="ignore"))
+            return data.get("agentId") or data.get("currentAgent")
         except Exception:
             pass
-    # Try reading config file
-    config_paths = [
-        Path.home() / ".config" / "openclaw" / "config.json",
-        Path.home() / ".openclaw" / "config.json",
-    ]
-    for p in config_paths:
-        if p.exists():
-            try:
-                data = json.loads(p.read_text(encoding="utf-8", errors="ignore"))
-                return data.get("agentId") or data.get("agent", {}).get("id")
-            except Exception:
-                pass
     return None
 
 
@@ -343,7 +348,8 @@ def read_current_config() -> dict[str, str]:
     for line in text.splitlines():
         m = re.match(r"^(\w[\w_]*):\s*(.+)$", line.strip())
         if m:
-            result[m.group(1)] = m.group(2).strip()
+            value = re.sub(r"\s+#.*$", "", m.group(2)).strip()
+            result[m.group(1)] = value
     return result
 
 
@@ -440,10 +446,6 @@ def init_queue_heartbeat(mode: str, language: str) -> None:
 | # | Type | Score | Content | Source | Status | Created |
 |---|------|-------|---------|--------|--------|---------|
 """
-    if language == "zh":
-        queue_header = "| # | 类型 | 分值 | 内容 | 来源 | 状态 | 创建时间 |\n"
-        queue_divider = "|---|------|-------|---------|--------|----------|\n"
-        empty_queue = queue_header + queue_divider
 
     content = read_file(HEARTBEAT)
 

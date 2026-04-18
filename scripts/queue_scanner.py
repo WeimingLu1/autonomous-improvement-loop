@@ -285,10 +285,42 @@ def all_buckets(project: Path, lang: str = "zh") -> list[tuple[str, str]]:
 
 # ── Core logic ────────────────────────────────────────────────────────────────
 
+def table_cell(line: str, col: int) -> str:
+    """Extract cell `col` (0-indexed) from a markdown table row like | A | B | C |."""
+    cells = [c.strip() for c in line.split('|')]
+    # cells[0] is empty string before leading |, cells[1] is first cell, etc.
+    return cells[col + 1] if col + 1 < len(cells) else ''
+
+
+def _strip_prefix(content: str) -> str:
+    """Strip queue-entry prefixes from Content so duplicate detection works.
+
+    Supports both legacy forms:
+    - [[Improve]] score=45 | XXX
+    - [[Improve]] XXX
+    """
+    content = re.sub(r'^\[\[[^\]]+\]\]\s*score=\d+\s*\|\s*', '', content).strip()
+    content = re.sub(r'^\[\[[^\]]+\]\]\s*', '', content).strip()
+    return content
+
+
 def existing_queue_normalized(heartbeat: Path) -> set[str]:
+    """Extract normalized Content values from all numbered table rows."""
     content = heartbeat.read_text(encoding="utf-8")
-    rows = re.findall(r'\|\s*\d+\s*\|[^|]*\|\s*([^|]+?)\s*\|', content)
-    return {normalize(f) for f in rows}
+    seen: set[str] = set()
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith('|') or stripped.startswith('|---'):
+            continue
+        # Only rows that start with | and have a row number
+        m = re.match(r'^\|\s*(\d+)\s*\|', stripped)
+        if not m:
+            continue
+        cell4 = table_cell(stripped, 3)  # 0-indexed: col 3 = 4th cell
+        # Strip [[TYPE]] score=N |  prefix so appended entries match findings
+        normalized = normalize(_strip_prefix(cell4))
+        seen.add(normalized)
+    return seen
 
 
 def normalize(text: str) -> str:
@@ -351,16 +383,29 @@ def _score_finding(finding: str) -> int:
 
 
 def queue_count(heartbeat: Path) -> int:
-    """Count pending entries in queue."""
+    """Count pending entries in queue by splitting on | (avoids pipe-in-content issues)."""
     content = heartbeat.read_text(encoding="utf-8")
-    pending = re.findall(r'\|\s*(\d+)\s*\|[^|]*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|', content)
-    return sum(1 for row in pending if 'pending' in row[-1].lower())
+    count = 0
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith('|') or stripped.startswith('|---'):
+            continue
+        m = re.match(r'^\|\s*(\d+)\s*\|', stripped)
+        if not m:
+            continue
+        cells = [c.strip() for c in stripped.split('|')]
+        # cells[0]=empty, cells[1]=#, cells[2]=Type, cells[3]=Score,
+        # cells[4]=Content, cells[5]=Source, cells[6]=Status, cells[7]=Created
+        if len(cells) >= 7 and 'pending' in cells[6].lower():
+            count += 1
+    return count
 
 
 def refresh_queue(project: Path, heartbeat: Path, repo: str, lang: str, min_items: int) -> int:
     """Keep scanning and appending until queue has at least min_items pending."""
     added = 0
-    while queue_count(heartbeat) < min_items:
+    max_add = max(min_items * 3, 20)
+    while queue_count(heartbeat) < min_items and added < max_add:
         candidate = choose_best_candidate(project, heartbeat, lang)
         if not candidate:
             print("queue_scanner: no more candidates found, queue has "
@@ -368,6 +413,11 @@ def refresh_queue(project: Path, heartbeat: Path, repo: str, lang: str, min_item
             break
         if append_to_queue(heartbeat, repo, candidate):
             added += 1
+    if added >= max_add and queue_count(heartbeat) < min_items:
+        print(
+            f"queue_scanner: safety stop hit after {added} additions; "
+            f"pending={queue_count(heartbeat)}"
+        )
     if added:
         print(f"queue_scanner: refreshed queue, added {added} items "
               f"(total pending: {queue_count(heartbeat)})")
