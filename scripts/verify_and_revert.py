@@ -103,15 +103,15 @@ def write_status(
         print(r.stderr, file=sys.stderr)
 
 
-def revert(current_head: str, *, cwd: Path) -> str:
+def revert(commit_to_revert: str, *, cwd: Path) -> str:
     """Revert the given commit and push. Returns the new HEAD hash."""
-    r = run(["git", "revert", "--no-edit", current_head], cwd=cwd)
+    r = run(["git", "revert", "--no-edit", commit_to_revert], cwd=cwd)
     if r.returncode != 0:
         print(r.stdout)
         print(r.stderr, file=sys.stderr)
         raise SystemExit(r.returncode)
     push(cwd=cwd)
-    return current_head(cwd=cwd)
+    return run(["git", "rev-parse", "HEAD"], cwd=cwd).stdout.strip()
 
 
 def run_verification(verify_cmd: str, *, cwd: Path) -> bool | None:
