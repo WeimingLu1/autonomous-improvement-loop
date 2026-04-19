@@ -37,11 +37,11 @@ After installation, interact with the loop via these commands:
 
 | Command | Action |
 |---------|--------|
-| `a-start` | Start hosting: create the cron job |
-| `a-stop` | Stop hosting: remove the cron job |
-| `a-add <content>` | Add a user requirement to the queue |
-| `a-scan` | Rescan the project, refresh the queue (non-user tasks only) |
-| `a-clear` | Clear all non-user tasks from the queue |
+| `a_start` | Start hosting: create the cron job |
+| `a_stop` | Stop hosting: remove the cron job |
+| `a_add <content>` | Add a user requirement to the queue |
+| `a_scan` | Rescan the project, refresh the queue (non-user tasks only) |
+| `a_clear` | Clear all non-user tasks from the queue |
 
 Commands are routed through OpenClaw's skill system — send them as messages and the skill parses the leading `a-` prefix automatically.
 
@@ -230,6 +230,6 @@ The project description is updated after each completed task so the agent always
 - `config.md` new fields: `project_kind`, `verification_command`, `publish_command`
 - `project_language` replaces per-command `--zh` flags
 - Queue format now includes `Detail` field for full intent capture
-- Command system (`a-start`, `a-stop`, `a-add`, `a-scan`, `a-clear`) added via skill router
+- Command system (`a_start`, `a_stop`, `a_add`, `a_scan`, `a_clear`) added via skill router
 - Cron runs now explicitly refresh the non-user queue after every completed task
 - `PROJECT.md` added for type-aware project description

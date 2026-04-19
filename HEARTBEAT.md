@@ -8,7 +8,7 @@
 | # | Type | Score | Content | Detail | Source | Status | Created |
 |---|------|-------|---------|--------|--------|--------|--------|
 | 1 | improve | 100 | 增加健康数据可视化：支持 ASCII 图表输出周/月趋势（饮… | 增加健康数据可视化：支持 ASCII 图表输出周/月趋势（饮食、睡眠、运动、测量数据） | user | done | 2026-04-19 |
-| 2 | improve | 100 | 完善错误提示：所有 CLI 命令的错误信息需说明原因并给出修… | 完善错误提示：所有 CLI 命令的错误信息需说明原因并给出修复建议，而非仅报错 | user | pending | 2026-04-19 |
+| 2 | improve | 100 | 完善错误提示：所有 CLI 命令的错误信息需说明原因并给出修… | 完善错误提示：所有 CLI 命令的错误信息需说明原因并给出修复建议，而非仅报错 | user | done | 2026-04-19 |
 | 3 | improve | 50 | [[Improve]] 为每个未测试的模块补齐单元测试 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
 | 4 | improve | 60 | [[Improve]] 为边界情况增加测试覆盖 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
 | 5 | improve | 60 | [[Improve]] 为关键用户流程增加集成测试 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
@@ -20,13 +20,8 @@
 
 | Field | Value |
 |-------|-------|
-| last_run_time | 2026-04-19T11:30:00Z |
-| last_run_commit | 935cc9b |
-| last_run_result | pass |
-| last_run_task | 增加健康数据 ASCII 图表可视化：条形图（睡眠/运动）、折线图（测量指标）、热力图（饮食）+ 5个 chart 子命令 + 29个测试 |
-| cron_lock | false |
-| mode | normal |
-| rollback_on_fail | true |
+| last_run_time | 2026-04-19T14:30:00Z |
+| last_run_commit | 79a9afb |
 
 ---
 
@@ -54,6 +49,13 @@
 | 2026-04-18T15:50:00Z | 2fd70ce | 为每个未测试的模块补齐单元测试 | pass |
 | 2026-04-18T17:20:00Z | 59e86bf | 确保所有错误路径都有对应测试 | pass |
 | 2026-04-18T16:20:00Z | - | 为关键用户流程增加集成测试 | pass |
+| 2026-04-19T14:30:00Z | 79a9afb | 为 services 模块补充 docstring（health_advisor_service/summary_service/profile_service） | pass |
+| 2026-04-19T14:00:00Z | 82c198b | 为 llm/ 模块补齐边界测试（28个用例）：factory、prompt_builder、advisor_prompt_builder、base、MinimaxClient | pass |
+| 2026-04-19T13:30:00Z | 2a4dc1c | 为 advisor 和 config CLI 增加集成测试（30个用例），覆盖 analyze/plan/insights/feedback/plans/current 和 config show/set-default-profile/paths 流程 | pass |
+| 2026-04-19T13:00:00Z | aa9c9d5 | 为 reminder_service、health_advisor_service、export_service 补齐边界测试（11个用例），232个测试全部通过 | pass |
+| 2026-04-19T12:30:00Z | a4d65e3 | 为 event_service 补齐单元测试（10个用例）+ RulesEngine 集成测试（10个用例），219个测试全部通过 | pass |
+| 2026-04-19T12:00:00Z | 5ac5eb7 | 完善错误提示：为所有 CLI 命令的错误信息增加原因说明和修复建议（log.py/advise.py/completion.py/export.py/status.py）+ 199 个测试全部通过 | pass |
+
 
 ## Notes
 

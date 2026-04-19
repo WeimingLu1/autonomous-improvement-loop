@@ -1342,6 +1342,205 @@ def cmd_status(project: Path) -> None:
 
 # ── Main entry point ────────────────────────────────────────────────────────────
 
+# ── a_queue: show current queue ───────────────────────────────────────────────
+
+def cmd_queue(all_items: bool = False) -> None:
+    step("📋 Current Queue")
+    if not HEARTBEAT.exists():
+        fail(f"HEARTBEAT.md not found at {HEARTBEAT}")
+        return
+
+    content = read_file(HEARTBEAT)
+    queue_match = re.search(r"(## Queue\n\n)([\s\S]*?)(\n---\n)", content)
+    if not queue_match:
+        ok("Queue section not found")
+        return
+
+    rows: list[tuple[str, str, str, str, str]] = []
+    for line in queue_match.group(2).splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|") or "---" in stripped or stripped.startswith("| #"):
+            continue
+        cells = [c.strip() for c in stripped.split("|")[1:-1]]
+        if not cells or not re.match(r"^\d+$", cells[0]):
+            continue
+        num = cells[0]
+        status = cells[6] if len(cells) >= 8 else (cells[5] if len(cells) >= 7 else "")
+        if not all_items and status.lower() == "done":
+            continue
+        score = cells[2] if len(cells) >= 4 else ""
+        content_val = cells[3] if len(cells) >= 5 else ""
+        detail_val = cells[4] if len(cells) >= 6 else content_val
+        rows.append((num, score, content_val, detail_val[:60], status))
+
+    if not rows:
+        ok("Queue is empty")
+        return
+
+    pending = sum(1 for r in rows if r[4].lower() != "done")
+    print(f"  {len(rows)} total ({pending} pending)\n")
+    print(f"  {'#':<3} {'Sc':<4} {'Content':<46} {'Status'}")
+    print(f"  {'-'*3} {'-'*4} {'-'*46} {'-'*10}")
+    for num, score, content_val, detail_val, status in rows:
+        marker = c("✓", COLOR_GREEN) if status.lower() == "done" else c("○", COLOR_YELLOW)
+        content_short = (content_val[:43] + "…") if len(content_val) > 46 else content_val
+        print(f"  {c(num, COLOR_BOLD):<3} {score:<4} {content_short:<46} {marker} {status}")
+
+
+# ── a_log: show recent Done Log ───────────────────────────────────────────────
+
+def cmd_log(n: int = 10) -> None:
+    step("📜 Recent Done Log")
+    if not HEARTBEAT.exists():
+        fail(f"HEARTBEAT.md not found at {HEARTBEAT}")
+        return
+
+    content = read_file(HEARTBEAT)
+    log_match = re.search(r"(## Done Log\n\n)(\| Time[\s\S]*?\n)(\|[\s\S]*?)(?=\n## |\Z)", content)
+    if not log_match:
+        ok("Done Log section not found")
+        return
+
+    data_lines: list[str] = []
+    for line in log_match.group(3).splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|") or "---" in stripped or stripped.startswith("| Time"):
+            continue
+        data_lines.append(stripped)
+
+    if not data_lines:
+        ok("Done Log is empty")
+        return
+
+    print(f"  Last {min(n, len(data_lines))} of {len(data_lines)} entries\n")
+    for line in data_lines[:n]:
+        cells = [c.strip() for c in line.split("|")[1:-1]]
+        if len(cells) < 4:
+            continue
+        time_val = cells[0]
+        commit = cells[1] if len(cells) > 1 else ""
+        task = cells[2] if len(cells) > 2 else ""
+        result = cells[3] if len(cells) > 3 else ""
+        result_mark = c("✓", COLOR_GREEN) if result.lower() == "pass" else c("✗", COLOR_RED)
+        task_short = (task[:50] + "…") if len(task) > 50 else task
+        print(f"  {time_val[:16]}  {result_mark}  {commit:<10}  {task_short}")
+
+
+# ── a_refresh: clear + scan ─────────────────────────────────────────────────
+
+def cmd_refresh(min_items: int | None = None) -> None:
+    step("🔄 Refreshing queue (clear + scan)")
+    config = read_current_config()
+    heartbeat_path_str = config.get("heartbeat_path", str(HEARTBEAT)).strip()
+    heartbeat_p = Path(heartbeat_path_str) if heartbeat_path_str else HEARTBEAT
+    project_path_str = config.get("project_path", "").strip()
+    language = config.get("project_language", DEFAULT_LANGUAGE).strip()
+    resolved_min = min_items if min_items is not None else int(
+        re.search(r"min_queue_items:\s*(\d+)", read_file(CONFIG_FILE) if CONFIG_FILE.exists() else "").group(1)
+        if re.search(r"min_queue_items:\s*(\d+)", read_file(CONFIG_FILE) if CONFIG_FILE.exists() else "")
+        else 5
+    )
+
+    if not project_path_str or project_path_str in (".", "YOUR_PROJECT_PATH"):
+        detected = detect_project_path()
+        project_path_str = str(detected) if detected else "."
+        ok(f"Auto-detected project: {project_path_str}")
+
+    # Step 1: clear
+    ok("Step 1/2: Clearing non-user tasks...")
+    r = run([sys.executable, str(HERE / "queue_scanner.py"), "--clear"], cwd=SKILL_DIR, timeout=60)
+    if r.returncode == 0:
+        ok("Non-user tasks cleared")
+    else:
+        warn(f"Clear returned: {r.stderr[:100] if r.stderr else r.stdout[:100]}")
+
+    # Step 2: scan
+    ok("Step 2/2: Scanning for new items...")
+    r = run(
+        [
+            sys.executable, str(HERE / "project_insights.py"),
+            "--project", project_path_str,
+            "--heartbeat", str(heartbeat_p),
+            "--language", language,
+            "--refresh", "--min", str(resolved_min),
+        ],
+        cwd=SKILL_DIR, timeout=180,
+    )
+    if r.returncode == 0:
+        ok(f"Queue refreshed (min={resolved_min})")
+    else:
+        warn(f"Scan returned: {r.stderr[:100] if r.stderr else ''}")
+
+
+# ── a_trigger: run cron immediately ──────────────────────────────────────────
+
+def cmd_trigger(force: bool = False) -> None:
+    step("⚡ Triggering cron execution")
+    config = read_current_config()
+    cron_job_id = config.get("cron_job_id", "").strip()
+    if not cron_job_id or cron_job_id in ("", "YOUR_AGENT_ID"):
+        detected = detect_existing_cron()
+        if detected:
+            cron_job_id = detected
+            ok(f"Detected cron job: {cron_job_id}")
+        else:
+            fail("No cron job ID found in config.md and none detected")
+            sys.exit(1)
+
+    if not force:
+        lock_match = re.search(r"cron_lock\s*\|\s*(true|false)", read_file(HEARTBEAT))
+        if lock_match and lock_match.group(1) == "true":
+            warn("cron_lock=true — another run may be in progress. Use --force to override.")
+            sys.exit(1)
+
+    ok(f"Running: openclaw cron run {cron_job_id}")
+    r = run(["openclaw", "cron", "run", cron_job_id], timeout=3600)
+    if r.returncode == 0:
+        ok("Cron run triggered successfully")
+    else:
+        fail(f"Failed: {r.stderr[:200] if r.stderr else r.stdout[:200]}")
+
+
+# ── a_config: get/set config values ─────────────────────────────────────────
+
+def cmd_config(action: str, key: str, value: str | None = None) -> None:
+    if action == "get":
+        step(f"⚙  Config: {key}")
+        config = read_current_config()
+        val = config.get(key, "").strip()
+        if val:
+            ok(f"{key} = {val}")
+        else:
+            # Try reading directly from config.md
+            raw = read_file(CONFIG_FILE)
+            m = re.search(rf"^(\s*{re.escape(key)}:\s*)(.*)$", raw, re.MULTILINE)
+            if m:
+                print(f"  {key} = {m.group(2).strip()}")
+            else:
+                warn(f"Key '{key}' not found in config.md")
+    elif action == "set":
+        if not value:
+            fail("'set' requires a value argument")
+            sys.exit(1)
+        step(f"⚙  Config: {key} = {value}")
+        raw = read_file(CONFIG_FILE)
+        if not re.search(rf"^{re.escape(key)}:", raw, re.MULTILINE):
+            fail(f"Key '{key}' not found in config.md — cannot set unregistered key")
+            sys.exit(1)
+        new_raw = re.sub(
+            rf"(^\s*{re.escape(key)}:\s*).+$",
+            rf"\g<1>{value}",
+            raw, flags=re.MULTILINE
+        )
+        if new_raw == raw:
+            fail(f"Pattern did not match for key '{key}'")
+            sys.exit(1)
+        write_file(CONFIG_FILE, new_raw)
+        ok(f"Set {key} = {value}")
+
+
+
+
 def main() -> int:
     import argparse
 
@@ -1379,7 +1578,7 @@ def main() -> int:
 
     sub = parser.add_subparsers(dest="command", required=True)
 
-    adopt_p = sub.add_parser("adopt", help="Take over an existing project")
+    adopt_p = sub.add_parser("a-adopt", help="Take over an existing project")
     adopt_p.add_argument("project", nargs="?", type=Path)
     adopt_p.add_argument("--agent", help="OpenClaw Agent ID")
     adopt_p.add_argument("--chat-id", help="Telegram Chat ID")
@@ -1392,7 +1591,7 @@ def main() -> int:
                          help="Force recreation of the Cron Job (replace existing)")
     adopt_p.set_defaults(func=cmd_adopt)
 
-    onboard_p = sub.add_parser("onboard", help="Bootstrap a new project from scratch")
+    onboard_p = sub.add_parser("a-onboard", help="Bootstrap a new project from scratch")
     onboard_p.add_argument("project", nargs="?", type=Path)
     onboard_p.add_argument("--agent", help="OpenClaw Agent ID")
     onboard_p.add_argument("--chat-id", help="Telegram Chat ID")
@@ -1403,31 +1602,62 @@ def main() -> int:
                           help="LLM model for cron sessions (empty = use OpenClaw default)")
     onboard_p.set_defaults(func=cmd_onboard)
 
-    status_p = sub.add_parser("status", help="Check project readiness")
+    status_p = sub.add_parser("a-status", help="Check project readiness")
     status_p.add_argument("project", nargs="?", type=Path,
                           default=detect_project_path())
     status_p.set_defaults(func=cmd_status)
 
     # ── start ─────────────────────────────────────────────────────────────────
-    start_p = sub.add_parser("start", help="Start cron托管 (create cron job)")
+    start_p = sub.add_parser("a-start", help="Start cron托管 (create cron job)")
     start_p.set_defaults(func=lambda _a: cmd_start())
 
     # ── stop ──────────────────────────────────────────────────────────────────
-    stop_p = sub.add_parser("stop", help="Stop cron托管 (remove cron job)")
+    stop_p = sub.add_parser("a-stop", help="Stop cron托管 (remove cron job)")
     stop_p.set_defaults(func=lambda _a: cmd_stop())
 
     # ── add ───────────────────────────────────────────────────────────────────
-    add_p = sub.add_parser("add", help="Add a user requirement to the queue")
+    add_p = sub.add_parser("a-add", help="Add a user requirement to the queue")
     add_p.add_argument("content", nargs="+", help="Requirement content text")
     add_p.set_defaults(func=lambda a: cmd_add(" ".join(a.content)))
 
     # ── scan ──────────────────────────────────────────────────────────────────
-    scan_p = sub.add_parser("scan", help="Trigger a queue scan")
+    scan_p = sub.add_parser("a-scan", help="Trigger a queue scan")
     scan_p.set_defaults(func=lambda _a: cmd_scan())
 
     # ── clear ────────────────────────────────────────────────────────────────
-    clear_p = sub.add_parser("clear", help="Clear non-user tasks from queue")
+    clear_p = sub.add_parser("a-clear", help="Clear non-user tasks from queue")
     clear_p.set_defaults(func=lambda _a: cmd_clear())
+
+    # ── a_queue ────────────────────────────────────────────────────────────────
+    queue_p = sub.add_parser("a-queue", help="Show current queue")
+    queue_p.add_argument("--all", action="store_true", help="Include done items")
+    queue_p.set_defaults(func=lambda a: cmd_queue(all_items=a.all))
+
+    # ── a_log ──────────────────────────────────────────────────────────────────
+    log_p = sub.add_parser("a-log", help="Show recent Done Log entries")
+    log_p.add_argument("-n", "--count", type=int, default=10,
+                      help="Number of entries to show (default: 10)")
+    log_p.set_defaults(func=lambda a: cmd_log(n=a.count))
+
+    # ── a_refresh ──────────────────────────────────────────────────────────────
+    refresh_p = sub.add_parser("a-refresh", help="Clear non-user tasks and refresh the queue")
+    refresh_p.add_argument("--min", type=int, default=None,
+                          help="Minimum queue items (default: from config.md or 5)")
+    refresh_p.set_defaults(func=lambda a: cmd_refresh(min_items=a.min))
+
+    # ── a_trigger ──────────────────────────────────────────────────────────────
+    trigger_p = sub.add_parser("a-trigger", help="Trigger cron execution immediately")
+    trigger_p.add_argument("--force", action="store_true",
+                          help="Skip cron_lock check (use with caution)")
+    trigger_p.set_defaults(func=lambda a: cmd_trigger(force=a.force))
+
+    # ── a_config ───────────────────────────────────────────────────────────────
+    config_sp = sub.add_parser("a-config", help="Get or set config values")
+    config_sp.add_argument("action", choices=["get", "set"],
+                          help="'get' to read a value, 'set' to write")
+    config_sp.add_argument("key", help="Config key (e.g. project_language)")
+    config_sp.add_argument("value", nargs="?", help="New value (required for 'set')")
+    config_sp.set_defaults(func=lambda a: cmd_config(action=a.action, key=a.key, value=a.value))
 
     args = parser.parse_args()
 
@@ -1444,7 +1674,7 @@ def main() -> int:
             print("  ~/projects/")
             print("  ~/Code/")
             print("\nSpecify one manually, for example: python init.py adopt ~/Projects/YourProject")
-            parser.parse_args(["adopt", "--help"])
+            parser.parse_args(["a-adopt", "--help"])
             sys.exit(1)
 
     # Auto-detect agent_id
@@ -1460,7 +1690,7 @@ def main() -> int:
         args.language = resolve_language(getattr(args, "project", None), explicit=None)
 
     try:
-        if args.command == "adopt":
+        if args.command == "a-adopt":
             cmd_adopt(
                 project=args.project,
                 agent_id=args.agent,
@@ -1469,7 +1699,7 @@ def main() -> int:
                 model=args.model,
                 force_new_cron=args.force_new_cron,
             )
-        elif args.command == "onboard":
+        elif args.command == "a-onboard":
             cmd_onboard(
                 project=args.project,
                 agent_id=args.agent,
@@ -1477,18 +1707,28 @@ def main() -> int:
                 language=args.language,
                 model=args.model,
             )
-        elif args.command == "status":
+        elif args.command == "a-status":
             cmd_status(args.project)
-        elif args.command == "start":
+        elif args.command == "a-start":
             cmd_start()
-        elif args.command == "stop":
+        elif args.command == "a-stop":
             cmd_stop()
-        elif args.command == "add":
+        elif args.command == "a-add":
             cmd_add(" ".join(args.content))
-        elif args.command == "scan":
+        elif args.command == "a-scan":
             cmd_scan()
-        elif args.command == "clear":
+        elif args.command == "a-clear":
             cmd_clear()
+        elif args.command == "a-queue":
+            cmd_queue(all_items=args.all)
+        elif args.command == "a-log":
+            cmd_log(n=args.count)
+        elif args.command == "a-refresh":
+            cmd_refresh(min_items=args.min)
+        elif args.command == "a-trigger":
+            cmd_trigger(force=args.force)
+        elif args.command == "a-config":
+            cmd_config(action=args.action, key=args.key, value=args.value)
     except KeyboardInterrupt:
         print("\n\nCancelled.")
         return 130

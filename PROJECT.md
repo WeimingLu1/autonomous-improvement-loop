@@ -75,6 +75,7 @@ HealthAgent 是一款面向个人健康管理的 CLI 工具，同时也是 OpenC
 
 | 时间 | Commit | 内容 | 结果 |
 |------|--------|------|------|
+| 2026-04-19T13:30:00Z | 2a4dc1c | 为 advisor 和 config CLI 增加集成测试（30个用例） | pass |
 | 2026-04-19T08:50:00Z | a5c9ba2 | 增加用户配置文件支持（~/.healthagent.yaml）及 config 子命令 | pass |
 | 2026-04-19T07:20:00Z | ca1f8da | 修复 ruff E501/B904/E712/F841 风格问题（共93处） | pass |
 | 2026-04-19T06:50:00Z | 92d1f9b | ruff auto-fix 清理：datetime.UTC 别名/unused imports/f-string 修正 | pass |

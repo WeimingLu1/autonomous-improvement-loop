@@ -1,6 +1,6 @@
 ---
 name: autonomous-improvement-loop
-description: Universal continuous improvement loop for any project. Agent-driven queue, cron scheduler, type-aware scanner, command system (a-start/stop/add/scan/clear), Detail field for full intent capture, inspire bucket for creative discovery. Works for software, writing, video, research, and generic projects. Install: clawhub install autonomous-improvement-loop
+description: Universal continuous improvement loop for any project. Agent-driven queue, cron scheduler, type-aware scanner, command system (a_start/stop/add/scan/clear), Detail field for full intent capture, inspire bucket for creative discovery. Works for software, writing, video, research, and generic projects. Install: clawhub install autonomous-improvement-loop
 ---
 
 # Autonomous Improvement Loop — Skill Reference
@@ -158,10 +158,10 @@ The skill is invoked via OpenClaw's skill router. Incoming message text is parse
 
 | Command | Action |
 |---------|--------|
-| `a-start` | Start hosting: create the cron job |
-| `a-stop` | Stop hosting: remove the cron job |
-| `a-add <content>` | Add a user requirement to the queue |
-| `a-scan` | Rescan the project, refresh the queue (non-user tasks only) |
-| `a-clear` | Clear all non-user tasks from the queue |
+| `a_start` | Start hosting: create the cron job |
+| `a_stop` | Stop hosting: remove the cron job |
+| `a_add <content>` | Add a user requirement to the queue |
+| `a_scan` | Rescan the project, refresh the queue (non-user tasks only) |
+| `a_clear` | Clear all non-user tasks from the queue |
 
 When a user sends a message, the skill parses the first `a-` prefix command; the remaining text is treated as arguments.
