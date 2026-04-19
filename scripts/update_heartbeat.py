@@ -6,9 +6,10 @@ Called by the cron agent after task execution to reliably update HEARTBEAT.md
 instead of relying on manual file edits. Performs:
   1. Mark the specified (or first pending) task as done
   2. Append Done Log entry
-  3. Refresh the queue (clear stale non-user + scan new items)
-  4. Update Run Status fields
-  5. Release cron_lock
+  3. Update Run Status fields
+  4. Refresh the queue (clear stale non-user + scan new items)
+  5. Update PROJECT.md recent activity
+  6. Release cron_lock
 
 Usage:
   update_heartbeat.py --heartbeat HEARTBEAT.md \
@@ -109,6 +110,67 @@ def _replace_all_queue_sections(content: str, new_block: str) -> str:
     if dash_match:
         return stripped_content[:dash_match.start()] + new_block + stripped_content[dash_match.start():]
     return new_block + stripped_content
+
+
+def _update_project_md(
+    project: Path,
+    *,
+    commit: str,
+    task: str,
+    result: str,
+    ts: str,
+    max_entries: int = 10,
+) -> None:
+    """Append the latest task result to PROJECT.md recent activity.
+
+    PROJECT.md lives at the skill root. If that file is absent, fall back to a
+    project-local PROJECT.md only when it exists.
+    """
+    project_md = project / "PROJECT.md"
+    if not project_md.exists():
+        fallback = SKILL_DIR / "PROJECT.md"
+        if fallback.exists():
+            project_md = fallback
+        else:
+            print("WARNING: PROJECT.md not found, skipping PROJECT update", file=sys.stderr)
+            return
+
+    lines = project_md.read_text(encoding="utf-8").splitlines()
+
+    section_idx = next((i for i, line in enumerate(lines) if line.strip() == "## 近期动态"), None)
+    if section_idx is None:
+        print("WARNING: PROJECT.md missing '## 近期动态' section, skipping", file=sys.stderr)
+        return
+
+    header_idx = next(
+        (i for i in range(section_idx + 1, len(lines)) if lines[i].strip() == "| 时间 | Commit | 内容 | 结果 |"),
+        None,
+    )
+    separator_idx = next(
+        (i for i in range((header_idx or section_idx) + 1, len(lines)) if lines[i].strip() == "|------|--------|------|------|"),
+        None,
+    )
+    if header_idx is None or separator_idx is None:
+        print("WARNING: PROJECT.md recent-activity table malformed, skipping", file=sys.stderr)
+        return
+
+    row_start = separator_idx + 1
+    row_end = row_start
+    while row_end < len(lines) and lines[row_end].startswith("|"):
+        row_end += 1
+
+    existing_rows = [line for line in lines[row_start:row_end] if line.strip()]
+    new_row = f"| {ts} | {commit} | {task} | {result} |"
+
+    deduped_rows = [row for row in existing_rows if f"| {commit} |" not in row]
+    updated_rows = [new_row] + deduped_rows[: max_entries - 1]
+
+    updated_lines = lines[:row_start] + updated_rows + lines[row_end:]
+    updated_content = "\n".join(updated_lines) + "\n"
+    updated_content = re.sub(r"\*最后更新：\d{4}-\d{2}-\d{2}\*", f"*最后更新：{ts[:10]}*", updated_content)
+
+    project_md.write_text(updated_content, encoding="utf-8")
+    print(f"PROJECT.md updated: {commit}")
 
 
 def _update_heartbeat(
@@ -219,7 +281,13 @@ def _update_heartbeat(
     except Exception as e:
         print(f"WARNING: refresh_queue failed: {e}", file=sys.stderr)
 
-    # ── 5. Done ──────────────────────────────────────────────────────────────
+    # ── 5. Update PROJECT.md ────────────────────────────────────────────────
+    try:
+        _update_project_md(project, commit=commit, task=task, result=result, ts=ts)
+    except Exception as e:
+        print(f"WARNING: PROJECT.md update failed: {e}", file=sys.stderr)
+
+    # ── 6. Done ──────────────────────────────────────────────────────────────
     print(f"\nHEARTBEAT update complete: {ts}")
 
 

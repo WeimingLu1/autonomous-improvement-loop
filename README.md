@@ -229,6 +229,7 @@ The project description is updated after each completed task so the agent always
 | `priority_scorer.py` | Score queue entries (supports user request insertion) |
 | `verify_and_revert.py` | Run verification, rollback on failure |
 | `run_status.py` | Read/write Run Status section |
+| `update_heartbeat.py` | Post-task updater: HEARTBEAT.md + PROJECT.md recent activity |
 | `bootstrap.py` | Legacy helper for old Python software projects |
 | `queue_scanner.py` | **Legacy** — redirects to `project_insights.py` |
 | `rollback_if_unstable.py` | **Legacy** — redirects to `verify_and_revert.py` |
