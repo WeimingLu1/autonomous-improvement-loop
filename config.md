@@ -25,4 +25,4 @@ publish_command:        # optional: shell command after successful task
 ## Cron
 cron_schedule: "*/30 * * * *"
 cron_timeout: 3600
-cron_job_id: 31930147-6ec6-4ea7-b4e5-1a3261607503
+cron_job_id: 

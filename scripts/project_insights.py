@@ -326,11 +326,11 @@ def call_llm(finding: str, bucket_name: str, inspire_context: list[str], lang: s
 
     In production, this would call an LLM API with the finding and inspire
     questions as context, returning (improved_finding, detail).
-    Currently returns the original finding with a concise, readable detail.
+    Returns the original finding with a concise detail that includes
+    the inspire question that guided this selection.
     """
-    if bucket_name == "inspire":
-        # For inspire bucket items, the finding IS the inspire question — use it as detail
-        detail = finding
+    if inspire_context:
+        detail = f"{inspire_context[0]} | Bucket: {bucket_name}"
     else:
         detail = f"Bucket: {bucket_name}"
     return finding, detail
@@ -341,6 +341,10 @@ def choose_best_candidate(project: Path, heartbeat: Path, lang: str) -> tuple[st
 
     Returns (finding, detail) tuple where detail is the full analysis
     context (used as the Detail field when Source=agent).
+
+    Note: items from the 'inspire' bucket are used as creative-context
+    questions and are NOT returned as queue items directly. Instead,
+    they populate the detail field of other bucket items.
     """
     ptype = detect_project_type(project)
     existing = existing_queue_normalized(heartbeat)
@@ -349,9 +353,12 @@ def choose_best_candidate(project: Path, heartbeat: Path, lang: str) -> tuple[st
     inspire_questions = _get_inspire_questions(ptype, lang)
 
     for bucket_name, ideas in get_buckets(ptype, lang):
+        if bucket_name == "inspire":
+            # Inspire bucket items are questions, not queue items — skip
+            continue
         for idea in ideas:
             if _normalize(idea).lower() not in existing:
-                # Use LLM stub to get finding + detail
+                # Use inspire context as detail for this finding
                 finding, detail = call_llm(idea, bucket_name, inspire_questions, lang)
                 return finding, detail
     return None
