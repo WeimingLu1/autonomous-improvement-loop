@@ -22,6 +22,10 @@
 ## Queue
 
 
+| 1 | improve | 60 | [[Improve]] 哪些开发者体验痛点还没被解决？ | 哪些开发者体验痛点还没被解决？ | scanner | pending | 2026-04-19 |
+| 2 | improve | 60 | [[Improve]] CLI 工具有哪些交互范式可以创新？ | CLI 工具有哪些交互范式可以创新？ | scanner | pending | 2026-04-19 |
+| 3 | improve | 60 | [[Improve]] 竞品的哪些亮点功能我们可以借鉴但还未实现？ | 竞品的哪些亮点功能我们可以借鉴但还未实现？ | scanner | pending | 2026-04-19 |
+
 ---
 
 ## Done Log

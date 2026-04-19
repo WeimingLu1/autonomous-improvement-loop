@@ -321,24 +321,18 @@ def _get_inspire_questions(ptype: str, lang: str) -> list[str]:
     return []
 
 
-def call_llm(finding: str, inspire_context: list[str], lang: str) -> tuple[str, str]:
+def call_llm(finding: str, bucket_name: str, inspire_context: list[str], lang: str) -> tuple[str, str]:
     """Stub for LLM-powered creative improvement suggestion.
 
     In production, this would call an LLM API with the finding and inspire
     questions as context, returning (improved_finding, detail).
-    Currently returns the original finding with a placeholder detail.
+    Currently returns the original finding with a concise, readable detail.
     """
-    # Combine inspire questions into a context string
-    if inspire_context:
-        context_str = "\n".join(f"  \u2022 {q}" for q in inspire_context)
-        detail = (
-            f"[inspire context used]\n"
-            f"LLM should consider these creative questions while evaluating:\n"
-            f"{context_str}\n"
-            f"Original finding: {finding}"
-        )
+    if bucket_name == "inspire":
+        # For inspire bucket items, the finding IS the inspire question — use it as detail
+        detail = finding
     else:
-        detail = f"Static bucket item; no inspire context applied. Finding: {finding}"
+        detail = f"Bucket: {bucket_name}"
     return finding, detail
 
 
@@ -354,11 +348,11 @@ def choose_best_candidate(project: Path, heartbeat: Path, lang: str) -> tuple[st
     # Extract inspire questions for type-aware creative context
     inspire_questions = _get_inspire_questions(ptype, lang)
 
-    for _bucket_name, ideas in get_buckets(ptype, lang):
+    for bucket_name, ideas in get_buckets(ptype, lang):
         for idea in ideas:
             if _normalize(idea).lower() not in existing:
                 # Use LLM stub to get finding + detail
-                finding, detail = call_llm(idea, inspire_questions, lang)
+                finding, detail = call_llm(idea, bucket_name, inspire_questions, lang)
                 return finding, detail
     return None
 
