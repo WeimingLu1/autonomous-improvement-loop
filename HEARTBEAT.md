@@ -22,25 +22,9 @@
 ## Queue
 
 
-| 1 | improve | 50 | [[Improve]] 为每个未测试的模块补齐单元测试 | 哪些开发者体验痛点还没被解决？ | Bucket: test | scanner | pending | 2026-04-19 |
-| 2 | improve | 60 | [[Improve]] 为边界情况增加测试覆盖 | 哪些开发者体验痛点还没被解决？ | Bucket: test | scanner | pending | 2026-04-19 |
-| 3 | improve | 60 | [[Improve]] 为关键用户流程增加集成测试 | 哪些开发者体验痛点还没被解决？ | Bucket: test | scanner | pending | 2026-04-19 |
-| 4 | improve | 55 | [[Improve]] 确保所有错误路径都有对应测试 | 哪些开发者体验痛点还没被解决？ | Bucket: test | scanner | pending | 2026-04-19 |
-| 5 | improve | 45 | [[Improve]] 为未写文档的模块补充 docstring | 哪些开发者体验痛点还没被解决？ | Bucket: doc | scanner | pending | 2026-04-19 |
-| 6 | improve | 60 | [[Improve]] 为公开 API 写清合约和使用示例 | 哪些开发者体验痛点还没被解决？ | Bucket: doc | scanner | pending | 2026-04-19 |
-| 7 | improve | 60 | [[Improve]] 为不直观逻辑增加注释说明 | 哪些开发者体验痛点还没被解决？ | Bucket: doc | scanner | pending | 2026-04-19 |
-| 8 | improve | 60 | [[Improve]] 处理代码库中的所有 TODO/FIXME | 哪些开发者体验痛点还没被解决？ | Bucket: todo | scanner | pending | 2026-04-19 |
-| 9 | improve | 60 | [[Improve]] 审查并移除或标注废弃代码路径 | 哪些开发者体验痛点还没被解决？ | Bucket: todo | scanner | pending | 2026-04-19 |
-| 10 | improve | 70 | [[Improve]] 改进错误提示：给出原因和修复建议 | 哪些开发者体验痛点还没被解决？ | Bucket: ux | scanner | pending | 2026-04-19 |
-| 11 | improve | 55 | [[Improve]] 增加 verbose 模式（--verbose）输出详细信息 | 哪些开发者体验痛点还没被解决？ | Bucket: ux | scanner | pending | 2026-04-19 |
-| 12 | improve | 60 | [[Improve]] 为 CLI 增加 shell 自动补全（bash/zsh/fish） | 哪些开发者体验痛点还没被解决？ | Bucket: ux | scanner | pending | 2026-04-19 |
-| 13 | improve | 60 | [[Improve]] 增加配置文件（~/.myapp.yaml）支持用户偏好设置 | 哪些开发者体验痛点还没被解决？ | Bucket: ux | scanner | pending | 2026-04-19 |
-| 14 | improve | 60 | [[Improve]] 找出最被期待但未实现的功能并实现 | 哪些开发者体验痛点还没被解决？ | Bucket: feature | scanner | pending | 2026-04-19 |
-| 15 | improve | 60 | [[Improve]] 增加 status 命令：一览当前项目状态 | 哪些开发者体验痛点还没被解决？ | Bucket: feature | scanner | pending | 2026-04-19 |
-| 16 | improve | 65 | [[Improve]] 增加 export 命令输出结构化数据 | 哪些开发者体验痛点还没被解决？ | Bucket: data | scanner | pending | 2026-04-19 |
-| 17 | improve | 60 | [[Improve]] 增加项目数据的备份/恢复机制 | 哪些开发者体验痛点还没被解决？ | Bucket: data | scanner | pending | 2026-04-19 |
-| 18 | improve | 68 | [[Improve]] 增加成就/里程碑系统，奖励持续投入 | 哪些开发者体验痛点还没被解决？ | Bucket: engage | scanner | pending | 2026-04-19 |
-| 19 | improve | 65 | [[Improve]] 增加连续记录追踪，激励保持节奏 | 哪些开发者体验痛点还没被解决？ | Bucket: engage | scanner | pending | 2026-04-19 |
+| 1 | improve | 50 | [[Improve]] 为每个未测试的模块补齐单元测试 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
+| 2 | improve | 60 | [[Improve]] 为边界情况增加测试覆盖 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
+| 3 | improve | 60 | [[Improve]] 为关键用户流程增加集成测试 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
 
 ---
 

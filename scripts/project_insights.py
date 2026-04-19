@@ -321,18 +321,87 @@ def _get_inspire_questions(ptype: str, lang: str) -> list[str]:
     return []
 
 
-def call_llm(finding: str, bucket_name: str, inspire_context: list[str], lang: str) -> tuple[str, str]:
-    """Stub for LLM-powered creative improvement suggestion.
+_BUCKET_DETAIL_TEMPLATES: dict[str, str] = {
+    "test": (
+        "Write or complete unit/integration tests for this module. "
+        "Identify all public functions and classes; for each, cover happy-path, "
+        "edge cases, and error conditions. Use pytest. Aim for >=80% coverage. "
+        "Place tests in tests/ mirroring the src/ structure."
+    ),
+    "doc": (
+        "Review and improve documentation for this module. "
+        "Ensure all public APIs have docstrings (Sphinx style: description, args, "
+        "returns, raises). Add usage examples for complex functions. "
+        "Keep docs consistent with existing style."
+    ),
+    "ux": (
+        "Improve the CLI user experience for this area. "
+        "Review error messages: they should be human-readable, explain WHAT failed "
+        "and WHY, and suggest HOW to fix it. "
+        "Check for consistent --help output, sensible defaults, and clear confirmations."
+    ),
+    "feature": (
+        "Design and implement this feature. "
+        "First, write a clear spec: what it does, what inputs it accepts, "
+        "what outputs it produces, and what edge cases exist. "
+        "Then implement with tests. Prefer small, composable functions."
+    ),
+    "data": (
+        "Implement or improve data handling for this area. "
+        "Focus on correct serialization/deserialization, migration paths, "
+        "backup/restore reliability, and clear data formats."
+    ),
+    "engage": (
+        "Add a user engagement feature. "
+        "Think about what motivates continued use: progress visibility, "
+        "achievement tracking, streak incentives, or clear feedback loops. "
+        "Implement in a way that is non-intrusive and respectful of user time."
+    ),
+    "todo": (
+        "Audit the codebase for TODO/FIXME/HACK comments. "
+        "For each one found: if it's still relevant, implement it; "
+        "if it's obsolete, remove it; if it's a real bug, open an issue instead."
+    ),
+    "structure": (
+        "Review the project structure. "
+        "Check if directories are logically organized, if file names are clear, "
+        "and if the layout reflects how the code actually works. "
+        "Propose or apply reorganizations that improve navigability."
+    ),
+    "clarity": (
+        "Improve clarity of the codebase. "
+        "Look for ambiguous naming, unclear logic, or confusing control flow. "
+        "Rename variables/functions to be self-documenting. "
+        "Add inline comments only where intent is not obvious from the code."
+    ),
+    "consistency": (
+        "Audit for consistency issues. "
+        "Check naming conventions, error-handling patterns, and coding style. "
+        "Apply fixes uniformly across the affected area."
+    ),
+    "completeness": (
+        "Find incomplete sections or missing pieces. "
+        "Check for placeholder content, unfinished features, or gaps in coverage. "
+        "Either complete them or document them clearly as known limitations."
+    ),
+    "workflow": (
+        "Identify and eliminate friction in the development workflow. "
+        "Look for manual steps that could be automated, repetitive tasks that "
+        "could be templated, and handoffs that lose information."
+    ),
+}
 
-    In production, this would call an LLM API with the finding and inspire
-    questions as context, returning (improved_finding, detail).
-    Returns the original finding with a concise detail that includes
-    the inspire question that guided this selection.
+
+def call_llm(finding: str, bucket_name: str, inspire_context: list[str], lang: str) -> tuple[str, str]:
+    """Return (finding, detail) for a queue entry.
+
+    The detail is a thorough task description generated from the bucket category.
+    In production this would call an LLM; here we use structured templates.
     """
-    if inspire_context:
-        detail = f"{inspire_context[0]} | Bucket: {bucket_name}"
-    else:
-        detail = f"Bucket: {bucket_name}"
+    detail = _BUCKET_DETAIL_TEMPLATES.get(
+        bucket_name,
+        f"Review and improve: {finding}"
+    )
     return finding, detail
 
 
