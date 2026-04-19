@@ -33,9 +33,9 @@
 
 ## Queue Management Rules
 
-- **User request** → score=100 → immediately inserted at #1
-- **cron_lock=true** during execution: skip queue edits
-- **After adding**: re-sort by score descending
+- **User request** → score=100 → immediately inserted at #1, all others shift down
+- **cron_lock=true** during execution: skip queue edits, agent refuses direct file edits
+- **After adding**: re-sort by score descending, write back to HEARTBEAT.md
 - **Cron sequence**: cron_lock → execute → verify/publish → announce → cron_unlock
 ```
 
@@ -77,8 +77,15 @@ Next: {next_task}
 Round: {iteration}
 ```
 
-If `project_language` is empty, runtime output follows the agent's language preference first, then project-language detection.
-If `project_language: zh`, the same report is emitted in Chinese at runtime.
+**Language resolution for project content:**
+1. explicit `--language` argument
+2. configured `project_language` in config.md
+3. agent language preference
+4. project content detection
+5. English fallback
+
+The skill UI (SKILL.md, README.md, scripts, reports) is always in English.
+The managed project's queue content and task descriptions follow `project_language`.
 
 ## Cron Creation (openclaw CLI)
 

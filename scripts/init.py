@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 r"""
-Autonomous Improvement Loop — setup wizard & cron托管 CLI
+Autonomous Improvement Loop — setup wizard & cron hosting CLI
 
 Supports these flows:
   adopt    Take over an existing project (auto-detect, configure, start)
   onboard  Bootstrap a brand-new project
   status   Check project readiness and queue state
 
-  start    Start cron托管 (create cron job from config.md)
-  stop     Stop cron托管 (remove cron job)
+  start    Start cron hosting (create cron job from config.md)
+  stop     Stop cron hosting (remove cron job)
   add      Add a user requirement to the queue
   scan     Trigger a queue scan via project_insights.py
   clear    Clear non-user tasks from the queue
@@ -23,10 +23,10 @@ Examples:
   # Check project readiness
   python init.py status ~/Projects/YOUR_PROJECT
 
-  # Start cron托管
+  # Start cron hosting
   python init.py start
 
-  # Stop cron托管
+  # Stop cron hosting
   python init.py stop
 
   # Add a user requirement
