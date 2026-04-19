@@ -230,7 +230,7 @@ The project description (type, positioning, features, architecture, inspire ques
 | `verify_and_revert.py` | Run verification, rollback on failure |
 | `run_status.py` | Read/write Run Status section |
 | `update_heartbeat.py` | Post-task updater: HEARTBEAT + queue refresh + inspire scan + PROJECT.md rebuild |
-| `inspire_scanner.py` | Generate [[Idea]] functional tasks from PROJECT.md inspire questions (every N cycles) |
+| `inspire_scanner.py` | Generates alternating [[Idea]]/[[Improve]] tasks from project analysis |
 | `project_md.py` | Generate PROJECT.md from current project tree (used by adopt / onboard / every task) |
 | `bootstrap.py` | Legacy helper for old Python software projects |
 | `queue_scanner.py` | **Legacy** — redirects to `project_insights.py` |
