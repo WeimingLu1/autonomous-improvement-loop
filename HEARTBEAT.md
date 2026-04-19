@@ -9,10 +9,10 @@
 
 | Field | Value |
 |-------|-------|
-| last_run_time | 2026-04-19T08:50:00Z |
-| last_run_commit | a5c9ba2 |
+| last_run_time | 2026-04-19T10:03:00Z |
+| last_run_commit | 985d438 |
 | last_run_result | pass |
-| last_run_task | 增加用户配置文件支持（~/.healthagent.yaml）及 config 子命令 |
+| last_run_task | 为 health completion 和 feedback CLI 补齐单元测试（共16个用例） |
 | cron_lock | false |
 | mode | normal |
 | rollback_on_fail | true |
@@ -32,6 +32,7 @@
 
 | Time | Commit | Task | Result |
 |------|--------|------|--------|
+| 2026-04-19T10:03:00Z | 985d438 | 为 health completion 和 feedback CLI 补齐单元测试（共16个用例） | pass |
 | 2026-04-19T08:50:00Z | a5c9ba2 | 增加用户配置文件支持（~/.healthagent.yaml）及 config 子命令 | pass |
 | 2026-04-19T07:20:00Z | ca1f8da | 修复 ruff E501/B904/E712/F841 风格问题（共93处） | pass |
 | 2026-04-19T06:50:00Z | 92d1f9b | ruff auto-fix 清理：datetime.UTC 别名/unused imports/f-string 修正 | pass |
@@ -59,6 +60,7 @@
 - Queue #13：新增用户配置文件功能（~/.healthagent.yaml + config 子命令）
 - Queue #1-11：已标记为 done（scanner 重复添加的已完成任务 + 本轮处理）
 - ruff 检查：本次修复 93 个 E501/B904/E712/F841 风格问题，ruff check . → All checks passed
+- 本轮（985d438）：为 completion 和 feedback CLI 新增 16 个测试用例，覆盖率从 76% 提升到 80%；同时修复 install 命令 FileNotFoundError 和重复追加 bug
 
 ## Queue Management Rules
 

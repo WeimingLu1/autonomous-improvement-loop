@@ -5,8 +5,8 @@
 ## Queue Format
 
 ```
-| # | Type | Score | Content | Source | Status | Created |
-|---|------|-------|---------|--------|--------|---------|
+| # | Type | Score | Content | Detail | Source | Status | Created |
+|---|------|-------|---------|--------|--------|--------|---------|
 ```
 
 ## Queue Management Rules
@@ -14,7 +14,9 @@
 - **User request** → score=100 → immediately inserted at #1, all others shift down
 - **During cron execution** (cron_lock=true): user requests can still join queue, agent refuses direct file edits
 - **After adding any entry**: re-sort by score descending, write back to HEARTBEAT.md
-- **Cron execution sequence**: ① cron_lock=true → ② execute task → ③ verify/publish if configured → ④ announce → ⑤ cron_lock=false
+- **After every completed cron run**: mark the executed row done/skip, append Done Log, then refresh the non-user queue
+- **Queue refresh rule**: preserve user tasks, clear stale non-user rows, then run `project_insights.py --refresh --min 5`
+- **Cron execution sequence**: ① cron_lock=true → ② execute task → ③ verify/publish if configured → ④ update HEARTBEAT.md → ⑤ refresh queue → ⑥ announce → ⑦ cron_lock=false
 
 ## Scoring
 

@@ -18,7 +18,9 @@
 
 ## Queue Maintenance
 
-- [ ] Queue has at least 5 pending items (run `project_insights.py --refresh --min 5` if needed)
+- [ ] After every completed task, refresh the non-user queue before ending the run
+- [ ] Preserve user tasks, clear stale non-user rows, then run `project_insights.py --refresh --min 5`
+- [ ] Queue has at least 5 pending items after refresh
 - [ ] No duplicate entries in queue
 - [ ] `done` entries are not re-sorted back into pending
 

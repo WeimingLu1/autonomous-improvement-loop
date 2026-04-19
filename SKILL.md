@@ -57,7 +57,7 @@ The skill auto-detects your project type via `project_insights.py`. You can also
           ▼
 ┌─────────────────────┐
 │ Report + update     │  ← Telegram + HEARTBEAT.md
-│ Queue refreshed    │
+│ Re-scan queue      │  ← preserve user tasks, refresh non-user queue every run
 └─────────────────────┘
 ```
 
@@ -133,6 +133,10 @@ Users insert tasks via message → directly written to HEARTBEAT.md Queue with s
 python project_insights.py --project . --heartbeat HEARTBEAT.md --language en
 
 # Keep scanning until queue has at least N items
+python project_insights.py --project . --heartbeat HEARTBEAT.md --language en --refresh --min 5
+
+# Rebuild non-user queue after a cron task
+python init.py clear
 python project_insights.py --project . --heartbeat HEARTBEAT.md --language en --refresh --min 5
 
 # Verify and auto-revert on failure

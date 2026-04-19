@@ -119,7 +119,7 @@ verify_and_revert.py — run verification_command from config.md
 Telegram report + update HEARTBEAT.md
     │
     ▼
-Queue refreshed if below minimum
+Re-scan queue every run (preserve user tasks, rebuild non-user queue)
 ```
 
 ---
@@ -231,4 +231,5 @@ The project description is updated after each completed task so the agent always
 - `project_language` replaces per-command `--zh` flags
 - Queue format now includes `Detail` field for full intent capture
 - Command system (`a-start`, `a-stop`, `a-add`, `a-scan`, `a-clear`) added via skill router
+- Cron runs now explicitly refresh the non-user queue after every completed task
 - `PROJECT.md` added for type-aware project description

@@ -1021,6 +1021,7 @@ def cmd_start() -> None:
     agent_id = config.get("agent_id", "").strip()
     chat_id = config.get("chat_id", "").strip()
     project_path = config.get("project_path", "").strip()
+    project_language = config.get("project_language", DEFAULT_LANGUAGE).strip() or DEFAULT_LANGUAGE
 
     # Check if already exists
     r = run(["openclaw", "cron", "list"], timeout=15)
@@ -1034,6 +1035,32 @@ def cmd_start() -> None:
         fail("agent_id not configured in config.md")
         sys.exit(1)
 
+    cron_message = textwrap.dedent(
+        f"""
+        Autonomous Improvement Loop triggered for project: {project_path or '(unset)'}.
+
+        Follow this workflow exactly:
+        1. Read {CONFIG_FILE} and {HEARTBEAT}. If {SKILL_DIR / 'PROJECT.md'} exists, read it too.
+        2. If HEARTBEAT.md says cron_lock=true, stop immediately.
+        3. Set cron_lock=true before editing the queue.
+        4. Execute the highest-priority pending queue item.
+        5. After the task finishes, update HEARTBEAT.md completely:
+           - mark the executed queue row as done or skip
+           - append a Done Log row
+           - update Run Status fields (time, commit, result, task)
+        6. Then ALWAYS refresh the queue before ending the run:
+           - preserve user tasks
+           - clear stale non-user queue entries with:
+             python3 {HERE / 'init.py'} clear
+           - rebuild the non-user queue with:
+             python3 {HERE / 'queue_scanner.py'} --project {project_path or '.'} --heartbeat {HEARTBEAT} --language {project_language} --refresh --min 5
+        7. Set cron_lock=false.
+        8. Send a concise final summary.
+
+        Do not finish the run until the queue has been refreshed.
+        """
+    ).strip()
+
     # Build openclaw cron add command
     cmd = [
         "openclaw", "cron", "add",
@@ -1042,7 +1069,7 @@ def cmd_start() -> None:
         "--timeout-seconds", cron_timeout,
         "--agent", agent_id,
         "--session", "isolated",
-        "--message", "Autonomous improvement loop triggered",
+        "--message", cron_message,
     ]
     if chat_id and chat_id not in ("", "YOUR_TELEGRAM_CHAT_ID"):
         cmd.extend(["--announce", "--channel", "telegram", "--to", chat_id])
