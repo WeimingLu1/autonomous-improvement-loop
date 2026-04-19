@@ -514,6 +514,56 @@ def _parse_all_queue_rows(content: str) -> list[dict[str, str]]:
     return rows
 
 
+def _render_queue_block(rows: list[dict[str, str]]) -> str:
+    table_lines = [
+        "| # | Type | Score | Content | Detail | Source | Status | Created |",
+        "|---|------|-------|---------|--------|--------|--------|--------|",
+    ]
+    for idx, row in enumerate(rows, 1):
+        table_lines.append(
+            f"| {idx} | {row['type']} | {row['score']} | {row['content']} | {row['detail']} | {row['source']} | {row['status']} | {row['created']} |"
+        )
+    return "## Queue\n\n" + "\n".join(table_lines) + "\n\n---\n"
+
+
+def _replace_all_queue_sections(content: str, new_block: str) -> str:
+    """Replace every ## Queue section with a single freshly rendered block.
+
+    Handles malformed queue sections too, including cases where `## Queue` is
+    followed by a table immediately without the expected blank line.
+    """
+    lines = content.splitlines(keepends=True)
+    kept: list[str] = []
+    i = 0
+    while i < len(lines):
+        if lines[i].strip() == "## Queue":
+            i += 1
+            while i < len(lines) and lines[i].strip() != "---":
+                i += 1
+            if i < len(lines) and lines[i].strip() == "---":
+                i += 1
+            while i < len(lines) and lines[i].strip() == "":
+                i += 1
+            continue
+        kept.append(lines[i])
+        i += 1
+
+    stripped_content = ''.join(kept)
+    if stripped_content.startswith("## Run Status\n"):
+        return new_block + stripped_content
+
+    run_status_match = re.search(r'\n## Run Status\n', stripped_content)
+    if run_status_match:
+        insert_at = run_status_match.start()
+        return stripped_content[:insert_at] + new_block + stripped_content[insert_at:]
+
+    dash_match = re.search(r'\n---\n', stripped_content)
+    if dash_match:
+        return stripped_content[:dash_match.start()] + new_block + stripped_content[dash_match.start():]
+
+    return new_block + stripped_content
+
+
 def append_to_queue(
     heartbeat: Path,
     finding: str,
@@ -556,37 +606,16 @@ def append_to_queue(
     }
 
     rows = ([new_row] + unique_existing) if insert_top else (unique_existing + [new_row])
-
-    # Build the replacement Queue block
-    header = "## Queue\n\n"
-    table_lines = [
-        "| # | Type | Score | Content | Detail | Source | Status | Created |",
-        "|---|------|-------|---------|--------|--------|--------|--------|",
-    ]
-    for idx, row in enumerate(rows, 1):
-        table_lines.append(
-            f"| {idx} | {row['type']} | {row['score']} | {row['content']} | {row['detail']} | {row['source']} | {row['status']} | {row['created']} |"
-        )
-    new_block = header + "\n".join(table_lines) + "\n\n---\n"
-
-    # Remove ALL existing ## Queue sections and their trailing separators
-    stripped_content = re.sub(r'\n## Queue\n\n[\s\S]*?\n---\n', '\n', content)
-
-    # Insert new block before ## Run Status
-    run_status_match = re.search(r'\n## Run Status\n', stripped_content)
-    if run_status_match:
-        insert_at = run_status_match.start()
-        updated = stripped_content[:insert_at] + new_block + stripped_content[insert_at:]
-    else:
-        # Fallback: replace the first ---
-        dash_match = re.search(r'\n---\n', stripped_content)
-        if dash_match:
-            updated = stripped_content[:dash_match.start()] + new_block + stripped_content[dash_match.start():]
-        else:
-            updated = new_block + stripped_content
+    new_block = _render_queue_block(rows)
+    updated = _replace_all_queue_sections(content, new_block)
 
     heartbeat.write_text(updated, encoding="utf-8")
-    print(f"project_insights: {'^1' if insert_top else '+1'} -> {table_lines[2 if insert_top else -1]}")
+    logged_row = rows[0] if insert_top else rows[-1]
+    print(
+        "project_insights: "
+        f"{'^1' if insert_top else '+1'} -> "
+        f"| {'1' if insert_top else len(rows)} | {logged_row['type']} | {logged_row['score']} | {logged_row['content']} | {logged_row['detail']} | {logged_row['source']} | {logged_row['status']} | {logged_row['created']} |"
+    )
     return True
 
 
@@ -609,59 +638,16 @@ def queue_count(heartbeat: Path) -> int:
 def clear_queue(heartbeat: Path) -> int:
     """Remove all non-user entries from the queue. Returns count of removed entries."""
     content = heartbeat.read_text(encoding="utf-8")
-    section_match = re.search(r'(## Queue\n\n)([\s\S]*?)(\n---\n)', content)
-    if not section_match:
+    if "## Queue" not in content:
         print("ERROR: Queue section not found in HEARTBEAT.md", file=sys.stderr)
         return 0
 
-    removed = 0
-    kept_rows: list[dict[str, str]] = []
-    for line in section_match.group(2).splitlines():
-        stripped = line.strip()
-        if not stripped.startswith('|') or stripped.startswith('|---') or stripped.startswith('| #'):
-            continue
-        cells = [c.strip() for c in stripped.split('|')[1:-1]]
-        if not cells or not re.match(r'^\d+$', cells[0]):
-            continue
-        if len(cells) >= 8:
-            row = {
-                "type": cells[1],
-                "score": cells[2],
-                "content": cells[3],
-                "detail": cells[4],
-                "source": cells[5],
-                "status": cells[6],
-                "created": cells[7],
-            }
-        elif len(cells) >= 7:
-            row = {
-                "type": cells[1],
-                "score": cells[2],
-                "content": cells[3],
-                "detail": cells[3],
-                "source": cells[4],
-                "status": cells[5],
-                "created": cells[6],
-            }
-        else:
-            continue
+    all_rows = _parse_all_queue_rows(content)
+    kept_rows = [row for row in all_rows if row["source"] == "user"]
+    removed = len(all_rows) - len(kept_rows)
 
-        if row["source"] == "user":
-            kept_rows.append(row)
-        else:
-            removed += 1
-
-    table_lines = [
-        "| # | Type | Score | Content | Detail | Source | Status | Created |",
-        "|---|------|-------|---------|--------|--------|--------|---------|",
-    ]
-    for idx, row in enumerate(kept_rows, 1):
-        table_lines.append(
-            f"| {idx} | {row['type']} | {row['score']} | {row['content']} | {row['detail']} | {row['source']} | {row['status']} | {row['created']} |"
-        )
-
-    new_section = section_match.group(1) + "\n".join(table_lines) + "\n" + section_match.group(3)
-    updated = content[:section_match.start()] + new_section + content[section_match.end():]
+    new_block = _render_queue_block(kept_rows)
+    updated = _replace_all_queue_sections(content, new_block)
     heartbeat.write_text(updated, encoding="utf-8")
     return removed
 
