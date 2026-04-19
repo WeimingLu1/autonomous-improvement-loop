@@ -3,40 +3,63 @@ r"""
 Autonomous Improvement Loop — setup wizard & cron hosting CLI
 
 Supports these flows:
-  adopt    Take over an existing project (auto-detect, configure, start)
-  onboard  Bootstrap a brand-new project
-  status   Check project readiness and queue state
+  a-adopt   Take over an existing project (auto-detect, configure, start)
+  a-onboard Bootstrap a brand-new project
+  a-status  Check project readiness and queue state
 
-  start    Start cron hosting (create cron job from config.md)
-  stop     Stop cron hosting (remove cron job)
-  add      Add a user requirement to the queue
-  scan     Trigger a queue scan via project_insights.py
-  clear    Clear non-user tasks from the queue
+  a-start   Start cron hosting (create cron job from config.md)
+  a-stop    Stop cron hosting (remove cron job)
+  a-add     Add a user requirement to the queue
+  a-scan    Trigger a queue scan via project_insights.py
+  a-clear  Clear non-user tasks from the queue
+  a-queue   Show current queue
+  a-log     Show recent Done Log entries
+  a-refresh Clear + scan (full queue refresh)
+  a-trigger Run cron immediately
+  a-config  Get or set config values
 
 Examples:
   # Take over an existing project (most common)
-  python init.py adopt ~/Projects/YOUR_PROJECT
+  python init.py a-adopt ~/Projects/YOUR_PROJECT
 
   # Bootstrap a new project
-  python init.py onboard ~/Projects/MyProject
+  python init.py a-onboard ~/Projects/MyProject
 
   # Check project readiness
-  python init.py status ~/Projects/YOUR_PROJECT
+  python init.py a-status ~/Projects/YOUR_PROJECT
 
   # Start cron hosting
-  python init.py start
+  python init.py a-start
 
   # Stop cron hosting
-  python init.py stop
+  python init.py a-stop
 
   # Add a user requirement
-  python init.py add "Implement dark mode support"
+  python init.py a-add "Implement dark mode support"
 
   # Trigger queue scan
-  python init.py scan
+  python init.py a-scan
 
   # Clear non-user tasks
-  python init.py clear
+  python init.py a-clear
+
+  # Show queue
+  python init.py a-queue
+
+  # Show recent log
+  python init.py a-log -n 10
+
+  # Full queue refresh
+  python init.py a-refresh
+
+  # Run cron immediately
+  python init.py a-trigger
+
+  # Read a config value
+  python init.py a-config get project_language
+
+  # Set a config value
+  python init.py a-config set project_language zh
 
 All parameters are optional. init.py auto-detects project path, GitHub repo,
 Agent ID, and Telegram Chat ID whenever possible, and only prompts when needed.
@@ -1042,22 +1065,21 @@ def cmd_start() -> None:
         Follow this workflow exactly:
         1. Read {CONFIG_FILE} and {HEARTBEAT}. If {SKILL_DIR / 'PROJECT.md'} exists, read it too.
         2. If HEARTBEAT.md says cron_lock=true, stop immediately.
-        3. Set cron_lock=true before editing the queue.
-        4. Execute the highest-priority pending queue item.
-        5. After the task finishes, update HEARTBEAT.md completely:
-           - mark the executed queue row as done or skip
-           - append a Done Log row
-           - update Run Status fields (time, commit, result, task)
-        6. Then ALWAYS refresh the queue before ending the run:
-           - preserve user tasks
-           - clear stale non-user queue entries with:
-             python3 {HERE / 'init.py'} clear
-           - rebuild the non-user queue with:
-             python3 {HERE / 'queue_scanner.py'} --project {project_path or '.'} --heartbeat {HEARTBEAT} --language {project_language} --refresh --min 5
-        7. Set cron_lock=false.
-        8. Send a concise final summary.
+        3. Set cron_lock=true in HEARTBEAT.md before editing.
+        4. Execute the highest-priority pending queue item (skip done items).
+        5. After the task finishes, call update_heartbeat.py:
+             python3 {HERE / 'update_heartbeat.py'} \
+               --heartbeat {HEARTBEAT} \
+               --project {project_path or '.'} \
+               --commit <git_commit_hash> \
+               --result pass \
+               --task "<task description>" \
+               --language {project_language} \
+               --min-queue 5
+        6. Send a concise final summary (commit, result, next item).
 
-        Do not finish the run until the queue has been refreshed.
+        IMPORTANT: Do NOT manually edit HEARTBEAT.md. Use update_heartbeat.py for all post-task updates.
+        Do not finish the run until update_heartbeat.py has completed.
         """
     ).strip()
 
@@ -1351,40 +1373,55 @@ def cmd_queue(all_items: bool = False) -> None:
         return
 
     content = read_file(HEARTBEAT)
-    queue_match = re.search(r"(## Queue\n\n)([\s\S]*?)(\n---\n)", content)
-    if not queue_match:
-        ok("Queue section not found")
-        return
 
-    rows: list[tuple[str, str, str, str, str]] = []
-    for line in queue_match.group(2).splitlines():
+    # Parse ALL rows from ALL ## Queue sections (handles multi-section corruption)
+    all_rows: list[dict[str, str]] = []
+    for line in content.splitlines():
         stripped = line.strip()
         if not stripped.startswith("|") or "---" in stripped or stripped.startswith("| #"):
             continue
         cells = [c.strip() for c in stripped.split("|")[1:-1]]
         if not cells or not re.match(r"^\d+$", cells[0]):
             continue
-        num = cells[0]
-        status = cells[6] if len(cells) >= 8 else (cells[5] if len(cells) >= 7 else "")
-        if not all_items and status.lower() == "done":
-            continue
-        score = cells[2] if len(cells) >= 4 else ""
-        content_val = cells[3] if len(cells) >= 5 else ""
-        detail_val = cells[4] if len(cells) >= 6 else content_val
-        rows.append((num, score, content_val, detail_val[:60], status))
+        if len(cells) >= 8:
+            all_rows.append({
+                "num": cells[0], "type": cells[1], "score": cells[2],
+                "content": cells[3], "detail": cells[4],
+                "source": cells[5], "status": cells[6], "created": cells[7],
+            })
+        elif len(cells) >= 7:
+            all_rows.append({
+                "num": cells[0], "type": cells[1], "score": cells[2],
+                "content": cells[3], "detail": cells[3],
+                "source": cells[4], "status": cells[5], "created": cells[6],
+            })
+
+    if not all_rows:
+        ok("Queue is empty")
+        return
+
+    # Deduplicate by normalized content (same logic as project_insights.py)
+    seen: set[str] = set()
+    rows: list[dict[str, str]] = []
+    for row in all_rows:
+        norm = re.sub(r"\s+", " ", row["content"].strip()).lower()
+        if norm not in seen:
+            seen.add(norm)
+            rows.append(row)
 
     if not rows:
         ok("Queue is empty")
         return
 
-    pending = sum(1 for r in rows if r[4].lower() != "done")
+    pending = sum(1 for r in rows if r["status"].lower() != "done")
     print(f"  {len(rows)} total ({pending} pending)\n")
     print(f"  {'#':<3} {'Sc':<4} {'Content':<46} {'Status'}")
     print(f"  {'-'*3} {'-'*4} {'-'*46} {'-'*10}")
-    for num, score, content_val, detail_val, status in rows:
-        marker = c("✓", COLOR_GREEN) if status.lower() == "done" else c("○", COLOR_YELLOW)
-        content_short = (content_val[:43] + "…") if len(content_val) > 46 else content_val
-        print(f"  {c(num, COLOR_BOLD):<3} {score:<4} {content_short:<46} {marker} {status}")
+    visible_rows = [row for row in rows if all_items or row["status"].lower() != "done"]
+    for display_num, row in enumerate(visible_rows, 1):
+        marker = c("✓", COLOR_GREEN) if row["status"].lower() == "done" else c("○", COLOR_YELLOW)
+        content_short = (row["content"][:43] + "…") if len(row["content"]) > 46 else row["content"]
+        print(f"  {c(str(display_num), COLOR_BOLD):<3} {row['score']:<4} {content_short:<46} {marker} {row['status']}")
 
 
 # ── a_log: show recent Done Log ───────────────────────────────────────────────
@@ -1551,28 +1588,46 @@ def main() -> int:
             Usage examples:
 
               # Take over an existing project (most common)
-              python init.py adopt ~/Projects/YOUR_PROJECT
+              python init.py a-adopt ~/Projects/YOUR_PROJECT
 
               # Bootstrap a new project
-              python init.py onboard ~/Projects/MyProject
+              python init.py a-onboard ~/Projects/MyProject
 
               # Check project readiness
-              python init.py status ~/Projects/YOUR_PROJECT
+              python init.py a-status ~/Projects/YOUR_PROJECT
 
-              # Start cron托管
-              python init.py start
+              # Start cron hosting
+              python init.py a-start
 
-              # Stop cron托管
-              python init.py stop
+              # Stop cron hosting
+              python init.py a-stop
 
               # Add a user requirement
-              python init.py add "Implement dark mode support"
+              python init.py a-add "Implement dark mode support"
 
               # Trigger queue scan
-              python init.py scan
+              python init.py a-scan
 
               # Clear non-user tasks
-              python init.py clear
+              python init.py a-clear
+
+              # Show current queue
+              python init.py a-queue
+
+              # Show recent done log
+              python init.py a-log -n 10
+
+              # Full queue refresh (clear + scan)
+              python init.py a-refresh
+
+              # Trigger cron immediately
+              python init.py a-trigger
+
+              # Read config value
+              python init.py a-config get project_language
+
+              # Write config value
+              python init.py a-config set project_language zh
             """),
     )
 

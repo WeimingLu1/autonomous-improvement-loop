@@ -158,10 +158,19 @@ The skill is invoked via OpenClaw's skill router. Incoming message text is parse
 
 | Command | Action |
 |---------|--------|
-| `a_start` | Start hosting: create the cron job |
-| `a_stop` | Stop hosting: remove the cron job |
-| `a_add <content>` | Add a user requirement to the queue |
-| `a_scan` | Rescan the project, refresh the queue (non-user tasks only) |
-| `a_clear` | Clear all non-user tasks from the queue |
+| `a-adopt <path>` | Take over an existing project (auto-detect + configure + start) |
+| `a-onboard <path>` | Bootstrap a brand-new project from scratch |
+| `a-status [path]` | Check project readiness |
+| `a-start` | Start cron hosting (create the cron job) |
+| `a-stop` | Stop cron hosting (remove the cron job) |
+| `a-add <content>` | Add a user requirement to the queue |
+| `a-scan` | Rescan the project, refresh the queue (non-user tasks only) |
+| `a-clear` | Clear all non-user tasks from the queue |
+| `a-queue [--all]` | Show current queue (use `--all` to include done items) |
+| `a-log [-n N]` | Show recent Done Log entries (default: 10) |
+| `a-refresh [--min N]` | Full queue refresh: clear non-user + scan new items |
+| `a-trigger [--force]` | Run cron immediately (skip `cron_lock` check with `--force`) |
+| `a-config get <key>` | Read a config value |
+| `a-config set <key> <value>` | Write a config value |
 
 When a user sends a message, the skill parses the first `a-` prefix command; the remaining text is treated as arguments.
