@@ -1472,11 +1472,11 @@ def cmd_refresh(min_items: int | None = None) -> None:
     heartbeat_p = Path(heartbeat_path_str) if heartbeat_path_str else HEARTBEAT
     project_path_str = config.get("project_path", "").strip()
     language = config.get("project_language", DEFAULT_LANGUAGE).strip()
-    resolved_min = min_items if min_items is not None else int(
-        re.search(r"min_queue_items:\s*(\d+)", read_file(CONFIG_FILE) if CONFIG_FILE.exists() else "").group(1)
-        if re.search(r"min_queue_items:\s*(\d+)", read_file(CONFIG_FILE) if CONFIG_FILE.exists() else "")
-        else 5
-    )
+    resolved_min = min_items
+    if resolved_min is None:
+        raw = read_file(CONFIG_FILE) if CONFIG_FILE.exists() else ""
+        m = re.search(r"min_queue_items:\s*(\d+)", raw)
+        resolved_min = int(m.group(1)) if m else 5
 
     if not project_path_str or project_path_str in (".", "YOUR_PROJECT_PATH"):
         detected = detect_project_path()

@@ -74,10 +74,10 @@ clawhub install autonomous-improvement-loop
 
 ```bash
 # Take over an existing project (any type)
-python scripts/init.py adopt ~/Projects/MY_PROJECT
+python scripts/init.py a-adopt ~/Projects/MY_PROJECT
 
 # Bootstrap a brand-new project (prompts for project type)
-python scripts/init.py onboard ~/Projects/MyProject
+python scripts/init.py a-onboard ~/Projects/MyProject
 
 # Check project readiness and queue
 python scripts/init.py status ~/Projects/MY_PROJECT
@@ -219,7 +219,7 @@ The project description is updated after each completed task so the agent always
 
 | Script | Purpose |
 |--------|---------|
-| `init.py` | adopt / onboard / status / start / stop / add / scan / clear |
+| `init.py` | a-adopt / a-onboard / a-status / a-start / a-stop / a-add / a-scan / a-clear / a-queue / a-log / a-refresh / a-trigger / a-config |
 | `project_insights.py` | Scan project, generate type-specific improvement candidates |
 | `priority_scorer.py` | Score queue entries (supports user request insertion) |
 | `verify_and_revert.py` | Run verification, rollback on failure |
@@ -239,6 +239,6 @@ The project description is updated after each completed task so the agent always
 - `config.md` new fields: `project_kind`, `verification_command`, `publish_command`
 - `project_language` replaces per-command `--zh` flags
 - Queue format now includes `Detail` field for full intent capture
-- Command system (`a_start`, `a_stop`, `a_add`, `a_scan`, `a_clear`) added via skill router
+- Command system (`a-start`, `a-stop`, `a-add`, `a-scan`, `a-clear`) added via skill router
 - Cron runs now explicitly refresh the non-user queue after every completed task
 - `PROJECT.md` added for type-aware project description

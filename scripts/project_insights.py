@@ -536,7 +536,9 @@ def _replace_all_queue_sections(content: str, new_block: str) -> str:
     kept: list[str] = []
     i = 0
     while i < len(lines):
-        if lines[i].strip() == "## Queue":
+        # Use `in` not `==` to handle ## Queue embedded mid-line
+        # e.g.  "> Config: config.md## Queue\n" or "---\n## Queue\n"
+        if "## Queue" in lines[i]:
             i += 1
             while i < len(lines) and lines[i].strip() != "---":
                 i += 1
@@ -604,6 +606,12 @@ def append_to_queue(
         "status": "pending",
         "created": created,
     }
+
+    # Deduplication: skip if new content already in queue
+    norm_new = _normalize(_strip_prefix(new_row["content"])).lower()
+    if norm_new in seen_content:
+        print(f"project_insights: skipped duplicate: {finding[:50]}")
+        return True
 
     rows = ([new_row] + unique_existing) if insert_top else (unique_existing + [new_row])
     new_block = _render_queue_block(rows)

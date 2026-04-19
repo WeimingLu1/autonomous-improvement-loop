@@ -16,7 +16,11 @@ agent_id: viya
 chat_id: 5535183090
 
 ## Project Language
-project_language: zh   # "en" = English, "zh" = Chinese (clear it later to follow agent preference)
+project_language: zh
+
+## Queue
+min_queue_items: 5
+heartbeat_path:   # defaults to skill directory if empty
 
 ## Verification & Publish
 verification_command:   # empty = no auto-verification

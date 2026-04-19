@@ -88,7 +88,7 @@ def _replace_all_queue_sections(content: str, new_block: str) -> str:
     kept: list[str] = []
     i = 0
     while i < len(lines):
-        if lines[i].strip() == "## Queue":
+        if "## Queue" in lines[i]:
             i += 1
             while i < len(lines) and lines[i].strip() != "---":
                 i += 1
