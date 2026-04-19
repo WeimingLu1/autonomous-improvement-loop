@@ -8,7 +8,8 @@ instead of relying on manual file edits. Performs:
   2. Append Done Log entry
   3. Update Run Status fields
   4. Refresh the queue (clear stale non-user + scan new items)
-  5. Release cron_lock
+  5. Rebuild PROJECT.md from the current project snapshot
+  6. Release cron_lock
 
 Usage:
   update_heartbeat.py --heartbeat HEARTBEAT.md \
@@ -219,7 +220,16 @@ def _update_heartbeat(
     except Exception as e:
         print(f"WARNING: refresh_queue failed: {e}", file=sys.stderr)
 
-    # ── 5. Done ──────────────────────────────────────────────────────────────
+    # ── 5. Rebuild PROJECT.md ───────────────────────────────────────────────
+    try:
+        from project_md import generate_project_md
+
+        generate_project_md(project, SKILL_DIR / "PROJECT.md", language=language)
+        print("PROJECT.md rebuilt from current project snapshot")
+    except Exception as e:
+        print(f"WARNING: PROJECT.md rebuild failed: {e}", file=sys.stderr)
+
+    # ── 6. Done ──────────────────────────────────────────────────────────────
     print(f"\nHEARTBEAT update complete: {ts}")
 
 

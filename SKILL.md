@@ -100,9 +100,9 @@ The skill auto-detects your project type via `project_insights.py`. You can also
 | `init.py` | Setup + all 13 commands | CLI |
 | `project_insights.py` | Scan project, generate candidates | `--project`, `--heartbeat`, `--language`, `--refresh`, `--min` |
 | `priority_scorer.py` | Score queue entries | stdin/stdout |
-| `verify_and_revert.py` | Verify task, rollback on failure | `--project`, `--heartbeat`, `--commit`, `--task` |
+| `project_md.py` | Generate PROJECT.md from current project tree | `--project`, `--output`, `--language`, `--repo` |
 | `run_status.py` | Read/write Run Status | `--heartbeat`, `read`/`write` |
-| `update_heartbeat.py` | Post-task updater: HEARTBEAT.md + PROJECT.md recent activity (cron automation) | `--heartbeat`, `--project`, `--commit`, `--result`, `--task`, `--language`, `--min-queue` |
+| `update_heartbeat.py` | Post-task updater: HEARTBEAT.md + rebuild PROJECT.md snapshot (cron automation) | `--heartbeat`, `--project`, `--commit`, `--result`, `--task`, `--language`, `--min-queue` |
 
 ---
 

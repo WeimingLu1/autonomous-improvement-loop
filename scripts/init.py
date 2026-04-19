@@ -755,6 +755,7 @@ def cmd_adopt(
     cli_name = detect_cli_name(project)
     try:
         from project_insights import detect_project_type
+        from project_md import generate_project_md
         project_kind = detect_project_type(project)
     except Exception:
         project_kind = "generic"
@@ -838,6 +839,15 @@ def cmd_adopt(
     )
     ok("config.md updated")
 
+    step("🧭 Generating PROJECT.md")
+    try:
+        from project_md import generate_project_md
+
+        generate_project_md(project, SKILL_DIR / "PROJECT.md", language=language, repo=repo)
+        ok("PROJECT.md generated")
+    except Exception as e:
+        warn(f"PROJECT.md generation failed: {e}")
+
     # Queue handling for old managed projects
     mode = "bootstrap" if new_items > 3 else "normal"
     current_rows = pending_queue_rows()
@@ -860,6 +870,13 @@ def cmd_adopt(
         step("📋 Initializing HEARTBEAT.md")
         init_queue_heartbeat(mode=mode, language=language)
         ok(f"HEARTBEAT.md initialized (mode: {mode})")
+
+    step("📋 Generating PROJECT.md")
+    try:
+        generate_project_md(project=project, output=SKILL_DIR / "PROJECT.md", language=language)
+        ok("PROJECT.md generated")
+    except Exception as e:
+        warn(f"PROJECT.md generation failed: {e}")
 
     step("🧠 Generating initial queue")
     if len(pending_queue_rows()) < 5:
@@ -1012,10 +1029,26 @@ def cmd_onboard(
     )
     ok("config.md written")
 
+    step("🧭 Generating PROJECT.md")
+    try:
+        from project_md import generate_project_md
+
+        generate_project_md(project, SKILL_DIR / "PROJECT.md", language=language, repo=gh_remote or None)
+        ok("PROJECT.md generated")
+    except Exception as e:
+        warn(f"PROJECT.md generation failed: {e}")
+
     # Step 7: init heartbeat
     step("📋 Initializing HEARTBEAT.md")
     init_queue_heartbeat(mode="bootstrap", language=language)
     ok("HEARTBEAT.md initialized (mode: bootstrap)")
+
+    step("📋 Generating PROJECT.md")
+    try:
+        generate_project_md(project=project, output=SKILL_DIR / "PROJECT.md", language=language)
+        ok("PROJECT.md generated")
+    except Exception as e:
+        warn(f"PROJECT.md generation failed: {e}")
 
     print(textwrap.dedent(f"""
     {c('✅ New project bootstrap complete!', COLOR_GREEN + COLOR_BOLD)}
@@ -1046,13 +1079,16 @@ def cmd_start() -> None:
     project_path = config.get("project_path", "").strip()
     project_language = config.get("project_language", DEFAULT_LANGUAGE).strip() or DEFAULT_LANGUAGE
 
-    # Check if already exists
+    # Clean up ANY existing "Autonomous Improvement Loop" cron jobs first.
+    # This ensures a-start always results in exactly 1 cron — idempotent.
     r = run(["openclaw", "cron", "list"], timeout=15)
-    if r.returncode == 0 and cron_job_id and cron_job_id in r.stdout:
-        ok(f"Cron job already active: {cron_job_id}")
-        print(f"\n  Use 'python init.py stop' to remove it, or\n"
-              f"  openclaw cron run {cron_job_id}  to trigger manually.")
-        return
+    if r.returncode == 0:
+        for line in r.stdout.splitlines():
+            if "Autonomous Improvement Loop" in line:
+                # Extract ID: first field before whitespace
+                existing_id = line.split()[0]
+                run(["openclaw", "cron", "delete", existing_id], timeout=15)
+                print(f"  Removed stale cron: {existing_id}")
 
     if not agent_id or agent_id in ("", "YOUR_AGENT_ID"):
         fail("agent_id not configured in config.md")
