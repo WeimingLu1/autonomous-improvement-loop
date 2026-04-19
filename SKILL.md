@@ -1,6 +1,6 @@
 ---
 name: autonomous-improvement-loop
-description: Universal continuous improvement loop for any project. Agent-driven queue, cron scheduler, type-aware scanner, command system (a_start/stop/add/scan/clear), Detail field for full intent capture, inspire bucket for creative discovery. Works for software, writing, video, research, and generic projects. Install: clawhub install autonomous-improvement-loop
+description: Universal continuous improvement loop for any project. Agent-driven queue, cron scheduler, type-aware scanner, 13 commands (a-adopt/onboard/status/start/stop/add/scan/clear/queue/log/refresh/trigger/config), Detail field for full intent capture, inspire bucket for creative discovery. Works for software, writing, video, research, and generic projects. Install: clawhub install autonomous-improvement-loop
 ---
 
 # Autonomous Improvement Loop — Skill Reference
@@ -78,11 +78,7 @@ The skill auto-detects your project type via `project_insights.py`. You can also
 |-------|-------------|
 | `last_run_time` | ISO timestamp of last run |
 | `last_run_commit` | Git hash of last commit |
-| `last_run_result` | `pass` \| `fail` \| `unverified` |
-| `last_run_task` | Description of last task |
 | `cron_lock` | `true` = someone is editing queue, skip this run |
-| `mode` | `bootstrap` \| `normal` |
-| `rollback_on_fail` | `true` = auto-revert on verification failure |
 
 ### Queue Fields
 
@@ -101,11 +97,12 @@ The skill auto-detects your project type via `project_insights.py`. You can also
 
 | Script | Role | Interface |
 |--------|------|----------|
-| `init.py` | Setup: adopt / onboard / status | CLI |
+| `init.py` | Setup + all 13 commands | CLI |
 | `project_insights.py` | Scan project, generate candidates | `--project`, `--heartbeat`, `--language`, `--refresh`, `--min` |
 | `priority_scorer.py` | Score queue entries | stdin/stdout |
 | `verify_and_revert.py` | Verify task, rollback on failure | `--project`, `--heartbeat`, `--commit`, `--task` |
 | `run_status.py` | Read/write Run Status | `--heartbeat`, `read`/`write` |
+| `update_heartbeat.py` | Post-task HEARTBEAT updates (cron automation) | `--heartbeat`, `--project`, `--commit`, `--result`, `--task`, `--language`, `--min-queue` |
 
 ---
 
@@ -136,7 +133,7 @@ python project_insights.py --project . --heartbeat HEARTBEAT.md --language en
 python project_insights.py --project . --heartbeat HEARTBEAT.md --language en --refresh --min 5
 
 # Rebuild non-user queue after a cron task
-python init.py clear
+python init.py a-clear
 python project_insights.py --project . --heartbeat HEARTBEAT.md --language en --refresh --min 5
 
 # Verify and auto-revert on failure
@@ -147,9 +144,9 @@ python verify_and_revert.py \
   --task "description of what was done"
 
 # Setup
-python init.py adopt ~/Projects/MY_PROJECT
-python init.py onboard ~/Projects/MY_PROJECT
-python init.py status ~/Projects/MY_PROJECT
+python init.py a-adopt ~/Projects/MY_PROJECT
+python init.py a-onboard ~/Projects/MyProject
+python init.py a-status ~/Projects/MY_PROJECT
 ```
 
 ## Command System

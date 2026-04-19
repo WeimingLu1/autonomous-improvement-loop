@@ -80,19 +80,24 @@ python scripts/init.py a-adopt ~/Projects/MY_PROJECT
 python scripts/init.py a-onboard ~/Projects/MyProject
 
 # Check project readiness and queue
-python scripts/init.py status ~/Projects/MY_PROJECT
+python scripts/init.py a-status ~/Projects/MY_PROJECT
 ```
 
 | Subcommand | Use case |
 |-----------|----------|
-| `adopt` | Take over an existing project, preserve existing queue, create cron |
-| `onboard` | Bootstrap a new project with type-appropriate directory structure |
-| `status` | Show readiness checklist, queue contents, cron status |
-| `start` | Start cron hosting (create cron job from config.md) |
-| `stop` | Stop cron hosting (remove cron job) |
-| `add` | Add a user requirement to the queue |
-| `scan` | Trigger a queue scan via project_insights.py |
-| `clear` | Clear non-user tasks from the queue |
+| `a-adopt` | Take over an existing project, preserve existing queue, create cron |
+| `a-onboard` | Bootstrap a new project with type-appropriate directory structure |
+| `a-status` | Show readiness checklist, queue contents, cron status |
+| `a-start` | Start cron hosting (create cron job from config.md) |
+| `a-stop` | Stop cron hosting (remove cron job) |
+| `a-add` | Add a user requirement to the queue |
+| `a-scan` | Trigger a queue scan via project_insights.py |
+| `a-clear` | Clear non-user tasks from the queue |
+| `a-queue` | Show current queue (`--all` to include done items) |
+| `a-log` | Show recent Done Log entries (`-n N` for count) |
+| `a-refresh` | Full refresh: clear non-user + scan new items |
+| `a-trigger` | Run cron immediately (`--force` to skip cron_lock) |
+| `a-config` | Read/write config values (`get`/`set`) |
 
 ### 3. Cron starts automatically
 
