@@ -1,6 +1,6 @@
 ---
 name: autonomous-improvement-loop
-description: Continuous autonomous improvement loop for a single project. Use when an agent should repeatedly scan a project, maintain a prioritized queue in HEARTBEAT.md, execute the highest-value task on a cron schedule, verify results, and report progress. Works for software, writing, video, research, and generic projects. Also use when adopting an existing project into a long-running improvement workflow or bootstrapping a new project for ongoing autonomous maintenance.
+description: Universal continuous improvement loop for any project. Agent-driven queue, cron scheduler, type-aware scanner, command system (a-start/stop/add/scan/clear), Detail field for full intent capture, inspire bucket for creative discovery. Works for software, writing, video, research, and generic projects. Install: clawhub install autonomous-improvement-loop
 ---
 
 # Autonomous Improvement Loop — Skill Reference

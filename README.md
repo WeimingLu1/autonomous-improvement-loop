@@ -2,7 +2,7 @@
 
 **One agent. One project. Cron-driven autonomous improvement queue.**
 
-[![ClawHub](https://img.shields.io/badge/Install-ClawHub-6B57FF?style=flat-square)](https://clawhub.ai)
+[![ClawHub](https://img.shields.io/badge/Install-ClawHub-6B57FF?style=flat-square)](https://clawhub.ai/skills/autonomous-improvement-loop)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
 ---
@@ -28,6 +28,22 @@ Once installed and configured:
 - Every completed task → commit → optional verification → report
 - Queue stays full automatically — the scanner keeps finding new tasks
 - The agent never loses context — it remembers the queue across sessions
+
+---
+
+## Command System
+
+After installation, interact with the loop via these commands:
+
+| Command | Action |
+|---------|--------|
+| `a-start` | Start hosting: create the cron job |
+| `a-stop` | Stop hosting: remove the cron job |
+| `a-add <content>` | Add a user requirement to the queue |
+| `a-scan` | Rescan the project, refresh the queue (non-user tasks only) |
+| `a-clear` | Clear all non-user tasks from the queue |
+
+Commands are routed through OpenClaw's skill system — send them as messages and the skill parses the leading `a-` prefix automatically.
 
 ---
 
@@ -63,10 +79,15 @@ python scripts/init.py status ~/Projects/MY_PROJECT
 | `adopt` | Take over an existing project, preserve existing queue, create cron |
 | `onboard` | Bootstrap a new project with type-appropriate directory structure |
 | `status` | Show readiness checklist, queue contents, cron status |
+| `start` | Start cron hosting (create cron job from config.md) |
+| `stop` | Stop cron hosting (remove cron job) |
+| `add` | Add a user requirement to the queue |
+| `scan` | Trigger a queue scan via project_insights.py |
+| `clear` | Clear non-user tasks from the queue |
 
 ### 3. Cron starts automatically
 
-After `adopt` or `onboard`, the cron job runs every 30 minutes automatically.
+After `adopt` or `start`, the cron job runs every 30 minutes automatically.
 
 ---
 
@@ -80,6 +101,7 @@ Acquire cron_lock — prevent concurrent runs
     │
     ▼
 project_insights.py — auto-detect project type, generate improvement ideas
+    │  includes "inspire" bucket with type-specific creative questions
     │
     ▼
 Pick top task from queue (highest score, not yet done)
@@ -155,15 +177,32 @@ Language resolution order is:
 ## Queue Format (HEARTBEAT.md)
 
 ```
-| # | Type | Score | Content | Source | Status | Created |
-|---|------|-------|---------|--------|--------|---------|
-| 1 | improve | 72 | [[Improve]] Add unit tests for untested module | scanner | done | 2026-04-18 |
+| # | Type | Score | Content | Detail | Source | Status | Created |
+|---|------|-------|---------|--------|--------|--------|---------|
+| 1 | improve | 72 | [[Improve]] Add unit tests | Full reasoning here... | scanner | done | 2026-04-18 |
 ```
 
 - **Type**: `improve` | `feature` | `fix` | `wizard` | `user`
 - **Score**: 1–100 (higher = more urgent; user requests = 100)
 - **Source**: `scanner` | `user` | `agent`
 - **Status**: `pending` | `done` | `skip`
+- **Content**: ≤30-character summary for cron reporting
+- **Detail**: Full original intent / analysis rationale; user requests recorded verbatim, AI-generated tasks include complete reasoning
+
+---
+
+## PROJECT.md — Project Description
+
+The skill maintains a `PROJECT.md` file at the skill root. It stores a type-aware description of the managed project, including:
+
+- Basic info (type, tech stack, repo, version)
+- Project positioning
+- Core features
+- Technical architecture
+- Recent activity log
+- Open-ended inspiration questions (type-specific)
+
+The project description is updated after each completed task so the agent always has fresh context.
 
 ---
 
@@ -171,7 +210,7 @@ Language resolution order is:
 
 | Script | Purpose |
 |--------|---------|
-| `init.py` | adopt / onboard / status — main setup tool |
+| `init.py` | adopt / onboard / status / start / stop / add / scan / clear |
 | `project_insights.py` | Scan project, generate type-specific improvement candidates |
 | `priority_scorer.py` | Score queue entries (supports user request insertion) |
 | `verify_and_revert.py` | Run verification, rollback on failure |
@@ -190,3 +229,6 @@ Language resolution order is:
 - `config.md` fields `version_file`, `cli_name`, `docs_dir` → removed (no longer required)
 - `config.md` new fields: `project_kind`, `verification_command`, `publish_command`
 - `project_language` replaces per-command `--zh` flags
+- Queue format now includes `Detail` field for full intent capture
+- Command system (`a-start`, `a-stop`, `a-add`, `a-scan`, `a-clear`) added via skill router
+- `PROJECT.md` added for type-aware project description
