@@ -86,12 +86,14 @@ The skill auto-detects your project type via `project_insights.py`. You can also
 
 ### Queue Fields
 
-| Field | Values |
-|-------|--------|
+| 字段 | 说明 |
+|------|------|
 | `Type` | `improve` \| `feature` \| `fix` \| `wizard` \| `user` |
 | `Score` | 1–100 (higher = more urgent; user requests auto → 100) |
 | `Source` | `scanner` \| `user` \| `agent` |
 | `Status` | `pending` \| `done` \| `skip` |
+| `Content` | ≤30字的简短摘要，供 cron 报告展示 |
+| `Detail` | 完整的原始意图/分析思路，用户需求照录，AI 生成任务写完整判断理由 |
 
 ---
 
@@ -145,3 +147,17 @@ python init.py adopt ~/Projects/MY_PROJECT
 python init.py onboard ~/Projects/MY_PROJECT
 python init.py status ~/Projects/MY_PROJECT
 ```
+
+## 命令系统
+
+通过 OpenClaw skill 路由接入，skill 接收消息文本后按前缀路由：
+
+| 命令 | 作用 |
+|------|------|
+| `a-start` | 开始托管：创建 cron job |
+| `a-stop` | 停止托管：删除 cron job |
+| `a-add <内容>` | 添加用户需求到队列 |
+| `a-scan` | 重新扫描项目，刷新队列（仅非 user 任务） |
+| `a-clear` | 清除队列中所有非 user 任务 |
+
+用户发送消息时，skill 解析首个 `a-` 前缀命令，其余文本作为参数处理。
