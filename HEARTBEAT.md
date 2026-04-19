@@ -2,7 +2,7 @@
 
 | # | Type | Score | Content | Detail | Source | Status | Created |
 |---|------|-------|---------|--------|--------|--------|--------|
-| 1 | idea | 62 | [[Idea]] 添加交互式 `health interactive` 命令，通过问答引导记录健康事件，降低输入门槛 | 添加交互式 `health interactive` 命令，通过问答引导记录健康事件，降低输入门槛 | inspire: CLI 工具有哪些交互范式可以创新？ | pending | 2026-04-19 |
+| 1 | idea | 62 | [[Idea]] 为 `health log` 添加 `--dry-run` 选项，先预览解析结果再决定是否写入 | 为 `health log` 添加 `--dry-run` 选项，先预览解析结果再决定是否写入 | inspire: CLI 工具有哪些交互范式可以创新？ | pending | 2026-04-19 |
 
 ---
 ## Run Status
@@ -12,6 +12,8 @@
 | last_run_time | 2026-04-19T07:49:31Z |
 | last_run_commit | 116b947 |
 | cron_lock | false |
+| last_generated_content | 为 `health log` 添加 `--dry-run` 选项，先预览解析结果再决定是否写入 |
+| improves_since_last_idea | 0 |
 ---
 
 ## Done Log

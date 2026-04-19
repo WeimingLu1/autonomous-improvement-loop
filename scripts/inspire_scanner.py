@@ -72,6 +72,40 @@ def _get_improves_since_idea(heartbeat: Path) -> int:
     return 0
 
 
+def _set_last_generated_content(heartbeat: Path, content: str) -> None:
+    '''Store last generated item normalized content in Run Status.
+    
+    Prevents immediate re-generation when a-refresh is called twice without
+    the agent executing the task.
+    '''
+    text = heartbeat.read_text(encoding='utf-8', errors='ignore')
+    normalized = _normalize_text(content)
+    content_row = f'| last_generated_content | {normalized} |'
+    if re.search(r'\|\s*last_generated_content\s*\|', text):
+        text = re.sub(
+            r'(\|\s*last_generated_content\s*\|\s*).+?(\s*\|)',
+            lambda m: f'{m.group(1)}{normalized}{m.group(2)}',
+            text,
+            count=1,
+        )
+    elif '## Run Status' in text:
+        rs_m = re.search(r'(\| Field \| Value \|\n\|[- ]+\|[- ]+\|\n((?:\|.*\|\n)*))', text)
+        if rs_m:
+            existing = rs_m.group(2).rstrip('\n')
+            new_rows = existing + f'\n{content_row}\n'
+            text = text[:rs_m.start(2)] + new_rows + text[rs_m.end(2):]
+    heartbeat.write_text(text, encoding='utf-8')
+
+
+def _get_last_generated_content(heartbeat: Path) -> str | None:
+    '''Read last_generated_content (normalized) from Run Status, or None.'''
+    if not heartbeat.exists():
+        return None
+    text = heartbeat.read_text(encoding='utf-8', errors='ignore')
+    m = re.search(r'\|\s*last_generated_content\s*\|\s*(.+?)\s*\|', text)
+    return m.group(1).strip() if m else None
+
+
 def _set_improves_since_idea(heartbeat: Path, count: int) -> None:
     """Update or insert improves_since_last_idea row in Run Status.
 
@@ -101,7 +135,7 @@ def _set_improves_since_idea(heartbeat: Path, count: int) -> None:
     elif "## Run Status" in text:
         # Insert into Run Status table after the last | Field | Value | row
         # Find the Run Status table body and append after its last row
-        rs_m = re.search(r"(\| Field \| Value \|\n\|-------+------+\|\n)((?:\|.*\|\n)*)", text)
+        rs_m = re.search(r"(\| Field \| Value \|\n\|[- ]+\|[- ]+\|\n)((?:\|.*\|\n)*)", text)
         if rs_m:
             existing_rows = rs_m.group(2)
             # Remove trailing empty lines
@@ -698,38 +732,28 @@ def _write_queue_rows(heartbeat_path: Path, rows: list[dict[str, str]]) -> None:
 
 
 def _detect_existing_queue_content(heartbeat_path: Path) -> set[str]:
-    """Collect all normalized idea/improve content from Queue AND Done Log.
+    """Collect all normalized idea/improve content from Queue AND Done Log AND Run Status.
 
-    Deduplication must cover both:
+    Dedup covers:
     - Queue (pending items not yet executed)
-    - Done Log (items already completed, to avoid re-generating the same idea)
+    - Done Log (items already completed)
+    - Run Status last_generated_content (prevents re-generation on consecutive a-refresh)
     """
     seen: set[str] = set()
     for row in _read_queue_rows(heartbeat_path):
         seen.add(_normalize_text(row.get("content", "")))
-    # Also skip ideas already completed (in Done Log)
-    for task_text in _read_done_log_content(heartbeat_path):
-        seen.add(_normalize_text(task_text))
-    return seen
-
-
-def _read_done_log_content(heartbeat_path: Path) -> list[str]:
-    """Extract task content strings from Done Log section.
-
-    Returns list of task content strings from completed rows.
-    Used for dedup: skip ideas that have already been done.
-    """
-    if not heartbeat_path.exists():
-        return []
+    # Skip ideas already completed (in Done Log)
     text = heartbeat_path.read_text(encoding="utf-8", errors="ignore")
-    # Find Done Log section
     m = re.search(r"## Done Log\b[\s\S]*?\| Time \| Commit \| Task \| Result \|[\s\S]*?(?=\n## |\Z)", text)
-    if not m:
-        return []
-    done_section = m.group(0)
-    # Parse rows: | time | commit | task | result |
-    rows = re.findall(r"\|\s*\d{4}-\d{2}-\d{2}[^|]*?\s*\|\s*`?[a-f0-9]+`?\s*\|\s*([^|]+?)\s*\|", done_section)
-    return [r.strip() for r in rows]
+    if m:
+        rows = re.findall(r"\|\s*\d{4}-\d{2}-\d{2}[^|]*?\s*\|\s*`?[a-f0-9]+`?\s*\|\s*([^|]+?)\s*\|", m.group(0))
+        for task in rows:
+            seen.add(_normalize_text(task.strip()))
+    # Skip last generated item (prevents re-generation on consecutive a-refresh)
+    last_norm = _get_last_generated_content(heartbeat_path)
+    if last_norm:
+        seen.add(last_norm)
+    return seen
 
 
 def _generate_ideas_for_software(
@@ -924,6 +948,7 @@ def run_inspire_scan(
     current = _get_improves_since_idea(heartbeat)
     new_counter = (current + 1) if next_type == "improve" else 0
     _set_improves_since_idea(heartbeat, new_counter)
+    _set_last_generated_content(heartbeat, best_text)
 
     return {
         "generated": next_type,
