@@ -71,19 +71,6 @@ HealthAgent 是一款面向个人健康管理的 CLI 工具，同时也是 OpenC
 
 ---
 
-## 近期动态
-
-| 时间 | Commit | 内容 | 结果 |
-|------|--------|------|------|
-| 2026-04-19T13:30:00Z | 2a4dc1c | 为 advisor 和 config CLI 增加集成测试（30个用例） | pass |
-| 2026-04-19T08:50:00Z | a5c9ba2 | 增加用户配置文件支持（~/.healthagent.yaml）及 config 子命令 | pass |
-| 2026-04-19T07:20:00Z | ca1f8da | 修复 ruff E501/B904/E712/F841 风格问题（共93处） | pass |
-| 2026-04-19T06:50:00Z | 92d1f9b | ruff auto-fix 清理：datetime.UTC 别名/unused imports/f-string 修正 | pass |
-| 2026-04-19T06:20:00Z | 5c452e6 | 为根包、domain 和 services 的 __init__.py 补充模块 docstring | pass |
-| 2026-04-19T05:20:00Z | c7b47f7 | 实现360度健康建议专家：综合档案建设→定制方案→动态反馈飞轮 | pass |
-
----
-
 ## 开放方向（软件类创意问题）
 
 以下为待探索的软件增强方向，按优先级或价值排列：
@@ -94,6 +81,4 @@ HealthAgent 是一款面向个人健康管理的 CLI 工具，同时也是 OpenC
 4. **数据导入/同步** — 支持从 CSV/JSON 批量导入历史数据，或与 Apple Health / Google Fit 同步
 5. **增强隐私保护** — 增加本地数据加密、敏感字段脱敏导出功能
 
----
 
-*最后更新：2026-04-19*

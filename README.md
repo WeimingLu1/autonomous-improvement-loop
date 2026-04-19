@@ -216,7 +216,7 @@ The skill maintains a `PROJECT.md` file at the skill root. It stores a type-awar
 - Recent activity log
 - Open-ended inspiration questions (type-specific)
 
-The project description is updated after each completed task so the agent always has fresh context.
+The project description (type, positioning, features, architecture, inspire questions) is captured at adopt/onboard time. It serves as the agent's long-term context for the project — what it is and where it could go — separate from the execution log in HEARTBEAT.md.
 
 ---
 
