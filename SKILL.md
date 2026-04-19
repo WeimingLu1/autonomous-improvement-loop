@@ -44,6 +44,10 @@ The skill auto-detects your project type via `project_insights.py`. You can also
 └─────────┬───────────┘
           ▼
 ┌─────────────────────┐
+│ inspire_scanner.py  │  ← alternating [[Idea]]/[[Improve]] via 2:1 cycle
+└─────────┬───────────┘
+          ▼
+┌─────────────────────┐
 │ Pick top queue task  │  ← highest score, not done yet
 └─────────┬───────────┘
           ▼
@@ -56,7 +60,7 @@ The skill auto-detects your project type via `project_insights.py`. You can also
 └─────────┬───────────┘
           ▼
 ┌─────────────────────┐
-│ Report + update     │  ← Telegram + HEARTBEAT.md
+│ Report + update     │  ← Telegram + HEARTBEAT.md + inspire_scanner runs here
 │ Re-scan queue      │  ← preserve user tasks, refresh non-user queue every run
 └─────────────────────┘
 ```
@@ -79,16 +83,17 @@ The skill auto-detects your project type via `project_insights.py`. You can also
 | `last_run_time` | ISO timestamp of last run |
 | `last_run_commit` | Git hash of last commit |
 | `cron_lock` | `true` = someone is editing queue, skip this run |
+| `improves_since_last_idea` | Counter for alternating queue: increments after each [[Improve]], resets after [[Idea]]; threshold = 2 triggers flip to idea |
 
 ### Queue Fields
 
 | Field | Description |
 |-------|-------------|
-| `Type` | `improve` \| `feature` \| `fix` \| `wizard` \| `user` |
-| `Score` | 1–100 (higher = more urgent; user requests auto → 100) |
-| `Source` | `scanner` \| `user` \| `agent` |
+| `Type` | `idea` \| `improve` \| `feature` \| `fix` \| `wizard` \| `user` |
+| `Score` | 1–100 (higher = more urgent; user requests = 100; ideas default to 65, improves default to 45) |
+| `Source` | `inspire: <question>` \| `git: <module>` \| `scanner` \| `user` \| `agent` |
 | `Status` | `pending` \| `done` \| `skip` |
-| `Content` | ≤30-character summary for cron reporting |
+| `Content` | ≤30-character summary; prefixed with `[[Idea]]` or `[[Improve]]` tag |
 | `Detail` | Full original intent / analysis rationale; user requests recorded verbatim, AI-generated tasks include complete reasoning |
 
 ---
@@ -101,7 +106,7 @@ The skill auto-detects your project type via `project_insights.py`. You can also
 | `project_insights.py` | Scan project, generate candidates | `--project`, `--heartbeat`, `--language`, `--refresh`, `--min` |
 | `priority_scorer.py` | Score queue entries | stdin/stdout |
 | `project_md.py` | Generate PROJECT.md from current project tree | `--project`, `--output`, `--language`, `--repo` |
-| `inspire_scanner.py` | Generates alternating [[Idea]]/[[Improve]] tasks from project analysis | `--project`, `--heartbeat`, `--language` |
+| `inspire_scanner.py` | Generates [[Idea]]/[[Improve]] tasks via 2:1 alternating cycle (idea→improve→improve→idea); deduplicates; git-informed improve targeting | `--project`, `--heartbeat`, `--language` |
 | `run_status.py` | Read/write Run Status | `--heartbeat`, `read`/`write` |
 | `update_heartbeat.py` | Post-task updater: HEARTBEAT + inspire scan + PROJECT.md rebuild (cron) | `--heartbeat`, `--project`, `--commit`, `--result`, `--task`, `--language`, `--min-queue` |
 

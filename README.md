@@ -118,6 +118,10 @@ project_insights.py — auto-detect project type, generate improvement ideas
     │  includes "inspire" bucket with type-specific creative questions
     │
     ▼
+inspire_scanner.py — generate next [[Idea]] or [[Improve]] via alternating 2:1 cycle
+    │  idea → improve → improve → idea → ...  (governed by improves_since_last_idea counter)
+    │
+    ▼
 Pick top task from queue (highest score, not yet done)
     │
     ▼
@@ -130,13 +134,48 @@ verify_and_revert.py — run verification_command from config.md
   • unverified → mark unverified, notify (no verification_command set)
     │
     ▼
-Telegram report + update HEARTBEAT.md
+Telegram report + update HEARTBEAT.md (+ inspire_scanner runs to pre-fill next item)
     │
     ▼
 Re-scan queue every run (preserve user tasks, rebuild non-user queue)
 ```
 
 ---
+
+## Alternating Queue System
+
+The queue alternates between two task types in a fixed 2:1 rhythm:
+
+| Cycle | Generates | `improves_since_last_idea` counter |
+|-------|-----------|-------------------------------------|
+| 1st | `[[Idea]]` (new capability or UX innovation) | reset to 0 |
+| 2nd | `[[Improve]]` (targeted improvement) | increment → 1 |
+| 3rd | `[[Improve]]` (second in streak) | increment → 2 |
+| 4th | `[[Idea]]` (flip back to innovation) | reset to 0 |
+
+**Why this ratio?** Ideas (score 65) naturally outrank Improves (score 45) when both appear, so a 2:1 ratio keeps the queue balanced without hardcoding type preferences in the sort key.
+
+### Alternation Triggers
+
+- Reads `[[Idea]]` / `[[Improve]]` tags from the **Done Log** to detect last committed task type
+- Stores `improves_since_last_idea` counter in the **Run Status** table
+- `inspire_scanner.py` generates exactly **one** new item per run, replacing all same-type rows in the queue
+
+### Idea vs Improve Quality
+
+- **[[Idea]]**: from `PROJECT.md` inspire questions — new capability, UX innovation, workflow improvement, or competitive benchmarking
+- **[[Improve]]**: git-activity-informed — targets the most-changed module since last idea; falls back to generic improvement if no recent commits
+
+### Inspire Questions
+
+Open-ended questions in `PROJECT.md` seed [[Idea]] generation. Examples per project type:
+
+| Type | Inspire questions |
+|------|-------------------|
+| `software` | What CLI patterns could reduce friction? What would make tests easier to write? |
+| `writing` | What pacing issues does this chapter have? Which character needs more depth? |
+| `video` | What scenes feel slow? Where could the narrative be tighter? |
+| `research` | What methodology gaps exist? What counter-arguments are missing? |
 
 ## Verification & Rollback
 
@@ -193,14 +232,15 @@ Language resolution order is:
 ```
 | # | Type | Score | Content | Detail | Source | Status | Created |
 |---|------|-------|---------|--------|--------|--------|---------|
-| 1 | improve | 72 | [[Improve]] Add unit tests | Full reasoning here... | scanner | done | 2026-04-18 |
+| 1 | idea | 65 | [[Idea]] Add interactive mode | Full reasoning here... | inspire: CLI | pending | 2026-04-19 |
+| 2 | improve | 45 | [[Improve]] Add unit tests | Full reasoning here... | git: src/cli/ | pending | 2026-04-19 |
 ```
 
-- **Type**: `improve` | `feature` | `fix` | `wizard` | `user`
-- **Score**: 1–100 (higher = more urgent; user requests = 100)
-- **Source**: `scanner` | `user` | `agent`
+- **Type**: `idea` (innovation) | `improve` (targeted improvement) | `feature` | `fix` | `wizard` | `user`
+- **Score**: 1–100 (higher = more urgent; user requests = 100; ideas score 65, improves score 45)
+- **Source**: `inspire: <question>` (idea from inspire question) | `git: <module>` (improve targeting most-active module) | `scanner` | `user` | `agent`
 - **Status**: `pending` | `done` | `skip`
-- **Content**: ≤30-character summary for cron reporting
+- **Content**: ≤30-character summary for cron reporting; prefixed with `[[Idea]]` or `[[Improve]]` tag
 - **Detail**: Full original intent / analysis rationale; user requests recorded verbatim, AI-generated tasks include complete reasoning
 
 ---
@@ -230,7 +270,7 @@ The project description (type, positioning, features, architecture, inspire ques
 | `verify_and_revert.py` | Run verification, rollback on failure |
 | `run_status.py` | Read/write Run Status section |
 | `update_heartbeat.py` | Post-task updater: HEARTBEAT + queue refresh + inspire scan + PROJECT.md rebuild |
-| `inspire_scanner.py` | Generates alternating [[Idea]]/[[Improve]] tasks from project analysis |
+| `inspire_scanner.py` | Generates [[Idea]]/[[Improve]] tasks using a 2:1 improve-to-idea alternating cycle driven by `improves_since_last_idea` counter in Run Status; deduplicates against existing queue |
 | `project_md.py` | Generate PROJECT.md from current project tree (used by adopt / onboard / every task) |
 | `bootstrap.py` | Legacy helper for old Python software projects |
 | `queue_scanner.py` | **Legacy** — redirects to `project_insights.py` |
