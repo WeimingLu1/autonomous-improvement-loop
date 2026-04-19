@@ -698,10 +698,38 @@ def _write_queue_rows(heartbeat_path: Path, rows: list[dict[str, str]]) -> None:
 
 
 def _detect_existing_queue_content(heartbeat_path: Path) -> set[str]:
+    """Collect all normalized idea/improve content from Queue AND Done Log.
+
+    Deduplication must cover both:
+    - Queue (pending items not yet executed)
+    - Done Log (items already completed, to avoid re-generating the same idea)
+    """
     seen: set[str] = set()
     for row in _read_queue_rows(heartbeat_path):
         seen.add(_normalize_text(row.get("content", "")))
+    # Also skip ideas already completed (in Done Log)
+    for task_text in _read_done_log_content(heartbeat_path):
+        seen.add(_normalize_text(task_text))
     return seen
+
+
+def _read_done_log_content(heartbeat_path: Path) -> list[str]:
+    """Extract task content strings from Done Log section.
+
+    Returns list of task content strings from completed rows.
+    Used for dedup: skip ideas that have already been done.
+    """
+    if not heartbeat_path.exists():
+        return []
+    text = heartbeat_path.read_text(encoding="utf-8", errors="ignore")
+    # Find Done Log section
+    m = re.search(r"## Done Log\b[\s\S]*?\| Time \| Commit \| Task \| Result \|[\s\S]*?(?=\n## |\Z)", text)
+    if not m:
+        return []
+    done_section = m.group(0)
+    # Parse rows: | time | commit | task | result |
+    rows = re.findall(r"\|\s*\d{4}-\d{2}-\d{2}[^|]*?\s*\|\s*`?[a-f0-9]+`?\s*\|\s*([^|]+?)\s*\|", done_section)
+    return [r.strip() for r in rows]
 
 
 def _generate_ideas_for_software(
