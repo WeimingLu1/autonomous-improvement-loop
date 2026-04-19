@@ -486,11 +486,14 @@ def refresh_queue(project: Path, heartbeat: Path, lang: str, min_items: int, det
     added = 0
     max_add = max(min_items * 3, 20)
     while queue_count(heartbeat) < min_items and added < max_add:
-        candidate = choose_best_candidate(project, heartbeat, lang)
-        if not candidate:
+        result = choose_best_candidate(project, heartbeat, lang)
+        if not result:
             print(f"project_insights: no more candidates, queue has {queue_count(heartbeat)} pending")
             break
-        if append_to_queue(heartbeat, candidate, detail):
+        finding, _detail = result
+        # CLI --detail overrides the LLM-generated detail
+        final_detail = detail if detail is not None else _detail
+        if append_to_queue(heartbeat, finding, final_detail):
             added += 1
     if added >= max_add and queue_count(heartbeat) < min_items:
         print(f"project_insights: safety stop after {added} additions; pending={queue_count(heartbeat)}")
@@ -531,11 +534,13 @@ def main() -> int:
         added = refresh_queue(args.project.resolve(), args.heartbeat.resolve(), args.language, args.min, args.detail)
         return 0 if added >= 0 else 1
 
-    candidate = choose_best_candidate(args.project.resolve(), args.heartbeat.resolve(), args.language)
-    if not candidate:
+    result = choose_best_candidate(args.project.resolve(), args.heartbeat.resolve(), args.language)
+    if not result:
         print("project_insights: no new candidates found")
         return 0
-    return 0 if append_to_queue(args.heartbeat.resolve(), candidate, args.detail) else 1
+    finding, _detail = result
+    final_detail = args.detail if args.detail is not None else _detail
+    return 0 if append_to_queue(args.heartbeat.resolve(), finding, final_detail) else 1
 
 
 if __name__ == "__main__":
