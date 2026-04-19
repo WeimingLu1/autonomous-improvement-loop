@@ -23,6 +23,6 @@ verification_command:   # empty = no auto-verification
 publish_command:        # optional: shell command after successful task
 
 ## Cron
-cron_schedule: "*/30 * * * *"
+cron_schedule: */30 * * * *
 cron_timeout: 3600
-cron_job_id: 
+cron_job_id:dfcea90c-603c-4bb1-b18b-ecd247364631

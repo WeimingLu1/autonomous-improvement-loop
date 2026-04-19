@@ -486,7 +486,7 @@ def build_config(
     publish_command:        # optional: shell command after successful task
 
     ## Cron
-    cron_schedule: "*/30 * * * *"
+    cron_schedule: */30 * * * *
     cron_timeout: {DEFAULT_TIMEOUT_S}
     cron_job_id: {cron_job_id or ""}
     """).strip()
@@ -1016,7 +1016,7 @@ def cmd_start() -> None:
 
     config = read_current_config()
     cron_job_id = config.get("cron_job_id", "").strip()
-    cron_schedule = config.get("cron_schedule", "*/30 * * * *").strip()
+    cron_schedule = config.get("cron_schedule", "*/30 * * * *").strip().strip('"').strip("'")
     cron_timeout = config.get("cron_timeout", str(DEFAULT_TIMEOUT_S)).strip()
     agent_id = config.get("agent_id", "").strip()
     chat_id = config.get("chat_id", "").strip()
