@@ -9,11 +9,11 @@ the project is software, a novel, a video script, or a research paper.
 PROJECT TYPES & THEIR BUCKETS
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 
-software  \u2192 test, doc, todo, ux, feature, data, engage
-writing    \u2192 plot, character, pace, dialogue, structure, clarity
-video      \u2192 script, pacing, visual, continuity, audio, edit
-research   \u2192 structure, citation, clarity, method, conclusion
-generic    \u2192 structure, clarity, consistency, completeness
+software  \u2192 test, doc, todo, ux, feature, data, engage, inspire
+writing    \u2192 plot, character, pace, dialogue, structure, clarity, inspire
+video      \u2192 script, pacing, visual, continuity, audio, edit, inspire
+research   \u2192 structure, citation, clarity, method, conclusion, inspire
+generic    \u2192 structure, clarity, consistency, completeness, inspire
 
 \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
 USAGE
@@ -86,6 +86,12 @@ def detect_project_type(project: Path) -> str:
 def _software_buckets(lang: str):
     en = lang == "en"
     return [
+        ("inspire", [
+            "哪些开发者体验痛点还没被解决？" if not en else "哪些 developer-experience pain points remain unsolved?",
+            "CLI 工具有哪些交互范式可以创新？" if not en else "What CLI interaction paradigms could be reimagined?",
+            "竞品的哪些亮点功能我们可以借鉴但还未实现？" if not en else "What competitor亮点 features could we adopt but haven't?",
+            "错误信息能否更人性化，给出修复建议而非仅报错误？" if not en else "Can error messages be more human: suggest fixes, not just errors?",
+        ]),
         ("test", [
             "Add unit tests for each untested module" if en else "\u4e3a\u6bcf\u4e2a\u672a\u6d4b\u8bd5\u7684\u6a21\u5757\u8865\u9f50\u5355\u5143\u6d4b\u8bd5",
             "Increase test coverage for edge cases" if en else "\u4e3a\u8fb9\u754c\u60c5\u51b5\u589e\u52a0\u6d4b\u8bd5\u8986\u76d6",
@@ -125,6 +131,12 @@ def _software_buckets(lang: str):
 def _writing_buckets(lang: str):
     en = lang == "en"
     return [
+        ("inspire", [
+            "情节张力是否足够？读者在哪个节点可能弃书？" if not en else "Is the plot tension sufficient? Where might readers abandon the book?",
+            "角色动机是否清晰？每个决定是否有足够铺垫？" if not en else "Are character motivations clear? Does each decision have enough setup?",
+            "开头能否更抓人？是否能在前 500 字内建立强烈期待感？" if not en else "Can the opening be more gripping? Does it build strong anticipation in the first 500 words?",
+            "读者评论/反馈中最高频的问题是什么？" if not en else "What are the most frequently mentioned reader complaints or questions?",
+        ]),
         ("plot", [
             "Review plot consistency: check for timeline contradictions" if en else "\u5ba1\u67e5\u60c5\u8282\u4e00\u81f4\u6027\uff1a\u68c0\u67e5\u65f6\u95f4\u7ebf\u77db\u76fe",
             "Identify and resolve any unresolved plot threads from earlier chapters" if en else "\u627e\u51fa\u5e76\u89e3\u51b3\u65e9\u671f\u7ae0\u8282\u9057\u7559\u7684\u672a\u89e3\u60c5\u8282\u7ebf\u7d22",
@@ -159,6 +171,12 @@ def _writing_buckets(lang: str):
 def _video_buckets(lang: str):
     en = lang == "en"
     return [
+        ("inspire", [
+            "开头 3 秒能否抓住观众？" if not en else "Can the opening 3 seconds capture the audience?",
+            "节奏是否拖沓？每个镜头是否有存在的理由？" if not en else "Is the pacing sluggish? Does every shot have a reason to exist?",
+            "视觉和声音的配合是否到位？是否有无声浪费？" if not en else "Does visual-audio sync work well? Any silent dead weight?",
+            "情绪曲线是否完整？起承转合是否平滑？" if not en else "Is the emotional arc complete? Does the structure flow smoothly?",
+        ]),
         ("script", [
             "Review scene objectives: does each scene have a clear purpose?" if en else "\u5ba1\u67e5\u573a\u666f\u76ee\u6807\uff1a\u6bcf\u4e2a\u573a\u666f\u662f\u5426\u6709\u6e05\u6670\u76ee\u7684\uff1f",
             "Review the cold open: does it hook in the first 30 seconds?" if en else "\u5ba1\u67e5\u5f00\u5934\uff1a\u524d 30 \u79d2\u662f\u5426\u6293\u4f4f\u89c2\u4f17\uff1f",
@@ -190,6 +208,12 @@ def _video_buckets(lang: str):
 def _research_buckets(lang: str):
     en = lang == "en"
     return [
+        ("inspire", [
+            "研究问题是否足够聚焦而非泛泛而谈？" if not en else "Is the research question sufficiently focused rather than vague?",
+            "方法论是否足够透明可复现？" if not en else "Is the methodology transparent and reproducible?",
+            "与最新文献相比，这个研究的增量贡献是什么？" if not en else "What is this study's incremental contribution vs. the latest literature?",
+            "结论是否被数据充分支持而非过度推论？" if not en else "Are conclusions fully supported by data, not over-interpreted?",
+        ]),
         ("structure", [
             "Verify the paper structure: abstract \u2192 intro \u2192 method \u2192 results \u2192 discussion" if en else "\u6838\u67e5\u8bba\u6587\u7ed3\u6784\uff1a\u6458\u8981\u2192\u5f15\u8a00\u2192\u65b9\u6cd5\u2192\u7ed3\u679c\u2192\u8ba8\u8bba",
             "Ensure the abstract is self-contained and summaries all sections" if en else "\u786e\u4fdd\u6458\u8981\u72ec\u7acb\u5b8c\u6574\uff0c\u6982\u62ec\u6240\u6709\u90e8\u5206",
@@ -217,6 +241,11 @@ def _research_buckets(lang: str):
 def _generic_buckets(lang: str):
     en = lang == "en"
     return [
+        ("inspire", [
+            "工作流程中最费力的环节是什么？" if not en else "What is the most laborious part of the workflow?",
+            "哪些重复劳动可以消除或自动化？" if not en else "What repetitive work can be eliminated or automated?",
+            "信息传递中哪些地方最容易出错或被误解？" if not en else "Where is information transfer most likely to break down or be misunderstood?",
+        ]),
         ("structure", [
             "Review overall project structure: is the hierarchy logical and navigable?" if en else "\u5ba1\u67e5\u6574\u4f53\u9879\u76ee\u7ed3\u6784\uff1a\u5c42\u6b21\u662f\u5426\u903b\u8f91\u6e05\u6670\uff1f",
             "Identify any orphaned or unlinked content that should be integrated" if en else "\u627e\u51fa\u5b64\u7acb\u6216\u672a\u94fe\u63a5\u7684\u5185\u5bb9\uff0c\u5e94\u6574\u5408",
@@ -282,14 +311,55 @@ def existing_queue_normalized(heartbeat: Path) -> set[str]:
     return seen
 
 
-def choose_best_candidate(project: Path, heartbeat: Path, lang: str) -> str | None:
-    """Return the highest-priority new idea from all buckets."""
+def _get_inspire_questions(ptype: str, lang: str) -> list[str]:
+    """Extract inspire questions for the given project type (2-3 questions)."""
+    buckets = get_buckets(ptype, lang)
+    for bucket_name, ideas in buckets:
+        if bucket_name == "inspire":
+            # Return 2-3 questions, alternating for variety
+            return ideas[:3]
+    return []
+
+
+def call_llm(finding: str, inspire_context: list[str], lang: str) -> tuple[str, str]:
+    """Stub for LLM-powered creative improvement suggestion.
+
+    In production, this would call an LLM API with the finding and inspire
+    questions as context, returning (improved_finding, detail).
+    Currently returns the original finding with a placeholder detail.
+    """
+    # Combine inspire questions into a context string
+    if inspire_context:
+        context_str = "\n".join(f"  \u2022 {q}" for q in inspire_context)
+        detail = (
+            f"[inspire context used]\n"
+            f"LLM should consider these creative questions while evaluating:\n"
+            f"{context_str}\n"
+            f"Original finding: {finding}"
+        )
+    else:
+        detail = f"Static bucket item; no inspire context applied. Finding: {finding}"
+    return finding, detail
+
+
+def choose_best_candidate(project: Path, heartbeat: Path, lang: str) -> tuple[str, str] | None:
+    """Return the highest-priority new idea from all buckets.
+
+    Returns (finding, detail) tuple where detail is the full analysis
+    context (used as the Detail field when Source=agent).
+    """
     ptype = detect_project_type(project)
     existing = existing_queue_normalized(heartbeat)
+
+    # Extract inspire questions for type-aware creative context
+    inspire_questions = _get_inspire_questions(ptype, lang)
+
     for _bucket_name, ideas in get_buckets(ptype, lang):
         for idea in ideas:
             if _normalize(idea).lower() not in existing:
-                return idea
+                # Use LLM stub to get finding + detail
+                finding, detail = call_llm(idea, inspire_questions, lang)
+                return finding, detail
     return None
 
 
@@ -320,7 +390,8 @@ def score_finding(finding: str) -> int:
     return 60
 
 
-def append_to_queue(heartbeat: Path, finding: str) -> bool:
+def append_to_queue(heartbeat: Path, finding: str, detail: str | None = None) -> bool:
+    """Append a finding to the queue. detail defaults to finding if not provided."""
     content = heartbeat.read_text(encoding="utf-8")
     section_match = re.search(r'(## Queue\n\n)([\s\S]*?)(\n---\n)', content)
     if not section_match:
@@ -332,8 +403,9 @@ def append_to_queue(heartbeat: Path, finding: str) -> bool:
     numbers = [int(m) for m in re.findall(r'^\|\s*(\d+)\s*\|', section_body, re.MULTILINE)]
     next_num = max(numbers) + 1 if numbers else 1
     created = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    detail_str = finding if detail is None else detail
 
-    new_line = f"| {next_num} | improve | {score} | [[Improve]] {finding} | scanner | pending | {created} |"
+    new_line = f"| {next_num} | improve | {score} | [[Improve]] {finding} | {detail_str} | scanner | pending | {created} |"
     new_section = (
         section_match.group(1)
         + section_body.rstrip()
@@ -362,12 +434,55 @@ def queue_count(heartbeat: Path) -> int:
         if not re.match(r'^\|\s*(\d+)\s*\|', stripped):
             continue
         cells = [c.strip() for c in stripped.split('|')]
-        if len(cells) >= 7 and 'pending' in cells[6].lower():
+        # Detail column added at index 5 (after Content at index 4)
+        # Source is at index 5 (new) or old index 4
+        status_idx = 7 if len(cells) >= 8 else 6
+        if len(cells) >= 7 and 'pending' in cells[status_idx].lower():
             count += 1
     return count
 
 
-def refresh_queue(project: Path, heartbeat: Path, lang: str, min_items: int) -> int:
+def clear_queue(heartbeat: Path) -> int:
+    """Remove all non-user entries from the queue. Returns count of removed entries."""
+    content = heartbeat.read_text(encoding="utf-8")
+    section_match = re.search(r'(## Queue\n\n)([\s\S]*?)(\n---\n)', content)
+    if not section_match:
+        print("ERROR: Queue section not found in HEARTBEAT.md", file=sys.stderr)
+        return 0
+
+    section_body = section_match.group(2)
+    lines = section_body.rstrip('\n').split('\n')
+    kept_lines: list[str] = []
+    removed = 0
+    for line in lines:
+        stripped = line.strip()
+        if not stripped.startswith('|') or stripped.startswith('|---'):
+            continue
+        if not re.match(r'^\|\s*(\d+)\s*\|', stripped):
+            continue
+        cells = [c.strip() for c in stripped.split('|')]
+        # Source column: index 5 (new format with Detail) or index 4 (old format)
+        source = cells[5] if len(cells) >= 6 else cells[4] if len(cells) >= 5 else ''
+        if source == 'user':
+            kept_lines.append(line)
+        else:
+            removed += 1
+
+    new_section = (
+        section_match.group(1)
+        + ('\n'.join(kept_lines) + '\n' if kept_lines else '')
+        + section_match.group(3)
+    )
+    updated = (
+        content[:section_match.start()]
+        + new_section
+        + content[section_match.end():]
+    )
+    heartbeat.write_text(updated, encoding="utf-8")
+    return removed
+
+
+def refresh_queue(project: Path, heartbeat: Path, lang: str, min_items: int, detail: str | None = None) -> int:
     added = 0
     max_add = max(min_items * 3, 20)
     while queue_count(heartbeat) < min_items and added < max_add:
@@ -375,7 +490,7 @@ def refresh_queue(project: Path, heartbeat: Path, lang: str, min_items: int) -> 
         if not candidate:
             print(f"project_insights: no more candidates, queue has {queue_count(heartbeat)} pending")
             break
-        if append_to_queue(heartbeat, candidate):
+        if append_to_queue(heartbeat, candidate, detail):
             added += 1
     if added >= max_add and queue_count(heartbeat) < min_items:
         print(f"project_insights: safety stop after {added} additions; pending={queue_count(heartbeat)}")
@@ -396,24 +511,31 @@ def main() -> int:
     parser.add_argument("--language", default="en", choices=["en", "zh"])
     parser.add_argument("--refresh", action="store_true")
     parser.add_argument("--min", type=int, default=5)
+    parser.add_argument("--clear", action="store_true", help="Clear queue of all non-user entries")
+    parser.add_argument("--detail", type=str, default=None, help="Detail text for new queue entries")
     args = parser.parse_args()
 
     if not args.heartbeat.exists():
         print(f"ERROR: HEARTBEAT not found: {args.heartbeat}", file=sys.stderr)
         return 1
 
+    if args.clear:
+        removed = clear_queue(args.heartbeat.resolve())
+        print(f"project_insights: cleared {removed} non-user entries")
+        return 0
+
     ptype = detect_project_type(args.project.resolve())
     print(f"[project_insights] type={ptype} lang={args.language}")
 
     if args.refresh:
-        added = refresh_queue(args.project.resolve(), args.heartbeat.resolve(), args.language, args.min)
+        added = refresh_queue(args.project.resolve(), args.heartbeat.resolve(), args.language, args.min, args.detail)
         return 0 if added >= 0 else 1
 
     candidate = choose_best_candidate(args.project.resolve(), args.heartbeat.resolve(), args.language)
     if not candidate:
         print("project_insights: no new candidates found")
         return 0
-    return 0 if append_to_queue(args.heartbeat.resolve(), candidate) else 1
+    return 0 if append_to_queue(args.heartbeat.resolve(), candidate, args.detail) else 1
 
 
 if __name__ == "__main__":

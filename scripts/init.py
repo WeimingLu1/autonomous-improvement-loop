@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 r"""
-Autonomous Improvement Loop — setup wizard
+Autonomous Improvement Loop — setup wizard & cron托管 CLI
 
-Supports two flows:
+Supports these flows:
   adopt    Take over an existing project (auto-detect, configure, start)
   onboard  Bootstrap a brand-new project
+  status   Check project readiness and queue state
+
+  start    Start cron托管 (create cron job from config.md)
+  stop     Stop cron托管 (remove cron job)
+  add      Add a user requirement to the queue
+  scan     Trigger a queue scan via project_insights.py
+  clear    Clear non-user tasks from the queue
 
 Examples:
   # Take over an existing project (most common)
@@ -16,8 +23,20 @@ Examples:
   # Check project readiness
   python init.py status ~/Projects/YOUR_PROJECT
 
-  # Fully interactive wizard (auto-detect everything)
-  python init.py adopt
+  # Start cron托管
+  python init.py start
+
+  # Stop cron托管
+  python init.py stop
+
+  # Add a user requirement
+  python init.py add "Implement dark mode support"
+
+  # Trigger queue scan
+  python init.py scan
+
+  # Clear non-user tasks
+  python init.py clear
 
 All parameters are optional. init.py auto-detects project path, GitHub repo,
 Agent ID, and Telegram Chat ID whenever possible, and only prompts when needed.
@@ -990,6 +1009,297 @@ def cmd_onboard(
     """))
 
 
+# ── Start: launch cron托管 ────────────────────────────────────────────────────
+
+def cmd_start() -> None:
+    step("⏰ Starting Autonomous Improvement Loop cron")
+
+    config = read_current_config()
+    cron_job_id = config.get("cron_job_id", "").strip()
+    cron_schedule = config.get("cron_schedule", "*/30 * * * *").strip()
+    cron_timeout = config.get("cron_timeout", str(DEFAULT_TIMEOUT_S)).strip()
+    agent_id = config.get("agent_id", "").strip()
+    chat_id = config.get("chat_id", "").strip()
+    project_path = config.get("project_path", "").strip()
+
+    # Check if already exists
+    r = run(["openclaw", "cron", "list"], timeout=15)
+    if r.returncode == 0 and cron_job_id and cron_job_id in r.stdout:
+        ok(f"Cron job already active: {cron_job_id}")
+        print(f"\n  Use 'python init.py stop' to remove it, or\n"
+              f"  openclaw cron run {cron_job_id}  to trigger manually.")
+        return
+
+    if not agent_id or agent_id in ("", "YOUR_AGENT_ID"):
+        fail("agent_id not configured in config.md")
+        sys.exit(1)
+
+    # Build openclaw cron add command
+    cmd = [
+        "openclaw", "cron", "add",
+        "--name", "Autonomous Improvement Loop",
+        "--cron", cron_schedule,
+        "--timeout-seconds", cron_timeout,
+        "--agent", agent_id,
+        "--session", "isolated",
+        "--message", "Autonomous improvement loop triggered",
+    ]
+    if chat_id and chat_id not in ("", "YOUR_TELEGRAM_CHAT_ID"):
+        cmd.extend(["--announce", "--channel", "telegram", "--to", chat_id])
+
+    run_result = run(cmd)
+    if run_result.returncode != 0:
+        fail(f"Failed to create cron: {run_result.stderr}")
+        sys.exit(1)
+
+    # Extract cron job ID from output
+    new_id = cron_job_id
+    if not new_id or new_id in ("", "YOUR_AGENT_ID"):
+        m = re.search(
+            r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}",
+            run_result.stdout,
+        )
+        new_id = m.group(0) if m else ""
+
+    # Update config with new cron_job_id
+    if CONFIG_FILE.exists():
+        content = read_file(CONFIG_FILE)
+        content = re.sub(
+            r"(^cron_job_id:\s*).+$",
+            rf"\g<1>{new_id}",
+            content,
+            flags=re.MULTILINE,
+        )
+        write_file(CONFIG_FILE, content)
+
+    ok(f"Cron job created: {new_id}")
+    print(f"\n  Schedule : {cron_schedule}")
+    print(f"  Timeout  : {cron_timeout}s")
+    print(f"  Agent    : {agent_id}")
+    if project_path:
+        print(f"  Project  : {project_path}")
+    print(f"\n  Run now manually: openclaw cron run {new_id}")
+
+
+# ── Stop: halt cron托管 ────────────────────────────────────────────────────────
+
+def cmd_stop() -> None:
+    step("⏹  Stopping Autonomous Improvement Loop cron")
+
+    config = read_current_config()
+    cron_job_id = config.get("cron_job_id", "").strip()
+
+    if not cron_job_id or cron_job_id in ("", "YOUR_AGENT_ID"):
+        # Fallback: try to detect from openclaw cron list
+        r = run(["openclaw", "cron", "list"], timeout=15)
+        if r.returncode == 0:
+            for line in r.stdout.strip().splitlines():
+                if "autonomous" in line.lower() or "improvement" in line.lower():
+                    m = re.search(
+                        r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}",
+                        line,
+                    )
+                    if m:
+                        cron_job_id = m.group(0)
+                        break
+
+    if not cron_job_id or cron_job_id in ("", "YOUR_AGENT_ID"):
+        warn("cron job not found")
+        return
+
+    r = run(["openclaw", "cron", "rm", cron_job_id], timeout=15)
+    if r.returncode != 0:
+        warn(f"Failed to remove cron: {r.stderr}")
+        sys.exit(1)
+
+    ok(f"Cron job removed: {cron_job_id}")
+
+    # Clear cron_job_id from config
+    if CONFIG_FILE.exists():
+        content = read_file(CONFIG_FILE)
+        content = re.sub(
+            r"(^cron_job_id:\s*).+$",
+            r"\1",
+            content,
+            flags=re.MULTILINE,
+        )
+        write_file(CONFIG_FILE, content)
+
+
+# ── Add: insert user requirement into queue ───────────────────────────────────
+
+def cmd_add(content_text: str) -> None:
+    step("📝 Adding user requirement to queue")
+
+    if not HEARTBEAT.exists():
+        fail(f"HEARTBEAT.md not found at {HEARTBEAT}")
+        sys.exit(1)
+
+    if not content_text or not content_text.strip():
+        fail("Empty content — nothing to add")
+        sys.exit(1)
+
+    # Parse Content (first 30 chars) + Detail (full)
+    content_stripped = content_text.strip()
+    content_summary = content_stripped[:30] + ("…" if len(content_stripped) > 30 else "")
+    created = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # Read existing queue rows
+    existing_rows: list[dict[str, str]] = []
+    max_num = 0
+    full_content = read_file(HEARTBEAT)
+
+    queue_match = re.search(
+        r"(\n## Queue\n\n)\|[\s\S]*?\n---\n",
+        full_content,
+    )
+    if queue_match:
+        queue_block = queue_match.group(0)
+        for line in queue_block.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("|") or "---" in stripped or stripped.startswith("| #"):
+                continue
+            m = re.match(
+                r"^\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|$",
+                stripped,
+            )
+            if m:
+                num = int(m.group(1))
+                max_num = max(max_num, num)
+                existing_rows.append(
+                    {
+                        "kind": m.group(2).strip(),
+                        "score": m.group(3).strip(),
+                        "desc": m.group(4).strip(),
+                        "source": m.group(5).strip(),
+                        "status": m.group(6).strip(),
+                        "created": m.group(7).strip(),
+                        "_num": str(num),
+                    }
+                )
+
+    # Build new row (insert at top)
+    new_row = {
+        "kind": "improvement",
+        "score": "100",
+        "desc": content_summary,
+        "source": "user",
+        "status": "pending",
+        "created": created,
+        "detail": content_stripped,
+        "_num": "0",
+    }
+
+    # Insert at top
+    all_rows = [new_row] + existing_rows
+
+    # Re-number
+    table_lines = [
+        "| # | Type | Score | Content | Source | Status | Created |",
+        "|---|------|-------|---------|--------|--------|---------|",
+    ]
+    for i, row in enumerate(all_rows, 1):
+        detail_note = f" ({row['detail']})" if "detail" in row else ""
+        table_lines.append(
+            f"| {i} | {row['kind']} | {row['score']} | {row['desc']}{detail_note} | {row['source']} | pending | {row['created']} |"
+        )
+
+    new_queue_block = "\n" + "\n".join(table_lines) + "\n---\n"
+
+    if queue_match:
+        new_content = full_content[:queue_match.start()] + "\n## Queue\n\n" + new_queue_block + full_content[queue_match.end():]
+    else:
+        # Queue section doesn't exist, insert before ---
+        sep = re.search(r"\n---\n\n##", full_content)
+        if sep:
+            insert_at = sep.start()
+            new_content = full_content[:insert_at] + "\n## Queue\n\n" + new_queue_block + full_content[insert_at:]
+        else:
+            new_content = full_content + "\n## Queue\n\n" + new_queue_block
+
+    write_file(HEARTBEAT, new_content)
+    ok(f"Added to queue: {content_summary}")
+    info(f"Full detail stored: {content_stripped[:80]}...")
+
+
+# ── Scan: trigger queue scan ──────────────────────────────────────────────────
+
+def cmd_scan() -> None:
+    step("🔍 Triggering queue scan")
+
+    config = read_current_config()
+    project_path_str = config.get("project_path", "").strip()
+    heartbeat_path_str = config.get("heartbeat_path", str(HEARTBEAT)).strip()
+    language = config.get("project_language", DEFAULT_LANGUAGE).strip()
+
+    if not project_path_str or project_path_str in (".", "YOUR_PROJECT_PATH"):
+        detected = detect_project_path()
+        if detected:
+            project_path_str = str(detected)
+            ok(f"Auto-detected project: {project_path_str}")
+        else:
+            fail("project_path not configured in config.md and could not auto-detect")
+            sys.exit(1)
+
+    project_p = Path(project_path_str)
+    heartbeat_p = Path(heartbeat_path_str) if heartbeat_path_str else HEARTBEAT
+
+    if not project_p.exists():
+        fail(f"Project path does not exist: {project_p}")
+        sys.exit(1)
+
+    ok(f"Running: project_insights.py --project {project_p} --heartbeat {heartbeat_p} --language {language} --refresh --min 3")
+
+    r = run(
+        [
+            sys.executable,
+            str(HERE / "project_insights.py"),
+            "--project", str(project_p),
+            "--heartbeat", str(heartbeat_p),
+            "--language", language,
+            "--refresh",
+            "--min", "3",
+        ],
+        cwd=SKILL_DIR,
+        timeout=180,
+    )
+    if r.returncode != 0:
+        fail(f"Scan failed: {r.stderr}")
+        sys.exit(1)
+
+    ok("Queue scan complete")
+    if r.stdout.strip():
+        print(r.stdout[:500])
+
+
+# ── Clear: remove non-user tasks ──────────────────────────────────────────────
+
+def cmd_clear() -> None:
+    step("🗑  Clearing non-user tasks from queue")
+
+    config = read_current_config()
+    heartbeat_path_str = config.get("heartbeat_path", str(HEARTBEAT)).strip()
+    heartbeat_p = Path(heartbeat_path_str) if heartbeat_path_str else HEARTBEAT
+
+    if not heartbeat_p.exists():
+        fail(f"HEARTBEAT.md not found at {heartbeat_p}")
+        sys.exit(1)
+
+    ok(f"Running: queue_scanner.py --clear")
+
+    r = run(
+        [sys.executable, str(HERE / "queue_scanner.py"), "--clear"],
+        cwd=SKILL_DIR,
+        timeout=60,
+    )
+    if r.returncode != 0:
+        warn(f"queue_scanner.py reported issues: {r.stderr}")
+
+    ok("Non-user tasks cleared")
+    if r.stdout.strip():
+        print(r.stdout[:500])
+
+
 # ── Status: inspect project state ─────────────────────────────────────────────
 
 def cmd_status(project: Path) -> None:
@@ -1078,8 +1388,20 @@ def main() -> int:
               # Check project readiness
               python init.py status ~/Projects/YOUR_PROJECT
 
-              # Fully interactive (auto-detect everything)
-              python init.py adopt
+              # Start cron托管
+              python init.py start
+
+              # Stop cron托管
+              python init.py stop
+
+              # Add a user requirement
+              python init.py add "Implement dark mode support"
+
+              # Trigger queue scan
+              python init.py scan
+
+              # Clear non-user tasks
+              python init.py clear
             """),
     )
 
@@ -1113,6 +1435,27 @@ def main() -> int:
     status_p.add_argument("project", nargs="?", type=Path,
                           default=detect_project_path())
     status_p.set_defaults(func=cmd_status)
+
+    # ── start ─────────────────────────────────────────────────────────────────
+    start_p = sub.add_parser("start", help="Start cron托管 (create cron job)")
+    start_p.set_defaults(func=lambda _a: cmd_start())
+
+    # ── stop ──────────────────────────────────────────────────────────────────
+    stop_p = sub.add_parser("stop", help="Stop cron托管 (remove cron job)")
+    stop_p.set_defaults(func=lambda _a: cmd_stop())
+
+    # ── add ───────────────────────────────────────────────────────────────────
+    add_p = sub.add_parser("add", help="Add a user requirement to the queue")
+    add_p.add_argument("content", nargs="+", help="Requirement content text")
+    add_p.set_defaults(func=lambda a: cmd_add(" ".join(a.content)))
+
+    # ── scan ──────────────────────────────────────────────────────────────────
+    scan_p = sub.add_parser("scan", help="Trigger a queue scan")
+    scan_p.set_defaults(func=lambda _a: cmd_scan())
+
+    # ── clear ────────────────────────────────────────────────────────────────
+    clear_p = sub.add_parser("clear", help="Clear non-user tasks from queue")
+    clear_p.set_defaults(func=lambda _a: cmd_clear())
 
     args = parser.parse_args()
 
@@ -1164,6 +1507,16 @@ def main() -> int:
             )
         elif args.command == "status":
             cmd_status(args.project)
+        elif args.command == "start":
+            cmd_start()
+        elif args.command == "stop":
+            cmd_stop()
+        elif args.command == "add":
+            cmd_add(" ".join(args.content))
+        elif args.command == "scan":
+            cmd_scan()
+        elif args.command == "clear":
+            cmd_clear()
     except KeyboardInterrupt:
         print("\n\nCancelled.")
         return 130
