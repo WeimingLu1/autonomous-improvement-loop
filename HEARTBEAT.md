@@ -1,31 +1,21 @@
-# Autonomous Improvement Loop — Queue Status
-
-> Skill: autonomous-improvement-loop | One agent x One project
-> Config: config.md## Queue
-
-| # | Type | Score | Content | Detail | Source | Status | Created |
-|---|------|-------|---------|--------|--------|--------|--------|
-| 2 | improve | 100 | 增加健康数据可视化：支持 ASCII 图表输出周/月趋势（饮… | 增加健康数据可视化：支持 ASCII 图表输出周/月趋势（饮食、睡眠、运动、测量数据） | user | done | 2026-04-19 |
-| 3 | improve | 100 | 完善错误提示：所有 CLI 命令的错误信息需说明原因并给出修… | 完善错误提示：所有 CLI 命令的错误信息需说明原因并给出修复建议，而非仅报错 | user | done | 2026-04-19 |
-
----
 ## Queue
 
 | # | Type | Score | Content | Detail | Source | Status | Created |
 |---|------|-------|---------|--------|--------|--------|--------|
-| 2 | improve | 100 | 增加健康数据可视化：支持 ASCII 图表输出周/月趋势（饮… | 增加健康数据可视化：支持 ASCII 图表输出周/月趋势（饮食、睡眠、运动、测量数据） | user | done | 2026-04-19 |
-| 3 | improve | 100 | 完善错误提示：所有 CLI 命令的错误信息需说明原因并给出修… | 完善错误提示：所有 CLI 命令的错误信息需说明原因并给出修复建议，而非仅报错 | user | done | 2026-04-19 |
-| 4 | improve | 50 | [[Improve]] 为每个未测试的模块补齐单元测试 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
+| 1 | improve | 50 | [[Improve]] 为每个未测试的模块补齐单元测试 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
+| 2 | improve | 60 | [[Improve]] 为边界情况增加测试覆盖 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
+| 3 | improve | 60 | [[Improve]] 为关键用户流程增加集成测试 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
+| 4 | improve | 55 | [[Improve]] 确保所有错误路径都有对应测试 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
+| 5 | improve | 45 | [[Improve]] 为未写文档的模块补充 docstring | Review and improve documentation for this module. Ensure all public APIs have docstrings (Sphinx style: description, args, returns, raises). Add usage examples for complex functions. Keep docs consistent with existing style. | scanner | pending | 2026-04-19 |
 
 ---
-
 ## Run Status
 
 | Field | Value |
 |-------|-------|
-| last_run_time | 2026-04-19T14:30:00Z |
-| last_run_commit | 79a9afb |
-| cron_lock | true |
+| last_run_time | 2026-04-19T15:00:00Z |
+| last_run_commit | f005921 |
+| cron_lock | false |
 
 ---
 
@@ -59,6 +49,7 @@
 | 2026-04-19T13:00:00Z | aa9c9d5 | 为 reminder_service、health_advisor_service、export_service 补齐边界测试（11个用例），232个测试全部通过 | pass |
 | 2026-04-19T12:30:00Z | a4d65e3 | 为 event_service 补齐单元测试（10个用例）+ RulesEngine 集成测试（10个用例），219个测试全部通过 | pass |
 | 2026-04-19T12:00:00Z | 5ac5eb7 | 完善错误提示：为所有 CLI 命令的错误信息增加原因说明和修复建议（log.py/advise.py/completion.py/export.py/status.py）+ 199 个测试全部通过 | pass |
+| 2026-04-19T15:00:00Z | f005921 | 为边界情况增加测试覆盖：新增73个测试（test_health_advisor_extract_data 30个、test_cli_boundary 25个、test_service_boundary 18个）+ 修复3个 health_advisor_service 边界崩溃 bug（_extract_sleep/activity/measurement_data） | pass |
 
 
 ## Notes
@@ -67,11 +58,3 @@
 - 用户请求（user）自动插队至顶部，scanner 条目按 score 排列
 - README 更新任务（#1）已完成，commit 65ccbd6 已记录至 Done Log
 
-## Queue Management Rules
-
-- **User request** → score=100 → immediately inserted at #1, all others shift down
-- **During cron execution** (`cron_lock=true`): user requests can still join queue, agent refuses direct file edits
-- **After adding any entry**: re-sort by score descending, write back to HEARTBEAT.md
-- **After every completed cron run**: mark the executed row done/skip, append Done Log, then refresh the non-user queue
-- **Queue refresh rule**: preserve user tasks, clear stale non-user rows, then run `project_insights.py --refresh --min 5`
-- **Cron execution sequence**: ① `cron_lock=true` → ② execute task → ③ verify/publish if configured → ④ update HEARTBEAT.md → ⑤ refresh queue → ⑥ announce → ⑦ `cron_lock=false`

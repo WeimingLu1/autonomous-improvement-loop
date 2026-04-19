@@ -31,7 +31,8 @@ def _read_config() -> dict[str, str]:
         key, _, value = line.partition(":")
         key = key.strip()
         value = value.strip()
-        if key in defaults:
+        # Skip blank values or comment-only values (e.g. "# defaults to ...")
+        if key in defaults and value and not value.startswith("#"):
             defaults[key] = value
     return defaults
 

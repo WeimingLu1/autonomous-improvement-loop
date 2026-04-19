@@ -1223,7 +1223,8 @@ def cmd_scan() -> None:
 
     config = read_current_config()
     project_path_str = config.get("project_path", "").strip()
-    heartbeat_path_str = config.get("heartbeat_path", str(HEARTBEAT)).strip()
+    heartbeat_path_str = config.get("heartbeat_path", "").strip()
+    heartbeat_p = HEARTBEAT if (not heartbeat_path_str or heartbeat_path_str.startswith("#")) else Path(heartbeat_path_str)
     language = config.get("project_language", DEFAULT_LANGUAGE).strip()
 
     if not project_path_str or project_path_str in (".", "YOUR_PROJECT_PATH"):
@@ -1236,7 +1237,6 @@ def cmd_scan() -> None:
             sys.exit(1)
 
     project_p = Path(project_path_str)
-    heartbeat_p = Path(heartbeat_path_str) if heartbeat_path_str else HEARTBEAT
 
     if not project_p.exists():
         fail(f"Project path does not exist: {project_p}")
@@ -1272,11 +1272,11 @@ def cmd_clear() -> None:
     step("🗑  Clearing non-user tasks from queue")
 
     config = read_current_config()
-    heartbeat_path_str = config.get("heartbeat_path", str(HEARTBEAT)).strip()
-    heartbeat_p = Path(heartbeat_path_str) if heartbeat_path_str else HEARTBEAT
+    heartbeat_path_str = config.get("heartbeat_path", "").strip()
+    heartbeat_p = HEARTBEAT if (not heartbeat_path_str or heartbeat_path_str.startswith("#")) else Path(heartbeat_path_str)
 
     if not heartbeat_p.exists():
-        fail(f"HEARTBEAT.md not found at {heartbeat_p}")
+        fail(f"HEARTBEAT not found at {heartbeat_p}")
         sys.exit(1)
 
     ok(f"Running: queue_scanner.py --clear")
@@ -1468,8 +1468,8 @@ def cmd_log(n: int = 10) -> None:
 def cmd_refresh(min_items: int | None = None) -> None:
     step("🔄 Refreshing queue (clear + scan)")
     config = read_current_config()
-    heartbeat_path_str = config.get("heartbeat_path", str(HEARTBEAT)).strip()
-    heartbeat_p = Path(heartbeat_path_str) if heartbeat_path_str else HEARTBEAT
+    heartbeat_path_str = config.get("heartbeat_path", "").strip()
+    heartbeat_p = HEARTBEAT if (not heartbeat_path_str or heartbeat_path_str.startswith("#")) else Path(heartbeat_path_str)
     project_path_str = config.get("project_path", "").strip()
     language = config.get("project_language", DEFAULT_LANGUAGE).strip()
     resolved_min = min_items
