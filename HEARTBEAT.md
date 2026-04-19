@@ -21,25 +21,6 @@
 
 ## Queue
 
-| # | Type | Score | Content | Source | Status | Created |
-|---|------|-------|---------|--------|--------|--------|
-| 1 | improve | 60 | [[Improve]] 为 CLI 增加 shell 自动补全（bash/zsh/fish） | scanner | done | 2026-04-19 |
-| 2 | improve | 45 | [[Improve]] 为未写文档的模块补充 docstring | scanner | done | 2026-04-18 |
-| 2 | improve | 50 | [[Improve]] 为每个未测试的模块补齐单元测试 | scanner | done | 2026-04-18 |
-| 3 | improve | 60 | [[Improve]] 为边界情况增加测试覆盖 | scanner | done | 2026-04-18 |
-| 4 | improve | 60 | [[Improve]] 为关键用户流程增加集成测试 | scanner | done | 2026-04-18 |
-| 5 | improve | 55 | [[Improve]] 确保所有错误路径都有对应测试 | scanner | done | 2026-04-18 |
-| 6 | improve | 60 | [[Improve]] 为公开 API 写清合约和使用示例 | scanner | done | 2026-04-18 |
-| 7 | improve | 60 | [[Improve]] 为不直观逻辑增加注释说明 | scanner | done | 2026-04-18 |
-| 8 | improve | 60 | [[Improve]] 处理代码库中的所有 TODO/FIXME | scanner | done | 2026-04-18 |
-| 9 | improve | 60 | [[Improve]] 审查并移除或标注废弃代码路径 | scanner | done | 2026-04-18 |
-| 10 | improve | 70 | [[Improve]] 改进错误提示：给出原因和修复建议 | scanner | done | 2026-04-18 |
-| 11 | improve | 55 | [[Improve]] 增加 verbose 模式（--verbose）输出详细信息 | scanner | done | 2026-04-18 |
-| 12 | improve | 60 | [[Improve]] 为 CLI 增加 shell 自动补全（bash/zsh/fish） | scanner | skip | 2026-04-19 |
-| 13 | improve | 60 | [[Improve]] 增加配置文件（~/.myapp.yaml）支持用户偏好设置 | scanner | done | 2026-04-19 |
-| 14 | improve | 60 | [[Improve]] 找出最被期待但未实现的功能并实现 | scanner | skip | 2026-04-19 |
-| 15 | improve | 60 | [[Improve]] 增加 status 命令：一览当前项目状态 | scanner | skip | 2026-04-19 |
-| 16 | improve | 65 | [[Improve]] 增加 export 命令输出结构化数据 | scanner | skip | 2026-04-19 |
 
 ---
 
