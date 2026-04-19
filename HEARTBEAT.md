@@ -2,11 +2,7 @@
 
 | # | Type | Score | Content | Detail | Source | Status | Created |
 |---|------|-------|---------|--------|--------|--------|--------|
-| 1 | improve | 50 | [[Improve]] 为每个未测试的模块补齐单元测试 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
-| 2 | improve | 60 | [[Improve]] 为边界情况增加测试覆盖 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
-| 3 | improve | 60 | [[Improve]] 为关键用户流程增加集成测试 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
-| 4 | improve | 55 | [[Improve]] 确保所有错误路径都有对应测试 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
-| 5 | improve | 45 | [[Improve]] 为未写文档的模块补充 docstring | Review and improve documentation for this module. Ensure all public APIs have docstrings (Sphinx style: description, args, returns, raises). Add usage examples for complex functions. Keep docs consistent with existing style. | scanner | pending | 2026-04-19 |
+| 1 | idea | 62 | [[Idea]] 添加交互式 `health interactive` 命令，通过问答引导记录健康事件，降低输入门槛 | 添加交互式 `health interactive` 命令，通过问答引导记录健康事件，降低输入门槛 | inspire: CLI 工具有哪些交互范式可以创新？ | pending | 2026-04-19 |
 
 ---
 ## Run Status

@@ -14,7 +14,7 @@ Supports these flows:
   a-clear  Clear non-user tasks from the queue
   a-queue   Show current queue
   a-log     Show recent Done Log entries
-  a-refresh Clear + scan (full queue refresh)
+  a-refresh Clear + inspire scan (run alternating queue cycle once)
   a-trigger Run cron immediately
   a-config  Get or set config values
 
@@ -1502,24 +1502,24 @@ def cmd_log(n: int = 10) -> None:
 # ── a_refresh: clear + scan ─────────────────────────────────────────────────
 
 def cmd_refresh(min_items: int | None = None) -> None:
-    step("🔄 Refreshing queue (clear + scan)")
+    """Clear non-user tasks, then run inspire_scanner once to generate one new item.
+
+    Uses the alternating queue system (idea→improve→improve→idea) to generate
+    exactly one new item per call, replacing same-type rows in the queue.
+    """
+    step("🔄 Refreshing queue (clear + inspire scan)")
     config = read_current_config()
     heartbeat_path_str = config.get("heartbeat_path", "").strip()
     heartbeat_p = HEARTBEAT if (not heartbeat_path_str or heartbeat_path_str.startswith("#")) else Path(heartbeat_path_str)
     project_path_str = config.get("project_path", "").strip()
     language = config.get("project_language", DEFAULT_LANGUAGE).strip()
-    resolved_min = min_items
-    if resolved_min is None:
-        raw = read_file(CONFIG_FILE) if CONFIG_FILE.exists() else ""
-        m = re.search(r"min_queue_items:\s*(\d+)", raw)
-        resolved_min = int(m.group(1)) if m else 5
 
     if not project_path_str or project_path_str in (".", "YOUR_PROJECT_PATH"):
         detected = detect_project_path()
         project_path_str = str(detected) if detected else "."
         ok(f"Auto-detected project: {project_path_str}")
 
-    # Step 1: clear
+    # Step 1: clear non-user tasks
     ok("Step 1/2: Clearing non-user tasks...")
     r = run([sys.executable, str(HERE / "queue_scanner.py"), "--clear"], cwd=SKILL_DIR, timeout=60)
     if r.returncode == 0:
@@ -1527,22 +1527,23 @@ def cmd_refresh(min_items: int | None = None) -> None:
     else:
         warn(f"Clear returned: {r.stderr[:100] if r.stderr else r.stdout[:100]}")
 
-    # Step 2: scan
-    ok("Step 2/2: Scanning for new items...")
+    # Step 2: run inspire_scanner once (alternating queue — generates 1 item)
+    ok("Step 2/2: Running inspire scanner...")
     r = run(
         [
-            sys.executable, str(HERE / "project_insights.py"),
+            sys.executable, str(HERE / "inspire_scanner.py"),
             "--project", project_path_str,
             "--heartbeat", str(heartbeat_p),
             "--language", language,
-            "--refresh", "--min", str(resolved_min),
         ],
-        cwd=SKILL_DIR, timeout=180,
+        cwd=SKILL_DIR, timeout=60,
     )
     if r.returncode == 0:
-        ok(f"Queue refreshed (min={resolved_min})")
+        ok("Inspire scan complete")
+        if r.stdout.strip():
+            print(r.stdout.strip())
     else:
-        warn(f"Scan returned: {r.stderr[:100] if r.stderr else ''}")
+        warn(f"Inspire scan returned: {r.stderr[:100] if r.stderr else r.stdout[:100]}")
 
 
 # ── a_trigger: run cron immediately ──────────────────────────────────────────
