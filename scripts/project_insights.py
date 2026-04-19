@@ -460,37 +460,85 @@ def score_finding(finding: str) -> int:
     return 60
 
 
-def append_to_queue(heartbeat: Path, finding: str, detail: str | None = None) -> bool:
-    """Append a finding to the queue. detail defaults to finding if not provided."""
+def append_to_queue(
+    heartbeat: Path,
+    finding: str,
+    detail: str | None = None,
+    score: int | None = None,
+    source: str = "scanner",
+    insert_top: bool = False,
+) -> bool:
+    """Append (or prepend) a finding to the queue."""
     content = heartbeat.read_text(encoding="utf-8")
     section_match = re.search(r'(## Queue\n\n)([\s\S]*?)(\n---\n)', content)
     if not section_match:
         print("ERROR: Queue section not found in HEARTBEAT.md", file=sys.stderr)
         return False
 
-    score = score_finding(finding)
     section_body = section_match.group(2)
-    numbers = [int(m) for m in re.findall(r'^\|\s*(\d+)\s*\|', section_body, re.MULTILINE)]
-    next_num = max(numbers) + 1 if numbers else 1
+    existing_rows: list[dict[str, str]] = []
+    for line in section_body.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith('|') or stripped.startswith('|---') or stripped.startswith('| #'):
+            continue
+        cells = [c.strip() for c in stripped.split('|')[1:-1]]
+        if not cells or not re.match(r'^\d+$', cells[0]):
+            continue
+        if len(cells) >= 8:
+            existing_rows.append(
+                {
+                    "type": cells[1],
+                    "score": cells[2],
+                    "content": cells[3],
+                    "detail": cells[4],
+                    "source": cells[5],
+                    "status": cells[6],
+                    "created": cells[7],
+                }
+            )
+        elif len(cells) >= 7:
+            existing_rows.append(
+                {
+                    "type": cells[1],
+                    "score": cells[2],
+                    "content": cells[3],
+                    "detail": cells[3],
+                    "source": cells[4],
+                    "status": cells[5],
+                    "created": cells[6],
+                }
+            )
+
+    resolved_score = score if score is not None else score_finding(finding)
     created = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     detail_str = finding if detail is None else detail
+    type_label = "feature" if source == "agent" else "improve"
+    prefix = "[[Improve]]" if source == "scanner" else "[[Feature]]" if source == "agent" else ""
+    content_cell = f"{prefix} {finding}" if prefix else finding
+    new_row = {
+        "type": type_label,
+        "score": str(resolved_score),
+        "content": content_cell,
+        "detail": detail_str,
+        "source": source,
+        "status": "pending",
+        "created": created,
+    }
 
-    new_line = f"| {next_num} | improve | {score} | [[Improve]] {finding} | {detail_str} | scanner | pending | {created} |"
-    new_section = (
-        section_match.group(1)
-        + section_body.rstrip()
-        + "\n"
-        + new_line
-        + "\n"
-        + section_match.group(3)
-    )
-    updated = (
-        content[:section_match.start()]
-        + new_section
-        + content[section_match.end():]
-    )
+    rows = ([new_row] + existing_rows) if insert_top else (existing_rows + [new_row])
+    table_lines = [
+        "| # | Type | Score | Content | Detail | Source | Status | Created |",
+        "|---|------|-------|---------|--------|--------|--------|---------|",
+    ]
+    for idx, row in enumerate(rows, 1):
+        table_lines.append(
+            f"| {idx} | {row['type']} | {row['score']} | {row['content']} | {row['detail']} | {row['source']} | {row['status']} | {row['created']} |"
+        )
+
+    new_section = section_match.group(1) + "\n".join(table_lines) + "\n" + section_match.group(3)
+    updated = content[:section_match.start()] + new_section + content[section_match.end():]
     heartbeat.write_text(updated, encoding="utf-8")
-    print(f"project_insights: +1 -> {new_line}")
+    print(f"project_insights: {'^1' if insert_top else '+1'} -> {table_lines[2 if insert_top else -1]}")
     return True
 
 
@@ -499,15 +547,13 @@ def queue_count(heartbeat: Path) -> int:
     count = 0
     for line in content.splitlines():
         stripped = line.strip()
-        if not stripped.startswith('|') or stripped.startswith('|---'):
+        if not stripped.startswith('|') or stripped.startswith('|---') or stripped.startswith('| #'):
             continue
-        if not re.match(r'^\|\s*(\d+)\s*\|', stripped):
+        cells = [c.strip() for c in stripped.split('|')[1:-1]]
+        if not cells or not re.match(r'^\d+$', cells[0]):
             continue
-        cells = [c.strip() for c in stripped.split('|')]
-        # Detail column added at index 5 (after Content at index 4)
-        # Source is at index 5 (new) or old index 4
-        status_idx = 7 if len(cells) >= 8 else 6
-        if len(cells) >= 7 and 'pending' in cells[status_idx].lower():
+        status = cells[6] if len(cells) >= 8 else cells[5] if len(cells) >= 7 else ''
+        if status.lower() == 'pending':
             count += 1
     return count
 
@@ -520,34 +566,54 @@ def clear_queue(heartbeat: Path) -> int:
         print("ERROR: Queue section not found in HEARTBEAT.md", file=sys.stderr)
         return 0
 
-    section_body = section_match.group(2)
-    lines = section_body.rstrip('\n').split('\n')
-    kept_lines: list[str] = []
     removed = 0
-    for line in lines:
+    kept_rows: list[dict[str, str]] = []
+    for line in section_match.group(2).splitlines():
         stripped = line.strip()
-        if not stripped.startswith('|') or stripped.startswith('|---'):
+        if not stripped.startswith('|') or stripped.startswith('|---') or stripped.startswith('| #'):
             continue
-        if not re.match(r'^\|\s*(\d+)\s*\|', stripped):
+        cells = [c.strip() for c in stripped.split('|')[1:-1]]
+        if not cells or not re.match(r'^\d+$', cells[0]):
             continue
-        cells = [c.strip() for c in stripped.split('|')]
-        # Source column: index 5 (new format with Detail) or index 4 (old format)
-        source = cells[5] if len(cells) >= 6 else cells[4] if len(cells) >= 5 else ''
-        if source == 'user':
-            kept_lines.append(line)
+        if len(cells) >= 8:
+            row = {
+                "type": cells[1],
+                "score": cells[2],
+                "content": cells[3],
+                "detail": cells[4],
+                "source": cells[5],
+                "status": cells[6],
+                "created": cells[7],
+            }
+        elif len(cells) >= 7:
+            row = {
+                "type": cells[1],
+                "score": cells[2],
+                "content": cells[3],
+                "detail": cells[3],
+                "source": cells[4],
+                "status": cells[5],
+                "created": cells[6],
+            }
+        else:
+            continue
+
+        if row["source"] == "user":
+            kept_rows.append(row)
         else:
             removed += 1
 
-    new_section = (
-        section_match.group(1)
-        + ('\n'.join(kept_lines) + '\n' if kept_lines else '')
-        + section_match.group(3)
-    )
-    updated = (
-        content[:section_match.start()]
-        + new_section
-        + content[section_match.end():]
-    )
+    table_lines = [
+        "| # | Type | Score | Content | Detail | Source | Status | Created |",
+        "|---|------|-------|---------|--------|--------|--------|---------|",
+    ]
+    for idx, row in enumerate(kept_rows, 1):
+        table_lines.append(
+            f"| {idx} | {row['type']} | {row['score']} | {row['content']} | {row['detail']} | {row['source']} | {row['status']} | {row['created']} |"
+        )
+
+    new_section = section_match.group(1) + "\n".join(table_lines) + "\n" + section_match.group(3)
+    updated = content[:section_match.start()] + new_section + content[section_match.end():]
     heartbeat.write_text(updated, encoding="utf-8")
     return removed
 
@@ -586,6 +652,10 @@ def main() -> int:
     parser.add_argument("--min", type=int, default=5)
     parser.add_argument("--clear", action="store_true", help="Clear queue of all non-user entries")
     parser.add_argument("--detail", type=str, default=None, help="Detail text for new queue entries")
+    parser.add_argument("--add", type=str, default=None, help="Add a user requirement to the queue (content text)")
+    parser.add_argument("--score", type=int, default=None, help="Override score for --add")
+    parser.add_argument("--source", default="user", help="Queue source for --add (user|agent|scanner)")
+    parser.add_argument("--top", action="store_true", help="Insert --add entry at top of queue (renumber others)")
     args = parser.parse_args()
 
     if not args.heartbeat.exists():
@@ -596,6 +666,17 @@ def main() -> int:
         removed = clear_queue(args.heartbeat.resolve())
         print(f"project_insights: cleared {removed} non-user entries")
         return 0
+
+    if args.add is not None:
+        ok = append_to_queue(
+            args.heartbeat.resolve(),
+            args.add,
+            detail=args.detail,
+            score=args.score,
+            source=args.source,
+            insert_top=args.top,
+        )
+        return 0 if ok else 1
 
     ptype = detect_project_type(args.project.resolve())
     print(f"[project_insights] type={ptype} lang={args.language}")

@@ -3,28 +3,31 @@
 > Skill: autonomous-improvement-loop | One agent x One project
 > Config: config.md
 
+## Queue
+
+| # | Type | Score | Content | Detail | Source | Status | Created |
+|---|------|-------|---------|--------|--------|--------|---------|
+| 1 | improve | 100 | 增加健康数据可视化：支持 ASCII 图表输出周/月趋势（饮… | 增加健康数据可视化：支持 ASCII 图表输出周/月趋势（饮食、睡眠、运动、测量数据） | user | pending | 2026-04-19 |
+| 2 | improve | 100 | 完善错误提示：所有 CLI 命令的错误信息需说明原因并给出修… | 完善错误提示：所有 CLI 命令的错误信息需说明原因并给出修复建议，而非仅报错 | user | pending | 2026-04-19 |
+| 3 | improve | 50 | [[Improve]] 为每个未测试的模块补齐单元测试 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
+| 4 | improve | 60 | [[Improve]] 为边界情况增加测试覆盖 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
+| 5 | improve | 60 | [[Improve]] 为关键用户流程增加集成测试 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
+| 6 | improve | 55 | [[Improve]] 确保所有错误路径都有对应测试 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
+| 7 | improve | 45 | [[Improve]] 为未写文档的模块补充 docstring | Review and improve documentation for this module. Ensure all public APIs have docstrings (Sphinx style: description, args, returns, raises). Add usage examples for complex functions. Keep docs consistent with existing style. | scanner | pending | 2026-04-19 |
+
 ---
 
 ## Run Status
 
 | Field | Value |
 |-------|-------|
-| last_run_time | 2026-04-19T10:03:00Z |
-| last_run_commit | 985d438 |
+| last_run_time | 2026-04-19T10:30:00Z |
+| last_run_commit | 65ccbd6 |
 | last_run_result | pass |
-| last_run_task | 为 health completion 和 feedback CLI 补齐单元测试（共16个用例） |
+| last_run_task | 根据 HealthAgent 项目最新状态，更新 README.md（shell 补全、用户配置、反馈追踪、13个 skill actions、目录结构、测试数量）并 push 到 GitHub |
 | cron_lock | false |
 | mode | normal |
 | rollback_on_fail | true |
-
----
-
-## Queue
-
-
-| 1 | improve | 50 | [[Improve]] 为每个未测试的模块补齐单元测试 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
-| 2 | improve | 60 | [[Improve]] 为边界情况增加测试覆盖 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
-| 3 | improve | 60 | [[Improve]] 为关键用户流程增加集成测试 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
 
 ---
 
@@ -32,18 +35,19 @@
 
 | Time | Commit | Task | Result |
 |------|--------|------|--------|
-| 2026-04-19T10:03:00Z | 985d438 | 为 health completion 和 feedback CLI 补齐单元测试（共16个用例） | pass |
-| 2026-04-19T08:50:00Z | a5c9ba2 | 增加用户配置文件支持（~/.healthagent.yaml）及 config 子命令 | pass |
-| 2026-04-19T07:20:00Z | ca1f8da | 修复 ruff E501/B904/E712/F841 风格问题（共93处） | pass |
-| 2026-04-19T06:50:00Z | 92d1f9b | ruff auto-fix 清理：datetime.UTC 别名/unused imports/f-string 修正 | pass |
-| 2026-04-19T06:20:00Z | 5c452e6 | 为根包、domain 和 services 的 __init__.py 补充模块 docstring | pass |
+| 2026-04-19T10:30:00Z | 65ccbd6 | 根据 HealthAgent 项目最新状态，更新 README.md（shell 补全、用户配置、反馈追踪、13个 skill actions、目录结构、测试数量）并 push 到 GitHub | pass |
+| 2026-04-19T10:03:00Z | 66775de | 为 feedback_service 补齐单元测试（25个用例）+ 修复 activity dimension bug | pass |
+| 2026-04-19T08:50:00Z | 985d438 | 为 health completion 和 feedback CLI 补齐单元测试（共16个用例） | pass |
+| 2026-04-19T07:20:00Z | a5c9ba2 | 增加用户配置文件支持（~/.healthagent.yaml）及 config 子命令 | pass |
+| 2026-04-19T06:50:00Z | ca1f8da | 修复 ruff E501/B904/E712/F841 风格问题（共93处） | pass |
+| 2026-04-19T06:20:00Z | 92d1f9b | ruff auto-fix 清理：datetime.UTC 别名/unused imports/f-string 修正 | pass |
+| 2026-04-19T05:20:00Z | 5c452e6 | 为根包、domain 和 services 的 __init__.py 补充模块 docstring | pass |
 | 2026-04-18T21:53:54Z | 3de73ba | 更新 README.md 和 skill adapter，补全 health advisor 命令文档 | pass |
-| 2026-04-19T05:20:00Z | c7b47f7 | 实现360度健康建议专家：综合档案建设→定制方案→动态反馈飞轮 | pass |
-| 2026-04-19T04:50:00Z | 55ff338 | 增加 verbose 模式（--verbose）输出详细信息 | pass |
-| 2026-04-19T04:20:00Z | 844a633 | 改进错误提示：给出原因和修复建议 | pass |
+| 2026-04-19T04:50:00Z | c7b47f7 | 实现360度健康建议专家：综合档案建设→定制方案→动态反馈飞轮 | pass |
+| 2026-04-19T04:20:00Z | 55ff338 | 增加 verbose 模式（--verbose）输出详细信息 | pass |
+| 2026-04-19T03:50:00Z | 844a633 | 改进错误提示：给出原因和修复建议 | pass |
 | 2026-04-19T02:50:00Z | e7aa964 | 为公开 API 写清合约和使用示例 | pass |
 | 2026-04-19T03:20:00Z | 4d52dc1 | 为不直观逻辑增加注释说明 | pass |
-| 2026-04-19T03:50:00Z | - | 处理代码库中的所有 TODO/FIXME | pass |
 | 2026-04-19T02:20:00Z | 941f695 | 修复 CLI version 命令硬编码为 0.1.0 而非实际包版本 0.3.6 | pass |
 | 2026-04-18T15:21:00Z | 5176e20 | 为边界情况增加测试覆盖 | pass |
 | 2026-04-18T15:32:00Z | - | 检查并确保 CLI 路径和 OpenClaw skill 路径都能适配所有功能 | pass |
@@ -53,18 +57,15 @@
 
 ## Notes
 
-- Queue #1 "废弃代码审查"：扫描了全量源码，未发现 deprecated/obsolete/unused 代码路径，无需移除或标注
-- Queue #2 "补齐单元测试"：已完成（Done Log），scanner 重新扫描时注意跳过
-- Queue #1 "补充 docstring"：根包、domain、services 三个 __init__.py 添加了模块 docstring，其余 __init__.py 为空包无需说明
-- Queue #12/14/15/16：跳过（#12重复，#14太模糊，#15/#16 已存在）
-- Queue #13：新增用户配置文件功能（~/.healthagent.yaml + config 子命令）
-- Queue #1-11：已标记为 done（scanner 重复添加的已完成任务 + 本轮处理）
-- ruff 检查：本次修复 93 个 E501/B904/E712/F841 风格问题，ruff check . → All checks passed
-- 本轮（985d438）：为 completion 和 feedback CLI 新增 16 个测试用例，覆盖率从 76% 提升到 80%；同时修复 install 命令 FileNotFoundError 和重复追加 bug
+- Queue 格式已统一为 8 列（# | Type | Score | Content | Detail | Source | Status | Created）
+- 用户请求（user）自动插队至顶部，scanner 条目按 score 排列
+- README 更新任务（#1）已完成，commit 65ccbd6 已记录至 Done Log
 
 ## Queue Management Rules
 
 - **User request** → score=100 → immediately inserted at #1, all others shift down
 - **During cron execution** (`cron_lock=true`): user requests can still join queue, agent refuses direct file edits
 - **After adding any entry**: re-sort by score descending, write back to HEARTBEAT.md
-- **Cron execution sequence**: ① `cron_lock=true` → ② execute task → ③ verify/publish if configured → ④ announce → ⑤ `cron_lock=false`
+- **After every completed cron run**: mark the executed row done/skip, append Done Log, then refresh the non-user queue
+- **Queue refresh rule**: preserve user tasks, clear stale non-user rows, then run `project_insights.py --refresh --min 5`
+- **Cron execution sequence**: ① `cron_lock=true` → ② execute task → ③ verify/publish if configured → ④ update HEARTBEAT.md → ⑤ refresh queue → ⑥ announce → ⑦ `cron_lock=false`

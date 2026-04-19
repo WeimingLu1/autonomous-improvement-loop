@@ -1166,87 +1166,32 @@ def cmd_add(content_text: str) -> None:
         fail("Empty content — nothing to add")
         sys.exit(1)
 
-    # Parse Content (first 30 chars) + Detail (full)
-    content_stripped = content_text.strip()
-    content_summary = content_stripped[:30] + ("…" if len(content_stripped) > 30 else "")
-    created = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    config = read_current_config()
+    project_p = config.get("project_path", "").strip()
+    heartbeat_p = HEARTBEAT.resolve()
+    content_summary = content_text.strip()[:30] + ("…" if len(content_text.strip()) > 30 else "")
 
-    # Read existing queue rows
-    existing_rows: list[dict[str, str]] = []
-    max_num = 0
-    full_content = read_file(HEARTBEAT)
-
-    queue_match = re.search(
-        r"(\n## Queue\n\n)\|[\s\S]*?\n---\n",
-        full_content,
-    )
-    if queue_match:
-        queue_block = queue_match.group(0)
-        for line in queue_block.splitlines():
-            stripped = line.strip()
-            if not stripped.startswith("|") or "---" in stripped or stripped.startswith("| #"):
-                continue
-            m = re.match(
-                r"^\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|$",
-                stripped,
-            )
-            if m:
-                num = int(m.group(1))
-                max_num = max(max_num, num)
-                existing_rows.append(
-                    {
-                        "kind": m.group(2).strip(),
-                        "score": m.group(3).strip(),
-                        "desc": m.group(4).strip(),
-                        "source": m.group(5).strip(),
-                        "status": m.group(6).strip(),
-                        "created": m.group(7).strip(),
-                        "_num": str(num),
-                    }
-                )
-
-    # Build new row (insert at top)
-    new_row = {
-        "kind": "improvement",
-        "score": "100",
-        "desc": content_summary,
-        "source": "user",
-        "status": "pending",
-        "created": created,
-        "detail": content_stripped,
-        "_num": "0",
-    }
-
-    # Insert at top
-    all_rows = [new_row] + existing_rows
-
-    # Re-number
-    table_lines = [
-        "| # | Type | Score | Content | Source | Status | Created |",
-        "|---|------|-------|---------|--------|--------|---------|",
+    cmd = [
+        sys.executable,
+        str(HERE / "project_insights.py"),
+        "--project", project_p or ".",
+        "--heartbeat", str(heartbeat_p),
+        "--add", content_text.strip(),
+        "--detail", content_text.strip(),
+        "--score", "100",
+        "--source", "user",
+        "--top",
     ]
-    for i, row in enumerate(all_rows, 1):
-        detail_note = f" ({row['detail']})" if "detail" in row else ""
-        table_lines.append(
-            f"| {i} | {row['kind']} | {row['score']} | {row['desc']}{detail_note} | {row['source']} | pending | {row['created']} |"
-        )
-
-    new_queue_block = "\n" + "\n".join(table_lines) + "\n---\n"
-
-    if queue_match:
-        new_content = full_content[:queue_match.start()] + "\n## Queue\n\n" + new_queue_block + full_content[queue_match.end():]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        ok(f"Added to queue: {content_summary}")
     else:
-        # Queue section doesn't exist, insert before ---
-        sep = re.search(r"\n---\n\n##", full_content)
-        if sep:
-            insert_at = sep.start()
-            new_content = full_content[:insert_at] + "\n## Queue\n\n" + new_queue_block + full_content[insert_at:]
-        else:
-            new_content = full_content + "\n## Queue\n\n" + new_queue_block
-
-    write_file(HEARTBEAT, new_content)
-    ok(f"Added to queue: {content_summary}")
-    info(f"Full detail stored: {content_stripped[:80]}...")
+        fail(f"Failed to add to queue (exit {result.returncode})")
+        if result.stdout:
+            print(result.stdout, file=sys.stdout)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+        sys.exit(1)
 
 
 # ── Scan: trigger queue scan ──────────────────────────────────────────────────
