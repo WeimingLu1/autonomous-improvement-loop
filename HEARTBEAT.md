@@ -7,7 +7,7 @@
 
 | # | Type | Score | Content | Detail | Source | Status | Created |
 |---|------|-------|---------|--------|--------|--------|---------|
-| 1 | improve | 100 | 增加健康数据可视化：支持 ASCII 图表输出周/月趋势（饮… | 增加健康数据可视化：支持 ASCII 图表输出周/月趋势（饮食、睡眠、运动、测量数据） | user | pending | 2026-04-19 |
+| 1 | improve | 100 | 增加健康数据可视化：支持 ASCII 图表输出周/月趋势（饮… | 增加健康数据可视化：支持 ASCII 图表输出周/月趋势（饮食、睡眠、运动、测量数据） | user | done | 2026-04-19 |
 | 2 | improve | 100 | 完善错误提示：所有 CLI 命令的错误信息需说明原因并给出修… | 完善错误提示：所有 CLI 命令的错误信息需说明原因并给出修复建议，而非仅报错 | user | pending | 2026-04-19 |
 | 3 | improve | 50 | [[Improve]] 为每个未测试的模块补齐单元测试 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
 | 4 | improve | 60 | [[Improve]] 为边界情况增加测试覆盖 | Write or complete unit/integration tests for this module. Identify all public functions and classes; for each, cover happy-path, edge cases, and error conditions. Use pytest. Aim for >=80% coverage. Place tests in tests/ mirroring the src/ structure. | scanner | pending | 2026-04-19 |
@@ -21,11 +21,11 @@
 
 | Field | Value |
 |-------|-------|
-| last_run_time | 2026-04-19T10:30:00Z |
-| last_run_commit | 65ccbd6 |
+| last_run_time | 2026-04-19T11:30:00Z |
+| last_run_commit | 935cc9b |
 | last_run_result | pass |
-| last_run_task | 根据 HealthAgent 项目最新状态，更新 README.md（shell 补全、用户配置、反馈追踪、13个 skill actions、目录结构、测试数量）并 push 到 GitHub |
-| cron_lock | false |
+| last_run_task | 增加健康数据 ASCII 图表可视化：条形图（睡眠/运动）、折线图（测量指标）、热力图（饮食）+ 5个 chart 子命令 + 29个测试 |
+| cron_lock | true |
 | mode | normal |
 | rollback_on_fail | true |
 
@@ -35,6 +35,7 @@
 
 | Time | Commit | Task | Result |
 |------|--------|------|--------|
+| 2026-04-19T11:30:00Z | 935cc9b | 增加健康数据 ASCII 图表可视化：条形图（睡眠/运动）、折线图（测量指标）、热力图（饮食）+ 5个 chart 子命令 + 29个测试 | pass |
 | 2026-04-19T10:30:00Z | 65ccbd6 | 根据 HealthAgent 项目最新状态，更新 README.md（shell 补全、用户配置、反馈追踪、13个 skill actions、目录结构、测试数量）并 push 到 GitHub | pass |
 | 2026-04-19T10:03:00Z | 66775de | 为 feedback_service 补齐单元测试（25个用例）+ 修复 activity dimension bug | pass |
 | 2026-04-19T08:50:00Z | 985d438 | 为 health completion 和 feedback CLI 补齐单元测试（共16个用例） | pass |

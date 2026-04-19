@@ -460,32 +460,22 @@ def score_finding(finding: str) -> int:
     return 60
 
 
-def append_to_queue(
-    heartbeat: Path,
-    finding: str,
-    detail: str | None = None,
-    score: int | None = None,
-    source: str = "scanner",
-    insert_top: bool = False,
-) -> bool:
-    """Append (or prepend) a finding to the queue."""
-    content = heartbeat.read_text(encoding="utf-8")
-    section_match = re.search(r'(## Queue\n\n)([\s\S]*?)(\n---\n)', content)
-    if not section_match:
-        print("ERROR: Queue section not found in HEARTBEAT.md", file=sys.stderr)
-        return False
+def _parse_all_queue_rows(content: str) -> list[dict[str, str]]:
+    """Parse ALL queue rows from ALL ## Queue sections in the file.
 
-    section_body = section_match.group(2)
-    existing_rows: list[dict[str, str]] = []
-    for line in section_body.splitlines():
+    This prevents stale ## Queue sections (from old bugs or manual edits)
+    from accumulating and causing queue corruption.
+    """
+    rows: list[dict[str, str]] = []
+    for line in content.splitlines():
         stripped = line.strip()
-        if not stripped.startswith('|') or stripped.startswith('|---') or stripped.startswith('| #'):
+        if not stripped.startswith('|') or '---' in stripped or stripped.startswith('| #'):
             continue
         cells = [c.strip() for c in stripped.split('|')[1:-1]]
         if not cells or not re.match(r'^\d+$', cells[0]):
             continue
         if len(cells) >= 8:
-            existing_rows.append(
+            rows.append(
                 {
                     "type": cells[1],
                     "score": cells[2],
@@ -497,7 +487,7 @@ def append_to_queue(
                 }
             )
         elif len(cells) >= 7:
-            existing_rows.append(
+            rows.append(
                 {
                     "type": cells[1],
                     "score": cells[2],
@@ -508,6 +498,33 @@ def append_to_queue(
                     "created": cells[6],
                 }
             )
+    return rows
+
+
+def append_to_queue(
+    heartbeat: Path,
+    finding: str,
+    detail: str | None = None,
+    score: int | None = None,
+    source: str = "scanner",
+    insert_top: bool = False,
+) -> bool:
+    """Append (or prepend) a finding to the queue.
+
+    Always produces exactly ONE ## Queue section, even if the file
+    previously had multiple (old-format) ## Queue sections.
+    """
+    content = heartbeat.read_text(encoding="utf-8")
+
+    # Collect all existing rows from ALL ## Queue sections (deduplicate by content)
+    all_existing = _parse_all_queue_rows(content)
+    seen_content: set[str] = set()
+    unique_existing: list[dict[str, str]] = []
+    for row in all_existing:
+        norm = _normalize(_strip_prefix(row["content"])).lower()
+        if norm not in seen_content:
+            seen_content.add(norm)
+            unique_existing.append(row)
 
     resolved_score = score if score is not None else score_finding(finding)
     created = datetime.now(timezone.utc).strftime('%Y-%m-%d')
@@ -525,18 +542,36 @@ def append_to_queue(
         "created": created,
     }
 
-    rows = ([new_row] + existing_rows) if insert_top else (existing_rows + [new_row])
+    rows = ([new_row] + unique_existing) if insert_top else (unique_existing + [new_row])
+
+    # Build the replacement Queue block
+    header = "## Queue\n\n"
     table_lines = [
         "| # | Type | Score | Content | Detail | Source | Status | Created |",
-        "|---|------|-------|---------|--------|--------|--------|---------|",
+        "|---|------|-------|---------|--------|--------|--------|--------|",
     ]
     for idx, row in enumerate(rows, 1):
         table_lines.append(
             f"| {idx} | {row['type']} | {row['score']} | {row['content']} | {row['detail']} | {row['source']} | {row['status']} | {row['created']} |"
         )
+    new_block = header + "\n".join(table_lines) + "\n\n---\n"
 
-    new_section = section_match.group(1) + "\n".join(table_lines) + "\n" + section_match.group(3)
-    updated = content[:section_match.start()] + new_section + content[section_match.end():]
+    # Remove ALL existing ## Queue sections and their trailing separators
+    stripped_content = re.sub(r'\n## Queue\n\n[\s\S]*?\n---\n', '\n', content)
+
+    # Insert new block before ## Run Status
+    run_status_match = re.search(r'\n## Run Status\n', stripped_content)
+    if run_status_match:
+        insert_at = run_status_match.start()
+        updated = stripped_content[:insert_at] + new_block + stripped_content[insert_at:]
+    else:
+        # Fallback: replace the first ---
+        dash_match = re.search(r'\n---\n', stripped_content)
+        if dash_match:
+            updated = stripped_content[:dash_match.start()] + new_block + stripped_content[dash_match.start():]
+        else:
+            updated = new_block + stripped_content
+
     heartbeat.write_text(updated, encoding="utf-8")
     print(f"project_insights: {'^1' if insert_top else '+1'} -> {table_lines[2 if insert_top else -1]}")
     return True
