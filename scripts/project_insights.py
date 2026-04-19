@@ -286,7 +286,7 @@ def _normalize(text: str) -> str:
 
 
 def _strip_prefix(content: str) -> str:
-    content = re.sub(r'^\[\[[^\]]+\]\]\s*score=\d+\s*\|\s*', '', content).strip()
+    content = re.sub(r'^\[\[[^\]]+\]\]\s*[Ss]core=\d+\s*\|\s*', '', content).strip()
     content = re.sub(r'^\[\[[^\]]+\]\]\s*', '', content).strip()
     return content
 
@@ -297,7 +297,12 @@ def _table_cell(line: str, col: int) -> str:
 
 
 def existing_queue_normalized(heartbeat: Path) -> set[str]:
-    """Normalized content strings already in the queue."""
+    """Normalized strings from both Content and Detail columns.
+
+    Comparing only Content is insufficient: Content is truncated to 30 chars
+    but ideas are stored in full. Adding both columns prevents false negatives
+    where a truncated Content cell fails to match its own full idea text.
+    """
     content = heartbeat.read_text(encoding="utf-8")
     seen: set[str] = set()
     for line in content.splitlines():
@@ -306,8 +311,16 @@ def existing_queue_normalized(heartbeat: Path) -> set[str]:
             continue
         if not re.match(r'^\|\s*(\d+)\s*\|', stripped):
             continue
-        cell4 = _table_cell(stripped, 3)
-        seen.add(_normalize(_strip_prefix(cell4)).lower())
+        cells = [c.strip() for c in stripped.split('|')[1:-1]]
+        if not cells or not re.match(r'^\d+$', cells[0]):
+            continue
+        # Content column (index 3) — compare raw to handle truncated content
+        content_cell = _table_cell(stripped, 3)
+        seen.add(_normalize(_strip_prefix(content_cell)).lower())
+        # Detail column (index 4, only in 8-col rows) — full text for cross-check
+        if len(cells) >= 8:
+            detail_cell = cells[4]
+            seen.add(_normalize(_strip_prefix(detail_cell)).lower())
     return seen
 
 
