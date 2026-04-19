@@ -13,16 +13,16 @@
 
 | Field | Value |
 |-------|-------|
-| last_run_time | 2026-04-19T15:00:00Z |
-| last_run_commit | f005921 |
+| last_run_time | 2026-04-19T07:49:31Z |
+| last_run_commit | 116b947 |
 | cron_lock | false |
-
 ---
 
 ## Done Log
 
 | Time | Commit | Task | Result |
 |------|--------|------|--------|
+| 2026-04-19T07:49:31Z | 116b947 | test: 新增 natural_language 解析器单元测试（50个用例）+ 修复 parser bug | pass |
 | 2026-04-19T11:30:00Z | 935cc9b | 增加健康数据 ASCII 图表可视化：条形图（睡眠/运动）、折线图（测量指标）、热力图（饮食）+ 5个 chart 子命令 + 29个测试 | pass |
 | 2026-04-19T10:30:00Z | 65ccbd6 | 根据 HealthAgent 项目最新状态，更新 README.md（shell 补全、用户配置、反馈追踪、13个 skill actions、目录结构、测试数量）并 push 到 GitHub | pass |
 | 2026-04-19T10:03:00Z | 66775de | 为 feedback_service 补齐单元测试（25个用例）+ 修复 activity dimension bug | pass |

@@ -24,6 +24,6 @@ env/
 
 # Local working files (not pushed to GitHub / ClawHub)
 plans/
-DEVLOG.md
+
 TODO.md
 specs/
