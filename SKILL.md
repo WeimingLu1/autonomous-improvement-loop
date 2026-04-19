@@ -101,8 +101,9 @@ The skill auto-detects your project type via `project_insights.py`. You can also
 | `project_insights.py` | Scan project, generate candidates | `--project`, `--heartbeat`, `--language`, `--refresh`, `--min` |
 | `priority_scorer.py` | Score queue entries | stdin/stdout |
 | `project_md.py` | Generate PROJECT.md from current project tree | `--project`, `--output`, `--language`, `--repo` |
+| `inspire_scanner.py` | Generate [[Idea]] tasks from PROJECT.md inspire questions | `--project`, `--heartbeat`, `--language`, `--every-n` |
 | `run_status.py` | Read/write Run Status | `--heartbeat`, `read`/`write` |
-| `update_heartbeat.py` | Post-task updater: HEARTBEAT.md + rebuild PROJECT.md snapshot (cron automation) | `--heartbeat`, `--project`, `--commit`, `--result`, `--task`, `--language`, `--min-queue` |
+| `update_heartbeat.py` | Post-task updater: HEARTBEAT + inspire scan + PROJECT.md rebuild (cron) | `--heartbeat`, `--project`, `--commit`, `--result`, `--task`, `--language`, `--min-queue` |
 
 ---
 

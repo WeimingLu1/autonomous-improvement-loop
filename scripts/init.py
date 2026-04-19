@@ -1102,7 +1102,7 @@ def cmd_start() -> None:
         1. Read {CONFIG_FILE} and {HEARTBEAT}. If {SKILL_DIR / 'PROJECT.md'} exists, read it too.
         2. If HEARTBEAT.md says cron_lock=true, stop immediately.
         3. Set cron_lock=true in HEARTBEAT.md before editing.
-        4. Execute the highest-priority pending queue item (skip done items).
+        4. Execute the highest-priority pending queue item — both [[Improve]] (maintenance/tasks) and [[Idea]] (functional improvements) are valid choices. Prefer [[Idea]] items when they have a score ≥ 40.
         5. After the task finishes, call update_heartbeat.py:
              python3 {HERE / 'update_heartbeat.py'} \
                --heartbeat {HEARTBEAT} \
