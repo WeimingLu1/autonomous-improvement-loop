@@ -23,7 +23,4 @@ env/
 *.sqlite3
 
 # Local working files (not pushed to GitHub / ClawHub)
-plans/
-
-TODO.md
-specs/
+.do_scan_cache/
