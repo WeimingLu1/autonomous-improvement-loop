@@ -114,29 +114,27 @@ def _set_improves_since_idea(heartbeat: Path, count: int) -> None:
 
 
 def _decide_next_type(heartbeat: Path) -> str:
-    """Core alternation logic: decide the next task type based on Done Log + counter.
+    """Core alternation logic — pure read-only, no side effects.
 
     Rules:
-    - No entries → return "idea"
-    - Last was "idea" → set counter=0, return "improve"
+    - No entries → "idea"
+    - Last was "idea" → "improve"
     - Last was "improve":
-        - if counter >= 2 → set counter=0, return "idea"
-        - else → counter+1, return "improve"
+        - if counter >= 2 → "idea"  (threshold reached, flip)
+        - else             → "improve"  (continue improve streak)
+
+    Counter is NOT updated here. Caller updates Run Status after generation.
     """
     last_type = _get_last_done_type(heartbeat)
     if last_type is None:
         return "idea"
     if last_type == "idea":
-        _set_improves_since_idea(heartbeat, 0)
         return "improve"
     # last_type == "improve"
     counter = _get_improves_since_idea(heartbeat)
     if counter >= 2:
-        _set_improves_since_idea(heartbeat, 0)
         return "idea"
-    else:
-        _set_improves_since_idea(heartbeat, counter + 1)
-        return "improve"
+    return "improve"
 
 
 def _get_recent_git_activity(project: Path, n: int = 20) -> list[tuple[str, int]]:
@@ -883,13 +881,29 @@ def run_inspire_scan(
     )
     _write_queue_rows(heartbeat, rows)
 
+    # ── Update alternation counter in Run Status ──────────────────────────
+    # Counter = how many improves have been GENERATED since last idea.
+    # Increment AFTER generation so the NEXT _decide_next_type call sees
+    # the correct count and flips at exactly 2.
+    #
+    # Semantics per cycle:
+    #   - Generate idea → counter=0 (new streak starts; next call sees
+    #     last_type=idea → improve, counter stays 0)
+    #   - Generate improve → counter=1 (one improve in flight; next call
+    #     sees last_type=improve, counter bumps to 2 → flip to idea)
+    #
+    # Ratio: 2 improves per idea ✓
+    current = _get_improves_since_idea(heartbeat)
+    new_counter = (current + 1) if next_type == "improve" else 0
+    _set_improves_since_idea(heartbeat, new_counter)
+
     return {
         "generated": next_type,
         "content": best_text,
         "score": best_score,
         "detail": best_detail,
         "source": source,
-        "improves_since_last_idea": _get_improves_since_idea(heartbeat),
+        "improves_since_last_idea": new_counter,
     }
 
 

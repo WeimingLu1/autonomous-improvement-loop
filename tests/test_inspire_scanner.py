@@ -70,7 +70,7 @@ def test_first_run_generates_idea(tmp_path: Path) -> None:
 
 
 def test_idea_then_improve(tmp_path: Path) -> None:
-    """Last was idea → next should be improve, and counter remains 0 until improve history accumulates."""
+    """Last was idea → next should be improve, and counter increments to 1."""
     hb = tmp_path / "HEARTBEAT.md"
     hb.write_text(
         make_heartbeat(
@@ -80,7 +80,7 @@ def test_idea_then_improve(tmp_path: Path) -> None:
     )
     result = run_inspire_scan(project=tmp_path, heartbeat=hb, language="zh")
     assert result["generated"] == "improve"
-    assert _get_improves_since_idea(hb) == 0
+    assert _get_improves_since_idea(hb) == 1
 
 
 def test_improve_x2_then_idea(tmp_path: Path) -> None:
