@@ -43,11 +43,11 @@ After installation, interact with the loop via these commands:
 | `a-start` | Start cron hosting (create the cron job) |
 | `a-stop` | Stop cron hosting (remove the cron job) |
 | `a-add <content>` | Add a user requirement to the queue |
-| `a-scan` | Rescan the project, refresh the queue (non-user tasks only) |
+| `a-scan` | **Legacy** — scan via `project_insights.py` (legacy); use `a-refresh` for the rolling 6-item rebuild |
 | `a-clear` | Clear all non-user tasks from the queue |
 | `a-queue [--all]` | Show current queue (use `--all` to include done items) |
 | `a-log [-n N]` | Show recent Done Log entries (default: 10) |
-| `a-refresh [--min N]` | Rebuild rolling queue from latest project state, keeping N pending tasks |
+| `a-refresh [--min N]` | Rebuild rolling backlog to 6 items (or N) from latest project state; clears non-user rows then fills with fresh alternating items |
 | `a-trigger [--force]` | Run cron immediately (skip `cron_lock` check with `--force`) |
 | `a-config get <key>` | Read a config value |
 | `a-config set <key> <value>` | Write a config value |
@@ -91,7 +91,7 @@ python scripts/init.py a-status ~/Projects/MY_PROJECT
 | `a-start` | Start cron hosting (create cron job from config.md) |
 | `a-stop` | Stop cron hosting (remove cron job) |
 | `a-add` | Add a user requirement to the queue |
-| `a-scan` | Trigger a queue scan via project_insights.py |
+| `a-scan` | **Legacy** — trigger a queue scan via `project_insights.py`; prefer `a-refresh` |
 | `a-clear` | Clear non-user tasks from the queue |
 | `a-queue` | Show current queue (`--all` to include done items) |
 | `a-log` | Show recent Done Log entries (`-n N` for count) |
@@ -114,12 +114,10 @@ Cron fires (every 30 min)
 Acquire cron_lock — prevent concurrent runs
     │
     ▼
-project_insights.py — auto-detect project type, generate improvement ideas
-    │  includes "inspire" bucket with type-specific creative questions
-    │
-    ▼
-inspire_scanner.py — generate next [[Idea]] or [[Improve]] via alternating 2:1 cycle
-    │  idea → improve → improve → idea → ...  (governed by improves_since_last_idea counter)
+inspire_scanner.py — rebuild rolling 6-item backlog in one shot
+    │  Alternating 2:1 cycle: idea → improve → improve → idea → improve → improve
+    │  Deduplicates against: existing queue + Done Log + last generated content
+    │  Improve tasks target the most-active git module; Ideas come from inspire questions
     │
     ▼
 Pick top task from queue (highest score, not yet done)
@@ -134,10 +132,11 @@ verify_and_revert.py — run verification_command from config.md
   • unverified → mark unverified, notify (no verification_command set)
     │
     ▼
-Telegram report + update HEARTBEAT.md (+ inspire_scanner runs to pre-fill next item)
+Telegram report + update HEARTBEAT.md
+    │  (rolling queue rebuild + PROJECT.md rebuild happen on next cron tick)
     │
     ▼
-Re-scan queue every run (preserve user tasks, rebuild non-user queue)
+Release cron_lock
 ```
 
 ---
@@ -153,9 +152,11 @@ The queue is rebuilt on every run into a rolling backlog, while still following 
 | 3rd | `[[Improve]]` (second in streak) | increment → 2 |
 | 4th | `[[Idea]]` (flip back to innovation) | reset to 0 |
 
-Default rolling backlog size: **6 items**, typically rendered as:
+The rolling backlog always maintains **6 pending tasks** in this alternating order:
 
 `idea → improve → improve → idea → improve → improve`
+
+On every run `inspire_scanner.py` rebuilds the entire non-user portion of the queue from scratch, using the latest project state (recent git activity for Improves, inspire questions for Ideas). User tasks are always preserved.
 
 **Why this ratio?** Ideas (score 65) naturally outrank Improves (score 45) when both appear, so a 2:1 ratio keeps the queue balanced without hardcoding type preferences in the sort key.
 
@@ -163,8 +164,8 @@ Default rolling backlog size: **6 items**, typically rendered as:
 
 - Reads `[[Idea]]` / `[[Improve]]` tags from the **Done Log** to detect last committed task type
 - Stores `improves_since_last_idea` counter in the **Run Status** table
-- `inspire_scanner.py` rebuilds the non-user queue into a rolling backlog on every run
-- By default it keeps **6 pending tasks** visible to the user
+- On every run, `inspire_scanner.py` generates the next `target_size` items in alternation order starting from the current Done Log state
+- Deduplication covers: Queue (pending) + Done Log (completed) + last generated content
 
 ### Idea vs Improve Quality
 
@@ -270,12 +271,12 @@ The project description (type, positioning, features, architecture, inspire ques
 | Script | Purpose |
 |--------|---------|
 | `init.py` | a-adopt / a-onboard / a-status / a-start / a-stop / a-add / a-scan / a-clear / a-queue / a-log / a-refresh / a-trigger / a-config |
-| `project_insights.py` | Scan project, generate type-specific improvement candidates |
+| `project_insights.py` | Used internally by inspire_scanner for git-activity-based Improve generation |
 | `priority_scorer.py` | Score queue entries (supports user request insertion) |
 | `verify_and_revert.py` | Run verification, rollback on failure |
 | `run_status.py` | Read/write Run Status section |
-| `update_heartbeat.py` | Post-task updater: HEARTBEAT + rolling queue rebuild + PROJECT.md rebuild |
-| `inspire_scanner.py` | Generates [[Idea]]/[[Improve]] tasks using a 2:1 improve-to-idea alternating cycle driven by `improves_since_last_idea` counter in Run Status; deduplicates against existing queue |
+| `update_heartbeat.py` | Post-task updater: mark done + append to Done Log + rebuild rolling queue (inspire_scanner) + rebuild PROJECT.md |
+| `inspire_scanner.py` | Rebuilds rolling 6-item backlog in alternating 2:1 order (idea→improve→improve→idea→improve→improve); deduplicates against queue + Done Log + last generated content; Improve tasks target most-active git module |
 | `project_md.py` | Generate PROJECT.md from current project tree (used by adopt / onboard / every task) |
 | `bootstrap.py` | Legacy helper for old Python software projects |
 | `queue_scanner.py` | **Legacy** — redirects to `project_insights.py` |

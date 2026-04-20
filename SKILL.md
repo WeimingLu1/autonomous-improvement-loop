@@ -1,6 +1,6 @@
 ---
 name: autonomous-improvement-loop
-description: Universal continuous improvement loop for any project. Agent-driven queue, cron scheduler, type-aware scanner, 13 commands (a-adopt/onboard/status/start/stop/add/scan/clear/queue/log/refresh/trigger/config), Detail field for full intent capture, inspire bucket for creative discovery. Works for software, writing, video, research, and generic projects. Install: clawhub install autonomous-improvement-loop
+description: Universal continuous improvement loop for any project. Rolling 6-item backlog queue (rebuilt every run) in alternating 2:1 improve/idea rhythm, cron scheduler, type-aware scanner, 13 commands (a-adopt/onboard/status/start/stop/add/scan/clear/queue/log/refresh/trigger/config), Detail field for full intent capture, inspire bucket for creative discovery. Works for software, writing, video, research, and generic projects. Install: clawhub install autonomous-improvement-loop
 ---
 
 # Autonomous Improvement Loop — Skill Reference
@@ -40,11 +40,9 @@ The skill auto-detects your project type via `project_insights.py`. You can also
 └─────────┬───────────┘
           ▼
 ┌─────────────────────┐
-│ project_insights.py │  ← scan project, generate candidates
-└─────────┬───────────┘
-          ▼
-┌─────────────────────┐
-│ inspire_scanner.py  │  ← alternating [[Idea]]/[[Improve]] via 2:1 cycle
+│ inspire_scanner.py  │  ← rebuild rolling 6-item backlog in one shot
+│                     │     idea → improve → improve → idea → improve → improve
+│                     │     deduplicates against queue + Done Log + last generated
 └─────────┬───────────┘
           ▼
 ┌─────────────────────┐
@@ -60,8 +58,7 @@ The skill auto-detects your project type via `project_insights.py`. You can also
 └─────────┬───────────┘
           ▼
 ┌─────────────────────┐
-│ Report + update     │  ← Telegram + HEARTBEAT.md + inspire_scanner runs here
-│ Re-scan queue      │  ← preserve user tasks, refresh non-user queue every run
+│ update_heartbeat.py  │  ← mark done + Done Log + rolling queue rebuild
 └─────────────────────┘
 ```
 
@@ -103,12 +100,12 @@ The skill auto-detects your project type via `project_insights.py`. You can also
 | Script | Role | Interface |
 |--------|------|----------|
 | `init.py` | Setup + all 13 commands | CLI |
-| `project_insights.py` | Scan project, generate candidates | `--project`, `--heartbeat`, `--language`, `--refresh`, `--min` |
+| `project_insights.py` | Used internally by inspire_scanner for git-activity-based Improve candidates | `--project`, `--heartbeat`, `--language`, `--refresh`, `--min` |
 | `priority_scorer.py` | Score queue entries | stdin/stdout |
 | `project_md.py` | Generate PROJECT.md from current project tree | `--project`, `--output`, `--language`, `--repo` |
-| `inspire_scanner.py` | Generates [[Idea]]/[[Improve]] tasks via 2:1 alternating cycle (idea→improve→improve→idea); deduplicates; git-informed improve targeting | `--project`, `--heartbeat`, `--language` |
+| `inspire_scanner.py` | Rebuilds rolling 6-item backlog in one call via 2:1 alternating cycle; deduplicates against queue + Done Log + last_generated_content; git-informed Improve targeting | `--project`, `--heartbeat`, `--language`, `--target-size` |
 | `run_status.py` | Read/write Run Status | `--heartbeat`, `read`/`write` |
-| `update_heartbeat.py` | Post-task updater: HEARTBEAT + rolling queue rebuild + PROJECT.md rebuild (cron) | `--heartbeat`, `--project`, `--commit`, `--result`, `--task`, `--language`, `--min-queue` |
+| `update_heartbeat.py` | Post-task updater: mark done + append Done Log + rebuild rolling queue + rebuild PROJECT.md | `--heartbeat`, `--project`, `--commit`, `--result`, `--task`, `--language`, `--min-queue` |
 
 ---
 
@@ -171,7 +168,7 @@ The skill is invoked via OpenClaw's skill router. Incoming message text is parse
 | `a-clear` | Clear all non-user tasks from the queue |
 | `a-queue [--all]` | Show current queue (use `--all` to include done items) |
 | `a-log [-n N]` | Show recent Done Log entries (default: 10) |
-| `a-refresh [--min N]` | Rebuild rolling queue from latest project state, keeping N pending tasks |
+| `a-refresh [--min N]` | Rebuild rolling backlog to 6 items (or N) from latest project state; clears non-user rows then fills with fresh alternating items |
 | `a-trigger [--force]` | Run cron immediately (skip `cron_lock` check with `--force`) |
 | `a-config get <key>` | Read a config value |
 | `a-config set <key> <value>` | Write a config value |
