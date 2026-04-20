@@ -195,17 +195,21 @@ def _update_heartbeat(
     heartbeat.write_text(content, encoding="utf-8")
     print(f"Run Status updated, cron_lock released")
 
-    # ── 4. Alternating queue: generate next task ───────────────────────────
-    # inspire_scanner.py handles clearing same-type non-user rows AND generating
-    # the next alternating item (idea→improve→improve→idea).
-    # project_insights.py is disabled here to maintain the 2:1 alternation ratio.
+    # ── 4. Rebuild rolling queue ────────────────────────────────────────────
+    # inspire_scanner.py refreshes the non-user queue from the latest project
+    # snapshot, keeping a rolling backlog with a 2 Improve : 1 Idea ratio.
     project = project.expanduser().resolve()
     heartbeat_p = heartbeat
     try:
-        from inspire_scanner import run_inspire_scan
-        result = run_inspire_scan(project=project, heartbeat=heartbeat_p, language=language)
-        print(f"Queue ({result['generated']}): {result['content'][:60]}")
-        print(f"Improves since last idea: {result['improves_since_last_idea']}")
+        from inspire_scanner import refresh_inspire_queue
+        result = refresh_inspire_queue(
+            project=project,
+            heartbeat=heartbeat_p,
+            language=language,
+            target_size=min_queue,
+        )
+        print(f"Queue rebuilt: {result['generated']}/{result['target_size']} item(s)")
+        print(f"Queue types: {' → '.join(result['types'])}")
     except Exception as e:
         print(f"WARNING: inspire scan failed: {e}", file=sys.stderr)
 

@@ -26,6 +26,7 @@ from inspire_scanner import (
     _set_improves_since_idea,
     _software_improve_generator,
     _write_queue_rows,
+    refresh_inspire_queue,
     run_inspire_scan,
 )
 
@@ -246,10 +247,40 @@ def test_software_improve_generator_returns_tuple(tmp_path: Path) -> None:
 
 
 def test_software_improve_fallback_when_no_git(tmp_path: Path) -> None:
-    """If not a git repo, returns generic fallback."""
+    """If not a git repo, still returns multiple generic fallbacks."""
     result = _software_improve_generator(tmp_path, "zh", set())
-    assert len(result) == 1
+    assert len(result) >= 1
     assert result[0][2] == 45
+
+
+def test_refresh_inspire_queue_builds_six_rows(tmp_path: Path) -> None:
+    """Rolling refresh should build a 6-item non-user queue."""
+    hb = tmp_path / "HEARTBEAT.md"
+    hb.write_text(make_heartbeat(), encoding="utf-8")
+
+    result = refresh_inspire_queue(project=tmp_path, heartbeat=hb, language="zh", target_size=6)
+    rows = _read_queue_rows(hb)
+
+    assert result["generated"] == 6
+    assert len(rows) == 6
+    assert rows[0]["type"] == "idea"
+    assert sum(1 for row in rows if row["type"] == "idea") == 2
+    assert sum(1 for row in rows if row["type"] == "improve") == 4
+
+
+def test_refresh_inspire_queue_respects_existing_phase(tmp_path: Path) -> None:
+    """If last done was an idea, the refreshed queue should start with improve."""
+    hb = tmp_path / "HEARTBEAT.md"
+    hb.write_text(
+        make_heartbeat(
+            done_log="| 2026-04-19T10:00:00Z | abc123 | [[Idea]] 测试 Idea | pass |\n",
+        ),
+        encoding="utf-8",
+    )
+
+    result = refresh_inspire_queue(project=tmp_path, heartbeat=hb, language="zh", target_size=6)
+
+    assert result["types"][:3] == ["improve", "improve", "idea"]
 
 
 # ── Dedup ───────────────────────────────────────────────────────────────────

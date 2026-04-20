@@ -214,208 +214,236 @@ def _get_recent_git_activity(project: Path, n: int = 20) -> list[tuple[str, int]
     return sorted(lines_changed.items(), key=lambda x: -x[1])
 
 
+def _module_matches(module: str, fragment: str) -> bool:
+    return module.startswith(fragment) or f"/{fragment}" in module
+
+
 def _software_improve_generator(project: Path, language: str, seen: set[str]) -> list[tuple[str, str, int]]:
-    """Generate 1 Improve task targeting the most-active module in recent Git commits.
+    """Generate multiple Improve candidates from recent Git activity."""
+    activity = _get_recent_git_activity(project, n=30)
+    results: list[tuple[str, str, int]] = []
 
-    ZH templates:
-    - `services/` → "基于最近 Git 提交分析，{module} 是高频改动模块。建议：补充该模块所有公开函数的边界测试（None/空列表/异常输入），并验证公开 API 的合约是否完整。"
-    - `cli/` → "cli/{module} 最近改动较多，建议审查并补充错误处理和边界测试，确保 --help 和 --json 两种输出模式均有测试覆盖。"
-    - `rules/` → "rules/{module} 规则引擎最近有改动，建议补充该规则的完整边界情况测试（窗口边界、None 字段、极端值）。"
-    - `parsers/` → "parsers/{module} 最近有更新，建议补充解析器的边界测试（空输入、畸形输入、特殊字符、超长输入）。"
-    - default → "最近高频改动的 {module} 建议进行全面审查，补充单元测试和 docstring。"
-    EN templates: same structure translated to English.
-    """
-    activity = _get_recent_git_activity(project, n=20)
+    for module, _changed in activity:
+        if language == "zh":
+            if _module_matches(module, "services/"):
+                content = (
+                    f"基于最近 Git 提交分析，{module} 是高频改动模块。"
+                    "建议：补充该模块所有公开函数的边界测试（None/空列表/异常输入），"
+                    "并验证公开 API 的合约是否完整。"
+                )
+            elif _module_matches(module, "cli/"):
+                content = (
+                    f"{module} 最近改动较多，建议审查并补充错误处理和边界测试，"
+                    "确保 --help 和 --json 两种输出模式均有测试覆盖。"
+                )
+            elif _module_matches(module, "rules/"):
+                content = (
+                    f"{module} 规则引擎最近有改动，建议补充完整边界情况测试"
+                    "（窗口边界、None 字段、极端值）。"
+                )
+            elif _module_matches(module, "parsers/"):
+                content = (
+                    f"{module} 最近有更新，建议补充解析器的边界测试"
+                    "（空输入、畸形输入、特殊字符、超长输入）。"
+                )
+            else:
+                content = (
+                    f"最近高频改动的 {module} 建议进行全面审查，"
+                    "补充单元测试、错误路径测试和 docstring。"
+                )
+        else:
+            if _module_matches(module, "services/"):
+                content = (
+                    f"Based on recent Git commits, {module} is a high-churn module. "
+                    "Add boundary tests (None/empty-list/exception inputs) for public functions, "
+                    "and verify public API contracts."
+                )
+            elif _module_matches(module, "cli/"):
+                content = (
+                    f"{module} has seen many recent changes. Add error-handling and boundary tests, "
+                    "covering both --help and --json output modes."
+                )
+            elif _module_matches(module, "rules/"):
+                content = (
+                    f"{module} has recent rule-engine changes. Add boundary tests for window edges, "
+                    "None fields, and extreme values."
+                )
+            elif _module_matches(module, "parsers/"):
+                content = (
+                    f"{module} has recent parser changes. Add tests for empty, malformed, special-char, "
+                    "and oversized input."
+                )
+            else:
+                content = (
+                    f"Frequently changed module {module} should be reviewed: add unit tests, "
+                    "error-path tests, and docstrings."
+                )
 
-    if not activity:
-        # Fallback when no git activity
-        content = (
-            "审视项目，找出最需要改进的模块并优先实施"
+        norm = _normalize_text(content)
+        if norm in seen:
+            continue
+        results.append((content, content, 45))
+        seen.add(norm)
+        if len(results) >= 8:
+            return results
+
+    fallback_texts = [
+        (
+            "为关键用户流程增加集成测试，确保真实 CLI 调用链在重构后仍然稳定"
             if language == "zh"
-            else "Identify the most impactful improvement area in this project"
-        )
-        if _normalize_text(content) in seen:
-            return []
-        return [(content, content, 45)]
+            else "Add integration tests for critical user flows so real CLI call chains stay stable after refactors"
+        ),
+        (
+            "确保所有错误路径都有对应测试，尤其是参数校验、空输入和数据库异常"
+            if language == "zh"
+            else "Ensure every error path has tests, especially validation, empty-input, and database-exception flows"
+        ),
+        (
+            "为每个未充分覆盖的模块补齐单元测试，并清理重复或缺少说明的断言"
+            if language == "zh"
+            else "Backfill unit tests for under-covered modules and clean up repetitive or unclear assertions"
+        ),
+        (
+            "为未写文档的模块补充 docstring，明确输入、输出和失败语义"
+            if language == "zh"
+            else "Add docstrings for undocumented modules, clarifying inputs, outputs, and failure semantics"
+        ),
+    ]
+    for content in fallback_texts:
+        norm = _normalize_text(content)
+        if norm in seen:
+            continue
+        results.append((content, content, 45))
+        seen.add(norm)
 
-    top_module = activity[0][0]  # e.g. "services/event_service.py"
-
-    # Determine prefix and pick template
-    if language == "zh":
-        if top_module.startswith("services/"):
-            content = (
-                f"基于最近 Git 提交分析，{top_module} 是高频改动模块。"
-                "建议：补充该模块所有公开函数的边界测试（None/空列表/异常输入），"
-                "并验证公开 API 的合约是否完整。"
-            )
-        elif top_module.startswith("cli/"):
-            content = (
-                f"cli/{top_module} 最近改动较多，建议审查并补充错误处理和边界测试，"
-                "确保 --help 和 --json 两种输出模式均有测试覆盖。"
-            )
-        elif top_module.startswith("rules/"):
-            content = (
-                f"rules/{top_module} 规则引擎最近有改动，建议补充该规则的完整边界情况测试"
-                "（窗口边界、None 字段、极端值）。"
-            )
-        elif top_module.startswith("parsers/"):
-            content = (
-                f"parsers/{top_module} 最近有更新，建议补充解析器的边界测试"
-                "（空输入、畸形输入、特殊字符、超长输入）。"
-            )
-        else:
-            content = (
-                f"最近高频改动的 {top_module} 建议进行全面审查，"
-                "补充单元测试和 docstring。"
-            )
-    else:
-        if top_module.startswith("services/"):
-            content = (
-                f"Based on recent Git commits, {top_module} is a high-churn module. "
-                "Suggestion: add boundary tests (None/empty-list/exception inputs) for all public functions, "
-                "and verify that public API contracts are complete."
-            )
-        elif top_module.startswith("cli/"):
-            content = (
-                f"cli/{top_module} has seen many recent changes. "
-                "Suggestion: add error-handling and boundary tests, ensuring both --help and --json output modes are covered."
-            )
-        elif top_module.startswith("rules/"):
-            content = (
-                f"rules/{top_module} rule engine has recent changes. "
-                "Suggestion: add complete boundary case tests (window edges, None fields, extreme values)."
-            )
-        elif top_module.startswith("parsers/"):
-            content = (
-                f"parsers/{top_module} has recent updates. "
-                "Suggestion: add boundary tests for the parser (empty input, malformed input, special chars, oversized input)."
-            )
-        else:
-            content = (
-                f"Frequently changed module {top_module} should be reviewed: "
-                "add unit tests and docstrings."
-            )
-
-    if _normalize_text(content) in seen:
-        return []
-    return [(content, content, 45)]
+    return results
 
 
 def _writing_improve_generator(project: Path, language: str, seen: set[str]) -> list[tuple[str, str, int]]:
-    """Scan `chapters/` directory, find oldest chapter by mtime, return Improve.
-
-
-    ZH: "章节 {name} 是最久未更新的，建议审查内容完整性、论证逻辑和与最新章节的衔接。"
-    EN: "Chapter {name} is the least recently updated. Review content completeness, argument logic, and alignment with the latest chapters."
-    """
+    """Return multiple chapter-review Improve candidates."""
     chapters_dir = project / "chapters"
     if not chapters_dir.is_dir():
         return []
 
     try:
-        files = [
-            (f, f.stat().st_mtime)
-            for f in chapters_dir.iterdir()
-            if f.is_file() and f.suffix in (".md", ".txt", ".rst")
-        ]
+        files = sorted(
+            [
+                (f, f.stat().st_mtime)
+                for f in chapters_dir.iterdir()
+                if f.is_file() and f.suffix in (".md", ".txt", ".rst")
+            ],
+            key=lambda item: item[1],
+        )
     except Exception:
         return []
 
-    if not files:
-        return []
-
-    oldest = min(files, key=lambda x: x[1])
-    name = oldest[0].name
-    content_zh = (
-        f"章节 {name} 是最久未更新的，建议审查内容完整性、论证逻辑和与最新章节的衔接。"
-    )
-    content_en = (
-        f"Chapter {name} is the least recently updated. "
-        "Review content completeness, argument logic, and alignment with the latest chapters."
-    )
-    content = content_zh if language == "zh" else content_en
-
-    if _normalize_text(content) in seen:
-        return []
-    return [(content, content, 45)]
+    results: list[tuple[str, str, int]] = []
+    for file_path, _ in files[:6]:
+        name = file_path.name
+        content = (
+            f"章节 {name} 是较久未更新的内容，建议审查完整性、论证逻辑和与最新章节的衔接。"
+            if language == "zh"
+            else f"Chapter {name} is relatively stale. Review completeness, argument flow, and alignment with recent chapters."
+        )
+        norm = _normalize_text(content)
+        if norm in seen:
+            continue
+        results.append((content, content, 45))
+        seen.add(norm)
+    return results
 
 
 def _video_improve_generator(project: Path, language: str, seen: set[str]) -> list[tuple[str, str, int]]:
-    """Scan `scenes/` directory, find oldest scene by mtime, return Improve.
-
-    ZH: "场景 {name} 是最久未更新的，建议审查脚本完整度和画面质量。"
-    EN: "Scene {name} is the least recently updated. Review script completeness and visual quality."
-    """
+    """Return multiple scene-review Improve candidates."""
     scenes_dir = project / "scenes"
     if not scenes_dir.is_dir():
         return []
 
     try:
-        files = [
-            (f, f.stat().st_mtime)
-            for f in scenes_dir.iterdir()
-            if f.is_file()
-        ]
+        files = sorted(
+            [(f, f.stat().st_mtime) for f in scenes_dir.iterdir() if f.is_file()],
+            key=lambda item: item[1],
+        )
     except Exception:
         return []
 
-    if not files:
-        return []
-
-    oldest = min(files, key=lambda x: x[1])
-    name = oldest[0].name
-    content_zh = (
-        f"场景 {name} 是最久未更新的，建议审查脚本完整度和画面质量。"
-    )
-    content_en = (
-        f"Scene {name} is the least recently updated. "
-        "Review script completeness and visual quality."
-    )
-    content = content_zh if language == "zh" else content_en
-
-    if _normalize_text(content) in seen:
-        return []
-    return [(content, content, 45)]
+    results: list[tuple[str, str, int]] = []
+    for file_path, _ in files[:6]:
+        name = file_path.name
+        content = (
+            f"场景 {name} 是较久未更新的内容，建议审查脚本完整度、镜头节奏和画面质量。"
+            if language == "zh"
+            else f"Scene {name} is relatively stale. Review script completeness, pacing, and visual quality."
+        )
+        norm = _normalize_text(content)
+        if norm in seen:
+            continue
+        results.append((content, content, 45))
+        seen.add(norm)
+    return results
 
 
 def _research_improve_generator(project: Path, language: str, seen: set[str]) -> list[tuple[str, str, int]]:
-    """Return a research-project Improve.
-
-    ZH: "研究项目中可能存在论证链条不够严谨的章节，建议全面审查假设、证据链和引用完整性。"
-    EN: "Research projects may contain chapters where argument chains lack rigor. Conduct a full review of assumptions, evidence chains, and citation integrity."
-    """
-    content_zh = (
-        "研究项目中可能存在论证链条不够严谨的章节，建议全面审查假设、证据链和引用完整性。"
-    )
-    content_en = (
-        "Research projects may contain chapters where argument chains lack rigor. "
-        "Conduct a full review of assumptions, evidence chains, and citation integrity."
-    )
-    content = content_zh if language == "zh" else content_en
-
-    if _normalize_text(content) in seen:
-        return []
-    return [(content, content, 45)]
+    """Return multiple research-project Improve candidates."""
+    contents = [
+        (
+            "全面审查研究中的假设、证据链和引用完整性，补齐最薄弱的一环。"
+            if language == "zh"
+            else "Audit assumptions, evidence chains, and citation completeness, then strengthen the weakest link first."
+        ),
+        (
+            "检查结论是否都能追溯到明确证据，避免存在跳步推理。"
+            if language == "zh"
+            else "Check whether every conclusion traces back to explicit evidence, avoiding reasoning gaps."
+        ),
+        (
+            "把最关键的一章做一次结构重构，提升论证节奏和可读性。"
+            if language == "zh"
+            else "Restructure the most critical chapter to improve argument pacing and readability."
+        ),
+    ]
+    results: list[tuple[str, str, int]] = []
+    for content in contents:
+        norm = _normalize_text(content)
+        if norm in seen:
+            continue
+        results.append((content, content, 45))
+        seen.add(norm)
+    return results
 
 
 def _generic_improve_generator(project: Path, language: str, seen: set[str]) -> list[tuple[str, str, int]]:
-    """Return a generic Improve.
-
-    ZH: "审视项目，找出用户抱怨最多或最影响工作效率的一个具体问题，优先修复。"
-    EN: "Examine the project: identify the specific issue users complain about most or the one that most reduces productivity, and fix it first."
-    """
-    content_zh = (
-        "审视项目，找出用户抱怨最多或最影响工作效率的一个具体问题，优先修复。"
-    )
-    content_en = (
-        "Examine the project: identify the specific issue users complain about most "
-        "or the one that most reduces productivity, and fix it first."
-    )
-    content = content_zh if language == "zh" else content_en
-
-    if _normalize_text(content) in seen:
-        return []
-    return [(content, content, 45)]
+    """Return multiple generic Improve candidates."""
+    contents = [
+        (
+            "审视项目，优先修复最影响用户效率的一个具体问题。"
+            if language == "zh"
+            else "Inspect the project and fix the single issue that hurts user efficiency the most."
+        ),
+        (
+            "找出最容易引发返工的流程，补齐检查点或自动化保护。"
+            if language == "zh"
+            else "Find the workflow most likely to cause rework and add checkpoints or automation around it."
+        ),
+        (
+            "检查最常被修改的部分，补齐缺失文档、测试或错误处理。"
+            if language == "zh"
+            else "Review the most frequently changed area and backfill missing docs, tests, or error handling."
+        ),
+        (
+            "找出一个低成本但高感知价值的小改进，并把它落地。"
+            if language == "zh"
+            else "Identify one low-cost but high-perceived-value improvement and ship it."
+        ),
+    ]
+    results: list[tuple[str, str, int]] = []
+    for content in contents:
+        norm = _normalize_text(content)
+        if norm in seen:
+            continue
+        results.append((content, content, 45))
+        seen.add(norm)
+    return results
 
 
 IMPROVE_GENERATORS: dict[str, callable] = {
@@ -833,6 +861,147 @@ def _write_ideas_to_heartbeat(
     return added
 
 
+def _read_done_log_tasks(heartbeat_path: Path) -> list[str]:
+    if not heartbeat_path.exists():
+        return []
+    text = heartbeat_path.read_text(encoding="utf-8", errors="ignore")
+    m = re.search(r"## Done Log\b[\s\S]*?\| Time \| Commit \| Task \| Result \|[\s\S]*?(?=\n## |\Z)", text)
+    if not m:
+        return []
+    return [task.strip() for task in re.findall(r"\|\s*\d{4}-\d{2}-\d{2}[^|]*?\s*\|\s*`?[a-f0-9]+`?\s*\|\s*([^|]+?)\s*\|", m.group(0))]
+
+
+def _count_trailing_improves_since_last_idea(heartbeat_path: Path) -> int:
+    count = 0
+    for task in reversed(_read_done_log_tasks(heartbeat_path)):
+        if "[[Idea]]" in task:
+            return 0 if count == 0 else count
+        if "[[Improve]]" in task:
+            count += 1
+            continue
+        break
+    return count
+
+
+def _decide_next_type_from_state(last_type: str | None, improves_since_last_idea: int) -> str:
+    if last_type is None:
+        return "idea"
+    if last_type == "idea":
+        return "improve"
+    return "idea" if improves_since_last_idea >= 2 else "improve"
+
+
+def _advance_alternation_state(last_type: str | None, improves_since_last_idea: int, generated_type: str) -> tuple[str, int]:
+    if generated_type == "idea":
+        return "idea", 0
+    next_counter = improves_since_last_idea + 1 if last_type == "improve" else 1
+    return "improve", next_counter
+
+
+def _build_candidates_for_type(
+    project: Path,
+    kind: str,
+    language: str,
+    seen: set[str],
+    task_type: str,
+) -> list[tuple[str, str, int]]:
+    if task_type == "idea":
+        if kind == "software":
+            return _generate_ideas_for_software(project, language, seen)
+        project_md = project / "PROJECT.md"
+        if not project_md.exists():
+            project_md = SKILL_DIR / "PROJECT.md"
+        questions = _load_inspire_questions(project_md, language)
+        results: list[tuple[str, str, int]] = []
+        for i in range(min(3, len(questions))):
+            question = questions[i % len(questions)]
+            text = (
+                f"基于问题「{question}」审视项目，找到最值得改进的地方并实施"
+                if language == "zh"
+                else f"Review the project through the question '{question}' and implement the most worthwhile improvement"
+            )
+            norm = _normalize_text(text)
+            if norm in seen:
+                continue
+            results.append((text, question, 45))
+            seen.add(norm)
+        return results
+
+    generator = IMPROVE_GENERATORS.get(kind, IMPROVE_GENERATORS["generic"])
+    candidates = generator(project, language, seen)
+    if candidates or kind == "generic":
+        return candidates
+    return IMPROVE_GENERATORS["generic"](project, language, seen)
+
+
+def refresh_inspire_queue(
+    project: Path,
+    heartbeat: Path | None = None,
+    *,
+    language: str = "zh",
+    target_size: int = 6,
+) -> dict:
+    """Refresh queue to a full rolling backlog with a 2 Improve : 1 Idea ratio.
+
+    Keeps user-authored rows, rebuilds non-user rows from current project state,
+    and generates the next `target_size` tasks in alternation order based on the
+    latest Done Log state.
+    """
+    heartbeat = heartbeat or HEARTBEAT
+    project = project.expanduser().resolve()
+    kind = _detect_project_type(project)
+    existing_rows = _read_queue_rows(heartbeat)
+    user_rows = [row for row in existing_rows if row.get("type", "").strip().lower() == "user"]
+
+    seen: set[str] = {_normalize_text(row.get("content", "")) for row in user_rows}
+    seen.update(_normalize_text(task) for task in _read_done_log_tasks(heartbeat))
+
+    last_type = _get_last_done_type(heartbeat)
+    counter = _count_trailing_improves_since_last_idea(heartbeat)
+    created = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    generated_rows: list[dict[str, str]] = []
+    generated_types: list[str] = []
+
+    for _ in range(max(target_size, 0)):
+        next_type = _decide_next_type_from_state(last_type, counter)
+        candidates = _build_candidates_for_type(project, kind, language, set(seen), next_type)
+        if not candidates:
+            alt_type = "improve" if next_type == "idea" else "idea"
+            candidates = _build_candidates_for_type(project, kind, language, set(seen), alt_type)
+            if not candidates:
+                break
+            next_type = alt_type
+
+        best_text, best_detail, best_score = max(candidates, key=lambda x: x[2])
+        source = f"inspire: {best_detail}" if next_type == "idea" else "rolling-refresh"
+        prefix = "[[Idea]]" if next_type == "idea" else "[[Improve]]"
+        generated_rows.append(
+            {
+                "type": next_type,
+                "score": str(best_score),
+                "content": _sanitize_cell(f"{prefix} {best_text}"),
+                "detail": _sanitize_cell(best_text),
+                "source": _sanitize_cell(source),
+                "status": "pending",
+                "created": created,
+            }
+        )
+        seen.add(_normalize_text(best_text))
+        generated_types.append(next_type)
+        last_type, counter = _advance_alternation_state(last_type, counter, next_type)
+
+    _write_queue_rows(heartbeat, user_rows + generated_rows)
+    _set_improves_since_idea(heartbeat, _count_trailing_improves_since_last_idea(heartbeat))
+
+    return {
+        "generated": len(generated_rows),
+        "target_size": target_size,
+        "types": generated_types,
+        "improves_since_last_idea": _count_trailing_improves_since_last_idea(heartbeat),
+        "first": generated_rows[0]["content"] if generated_rows else "",
+    }
+
+
 # ── Public API ─────────────────────────────────────────────────────────────
 
 def run_inspire_scan(
@@ -969,14 +1138,23 @@ def main() -> int:
     parser.add_argument("--project", required=True, type=Path)
     parser.add_argument("--heartbeat", default=None, type=Path)
     parser.add_argument("--language", default="zh", choices=["zh", "en"])
+    parser.add_argument("--target-size", default=1, type=int)
     args = parser.parse_args()
 
     import json
-    result = run_inspire_scan(
-        project=args.project,
-        heartbeat=args.heartbeat,
-        language=args.language,
-    )
+    if args.target_size > 1:
+        result = refresh_inspire_queue(
+            project=args.project,
+            heartbeat=args.heartbeat,
+            language=args.language,
+            target_size=args.target_size,
+        )
+    else:
+        result = run_inspire_scan(
+            project=args.project,
+            heartbeat=args.heartbeat,
+            language=args.language,
+        )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 

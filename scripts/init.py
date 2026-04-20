@@ -1502,44 +1502,37 @@ def cmd_log(n: int = 10) -> None:
 # ── a_refresh: clear + scan ─────────────────────────────────────────────────
 
 def cmd_refresh(min_items: int | None = None) -> None:
-    """Clear non-user tasks, then run inspire_scanner once to generate one new item.
+    """Rebuild the rolling queue from latest project state.
 
-    Uses the alternating queue system (idea→improve→improve→idea) to generate
-    exactly one new item per call, replacing same-type rows in the queue.
+    Generates a fresh backlog of N items (default from config), keeping a
+    2 Improve : 1 Idea ratio while updating the list after project changes.
     """
-    step("🔄 Refreshing queue (clear + inspire scan)")
+    step("🔄 Refreshing queue (rolling backlog rebuild)")
     config = read_current_config()
     heartbeat_path_str = config.get("heartbeat_path", "").strip()
     heartbeat_p = HEARTBEAT if (not heartbeat_path_str or heartbeat_path_str.startswith("#")) else Path(heartbeat_path_str)
     project_path_str = config.get("project_path", "").strip()
     language = config.get("project_language", DEFAULT_LANGUAGE).strip()
+    target_size = min_items or int(config.get("min_queue_items", "6") or 6)
 
     if not project_path_str or project_path_str in (".", "YOUR_PROJECT_PATH"):
         detected = detect_project_path()
         project_path_str = str(detected) if detected else "."
         ok(f"Auto-detected project: {project_path_str}")
 
-    # Step 1: clear non-user tasks
-    ok("Step 1/2: Clearing non-user tasks...")
-    r = run([sys.executable, str(HERE / "queue_scanner.py"), "--clear"], cwd=SKILL_DIR, timeout=60)
-    if r.returncode == 0:
-        ok("Non-user tasks cleared")
-    else:
-        warn(f"Clear returned: {r.stderr[:100] if r.stderr else r.stdout[:100]}")
-
-    # Step 2: run inspire_scanner once (alternating queue — generates 1 item)
-    ok("Step 2/2: Running inspire scanner...")
+    ok(f"Building {target_size}-item rolling queue...")
     r = run(
         [
             sys.executable, str(HERE / "inspire_scanner.py"),
             "--project", project_path_str,
             "--heartbeat", str(heartbeat_p),
             "--language", language,
+            "--target-size", str(target_size),
         ],
         cwd=SKILL_DIR, timeout=60,
     )
     if r.returncode == 0:
-        ok("Inspire scan complete")
+        ok("Rolling queue rebuild complete")
         if r.stdout.strip():
             print(r.stdout.strip())
     else:

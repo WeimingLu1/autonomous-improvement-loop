@@ -83,7 +83,7 @@ The skill auto-detects your project type via `project_insights.py`. You can also
 | `last_run_time` | ISO timestamp of last run |
 | `last_run_commit` | Git hash of last commit |
 | `cron_lock` | `true` = someone is editing queue, skip this run |
-| `improves_since_last_idea` | Counter for alternating queue: increments after each [[Improve]], resets after [[Idea]]; threshold = 2 triggers flip to idea |
+| `improves_since_last_idea` | Counter for alternating queue phase: 2 improves per idea, used while rebuilding the rolling queue |
 
 ### Queue Fields
 
@@ -108,7 +108,7 @@ The skill auto-detects your project type via `project_insights.py`. You can also
 | `project_md.py` | Generate PROJECT.md from current project tree | `--project`, `--output`, `--language`, `--repo` |
 | `inspire_scanner.py` | Generates [[Idea]]/[[Improve]] tasks via 2:1 alternating cycle (idea→improve→improve→idea); deduplicates; git-informed improve targeting | `--project`, `--heartbeat`, `--language` |
 | `run_status.py` | Read/write Run Status | `--heartbeat`, `read`/`write` |
-| `update_heartbeat.py` | Post-task updater: HEARTBEAT + inspire scan + PROJECT.md rebuild (cron) | `--heartbeat`, `--project`, `--commit`, `--result`, `--task`, `--language`, `--min-queue` |
+| `update_heartbeat.py` | Post-task updater: HEARTBEAT + rolling queue rebuild + PROJECT.md rebuild (cron) | `--heartbeat`, `--project`, `--commit`, `--result`, `--task`, `--language`, `--min-queue` |
 
 ---
 
@@ -171,7 +171,7 @@ The skill is invoked via OpenClaw's skill router. Incoming message text is parse
 | `a-clear` | Clear all non-user tasks from the queue |
 | `a-queue [--all]` | Show current queue (use `--all` to include done items) |
 | `a-log [-n N]` | Show recent Done Log entries (default: 10) |
-| `a-refresh [--min N]` | Full queue refresh: clear non-user + scan new items |
+| `a-refresh [--min N]` | Rebuild rolling queue from latest project state, keeping N pending tasks |
 | `a-trigger [--force]` | Run cron immediately (skip `cron_lock` check with `--force`) |
 | `a-config get <key>` | Read a config value |
 | `a-config set <key> <value>` | Write a config value |

@@ -19,7 +19,7 @@ chat_id: 5535183090
 project_language: zh
 
 ## Queue
-min_queue_items: 5
+min_queue_items: 6
 heartbeat_path:   # defaults to skill directory if empty
 
 ## Verification & Publish

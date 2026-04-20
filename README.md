@@ -47,7 +47,7 @@ After installation, interact with the loop via these commands:
 | `a-clear` | Clear all non-user tasks from the queue |
 | `a-queue [--all]` | Show current queue (use `--all` to include done items) |
 | `a-log [-n N]` | Show recent Done Log entries (default: 10) |
-| `a-refresh [--min N]` | Full queue refresh: clear non-user + scan new items |
+| `a-refresh [--min N]` | Rebuild rolling queue from latest project state, keeping N pending tasks |
 | `a-trigger [--force]` | Run cron immediately (skip `cron_lock` check with `--force`) |
 | `a-config get <key>` | Read a config value |
 | `a-config set <key> <value>` | Write a config value |
@@ -95,7 +95,7 @@ python scripts/init.py a-status ~/Projects/MY_PROJECT
 | `a-clear` | Clear non-user tasks from the queue |
 | `a-queue` | Show current queue (`--all` to include done items) |
 | `a-log` | Show recent Done Log entries (`-n N` for count) |
-| `a-refresh` | Full refresh: clear non-user + scan new items |
+| `a-refresh` | Rebuild rolling queue from latest project state |
 | `a-trigger` | Run cron immediately (`--force` to skip cron_lock) |
 | `a-config` | Read/write config values (`get`/`set`) |
 
@@ -144,7 +144,7 @@ Re-scan queue every run (preserve user tasks, rebuild non-user queue)
 
 ## Alternating Queue System
 
-The queue alternates between two task types in a fixed 2:1 rhythm:
+The queue is rebuilt on every run into a rolling backlog, while still following a fixed 2:1 rhythm:
 
 | Cycle | Generates | `improves_since_last_idea` counter |
 |-------|-----------|-------------------------------------|
@@ -153,13 +153,18 @@ The queue alternates between two task types in a fixed 2:1 rhythm:
 | 3rd | `[[Improve]]` (second in streak) | increment → 2 |
 | 4th | `[[Idea]]` (flip back to innovation) | reset to 0 |
 
+Default rolling backlog size: **6 items**, typically rendered as:
+
+`idea → improve → improve → idea → improve → improve`
+
 **Why this ratio?** Ideas (score 65) naturally outrank Improves (score 45) when both appear, so a 2:1 ratio keeps the queue balanced without hardcoding type preferences in the sort key.
 
 ### Alternation Triggers
 
 - Reads `[[Idea]]` / `[[Improve]]` tags from the **Done Log** to detect last committed task type
 - Stores `improves_since_last_idea` counter in the **Run Status** table
-- `inspire_scanner.py` generates exactly **one** new item per run, replacing all same-type rows in the queue
+- `inspire_scanner.py` rebuilds the non-user queue into a rolling backlog on every run
+- By default it keeps **6 pending tasks** visible to the user
 
 ### Idea vs Improve Quality
 
@@ -269,7 +274,7 @@ The project description (type, positioning, features, architecture, inspire ques
 | `priority_scorer.py` | Score queue entries (supports user request insertion) |
 | `verify_and_revert.py` | Run verification, rollback on failure |
 | `run_status.py` | Read/write Run Status section |
-| `update_heartbeat.py` | Post-task updater: HEARTBEAT + queue refresh + inspire scan + PROJECT.md rebuild |
+| `update_heartbeat.py` | Post-task updater: HEARTBEAT + rolling queue rebuild + PROJECT.md rebuild |
 | `inspire_scanner.py` | Generates [[Idea]]/[[Improve]] tasks using a 2:1 improve-to-idea alternating cycle driven by `improves_since_last_idea` counter in Run Status; deduplicates against existing queue |
 | `project_md.py` | Generate PROJECT.md from current project tree (used by adopt / onboard / every task) |
 | `bootstrap.py` | Legacy helper for old Python software projects |
