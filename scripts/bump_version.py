@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 
-def bump_version(project: Path, do_commit: bool = False) -> str | None:
+def bump_version(project: Path, do_commit: bool = False, do_release: bool = False) -> str | None:
     version_file = project / "VERSION"
     if not version_file.exists():
         print(f"ERROR: VERSION not found at {version_file}", file=sys.stderr)
@@ -41,6 +41,18 @@ def bump_version(project: Path, do_commit: bool = False) -> str | None:
                 check=True,
             )
             print(f"VERSION commit created")
+
+            if do_release:
+                subprocess.run(["git", "push"], cwd=project, check=True)
+                print(f"GitHub push done")
+                subprocess.run(
+                    ["gh", "release", "create", f"v{new_ver}",
+                     "--title", f"v{new_ver}",
+                     "--generate-notes"],
+                    cwd=project,
+                    check=True,
+                )
+                print(f"GitHub release v{new_ver} created")
         return new_ver
     except Exception as e:
         print(f"ERROR: failed to bump VERSION: {e}", file=sys.stderr)
@@ -50,10 +62,14 @@ def bump_version(project: Path, do_commit: bool = False) -> str | None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Bump patch version in VERSION file")
     parser.add_argument("--path", type=Path, default=Path.cwd())
-    parser.add_argument("--commit", action="store_true")
+    parser.add_argument("--commit", action="store_true",
+                        help="Also git add + commit VERSION")
+    parser.add_argument("--release", action="store_true",
+                        help="Also git push + GitHub release (implies --commit")
     args = parser.parse_args()
 
-    result = bump_version(args.path, do_commit=args.commit)
+    result = bump_version(args.path, do_commit=args.commit or args.release,
+                          do_release=args.release)
     if result is None:
         return 1
     return 0
