@@ -195,33 +195,12 @@ def _update_heartbeat(
     heartbeat.write_text(content, encoding="utf-8")
     print(f"Run Status updated, cron_lock released")
 
-    # ── 4. Refresh queue (clear stale non-user + scan new items) ────────────
-    # Import and run project_insights
-    sys.path.insert(0, str(HERE))
-    try:
-        import project_insights as pi
-    except Exception as e:
-        print(f"WARNING: could not import project_insights: {e}", file=sys.stderr)
-        return
-
+    # ── 4. Alternating queue: generate next task ───────────────────────────
+    # inspire_scanner.py handles clearing same-type non-user rows AND generating
+    # the next alternating item (idea→improve→improve→idea).
+    # project_insights.py is disabled here to maintain the 2:1 alternation ratio.
     project = project.expanduser().resolve()
     heartbeat_p = heartbeat
-
-    # Clear non-user rows
-    try:
-        removed = pi.clear_queue(heartbeat_p)
-        print(f"Queue cleared: {removed} non-user row(s) removed")
-    except Exception as e:
-        print(f"WARNING: clear_queue failed: {e}", file=sys.stderr)
-
-    # Refresh with new candidates
-    try:
-        added = pi.refresh_queue(project, heartbeat_p, language, min_queue)
-        print(f"Queue refreshed: {added} new item(s) added")
-    except Exception as e:
-        print(f"WARNING: refresh_queue failed: {e}", file=sys.stderr)
-
-    # ── 5. Alternating queue: generate next task ───────────────────────────
     try:
         from inspire_scanner import run_inspire_scan
         result = run_inspire_scan(project=project, heartbeat=heartbeat_p, language=language)
