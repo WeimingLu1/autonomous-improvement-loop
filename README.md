@@ -165,7 +165,8 @@ On every run `inspire_scanner.py` rebuilds the entire non-user portion of the qu
 - Reads `[[Idea]]` / `[[Improve]]` tags from the **Done Log** to detect last committed task type
 - Stores `improves_since_last_idea` counter in the **Run Status** table
 - On every run, `inspire_scanner.py` generates the next `target_size` items in alternation order starting from the current Done Log state
-- Deduplication covers: Queue (pending) + Done Log (completed) + last generated content
+- Deduplication covers: Queue (pending) + Done Log (completed, including items with execution notes appended) + last generated content
+  - **Prefix dedup**: if a Done Log entry starts with the queue item text (agent appended execution notes in parentheses), they are considered the same task and skipped
 
 ### Idea vs Improve Quality
 

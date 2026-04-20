@@ -133,11 +133,11 @@ Users insert tasks via message → directly written to HEARTBEAT.md Queue with s
 python project_insights.py --project . --heartbeat HEARTBEAT.md --language en
 
 # Keep scanning until queue has at least N items
-python project_insights.py --project . --heartbeat HEARTBEAT.md --language en --refresh --min 5
+python project_insights.py --project . --heartbeat HEARTBEAT.md --language en --refresh --min 6
 
 # Rebuild non-user queue after a cron task
 python init.py a-clear
-python project_insights.py --project . --heartbeat HEARTBEAT.md --language en --refresh --min 5
+python project_insights.py --project . --heartbeat HEARTBEAT.md --language en --refresh --min 6
 
 # Verify and auto-revert on failure
 python verify_and_revert.py \
