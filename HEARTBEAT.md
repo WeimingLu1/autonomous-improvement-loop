@@ -23,7 +23,7 @@
 | cron_lock | false |
 | mode | normal |
 | rollback_on_fail | true |
-| improves_since_last_idea | 1 |
+| improves_since_last_idea | 0 |
 ---
 
 ## Done Log
