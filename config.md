@@ -3,24 +3,24 @@
 > Fill in this file after installing the skill to bind it to your project.
 
 ## Project
-project_path: /Users/weiminglu/Projects/autonomous-improvement-loop
+project_path: /path/to/your/project
 project_kind: software   # software | writing | video | research | generic
 
 ## GitHub Repository
-repo: https://github.com/WeimingLu1/autonomous-improvement-loop
+repo: https://github.com/YOUR_USERNAME/YOUR_REPO
 
 ## OpenClaw Agent ID
-agent_id: mia
+agent_id: YOUR_AGENT_ID
 
 ## Telegram Chat ID
-chat_id:
+chat_id: YOUR_CHAT_ID
 
 ## Project Language
-project_language: zh
+project_language: en   # "en" = English, "zh" = Chinese
 
 ## Queue
 min_queue_items: 6
-heartbeat_path: /Users/weiminglu/.openclaw/workspace-mia/skills/autonomous-improvement-loop/HEARTBEAT.md
+heartbeat_path:   # defaults to skill directory if empty
 
 ## Verification & Publish
 verification_command:   # empty = no auto-verification
@@ -29,4 +29,4 @@ publish_command:        # optional: shell command after successful task
 ## Cron
 cron_schedule: */30 * * * *
 cron_timeout: 3600
-cron_job_id: 9a18a926-e25d-4e91-a3b3-5b2b3d62aec0
+cron_job_id:   # filled automatically by a-start
