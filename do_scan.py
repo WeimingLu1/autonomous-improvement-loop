@@ -68,6 +68,11 @@ def main() -> int:
     heartbeat = Path(config["heartbeat_path"]).expanduser().resolve()
     lang = args.lang if args.lang else config["project_language"]
 
+    valid_langs = {"en", "zh"}
+    if lang not in valid_langs:
+        print(f"WARNING: project_language '{lang}' is invalid, defaulting to 'en'", file=sys.stderr)
+        lang = "en"
+
     if args.clear:
         removed = clear_queue(heartbeat)
         print(f"Do scan: cleared {removed} non-user entries")

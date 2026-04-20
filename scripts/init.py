@@ -1225,6 +1225,9 @@ def cmd_add(content_text: str) -> None:
         fail("Empty content — nothing to add")
         sys.exit(1)
 
+    # Sanitize pipe characters (break markdown table parsing) and newlines
+    content_text = content_text.replace("|", "/").replace("\n", " ")
+
     config = read_current_config()
     project_p = config.get("project_path", "").strip()
     heartbeat_p = HEARTBEAT.resolve()

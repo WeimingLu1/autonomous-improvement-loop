@@ -11,6 +11,8 @@
 |-------|-------|
 | last_run_time | 2026-04-19T07:49:31Z |
 | last_run_commit | 116b947 |
+| last_run_result | unknown |
+| last_run_task | none |
 | cron_lock | false |
 | last_generated_content | 为 `health log` 添加 `--dry-run` 选项，先预览解析结果再决定是否写入 |
 | improves_since_last_idea | 0 |

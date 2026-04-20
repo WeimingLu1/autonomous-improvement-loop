@@ -410,11 +410,16 @@ def call_llm(finding: str, bucket_name: str, inspire_context: list[str], lang: s
 
     The detail is a thorough task description generated from the bucket category.
     In production this would call an LLM; here we use structured templates.
+
+    When inspire_context is available (questions that inspired this idea),
+    append the first question to the detail to preserve creative context.
     """
     detail = _BUCKET_DETAIL_TEMPLATES.get(
         bucket_name,
         f"Review and improve: {finding}"
     )
+    if inspire_context:
+        detail = f"{detail} (inspired by: {inspire_context[0]})"
     return finding, detail
 
 
@@ -591,12 +596,12 @@ def append_to_queue(
             seen_content.add(norm)
             unique_existing.append(row)
 
-    resolved_score = score if score is not None else score_finding(finding)
-    created = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-    detail_str = finding if detail is None else detail
     type_label = "feature" if source == "agent" else "improve"
+    resolved_score = score if score is not None else (45 if type_label == "improve" else score_finding(finding))
     prefix = "[[Improve]]" if source == "scanner" else "[[Feature]]" if source == "agent" else ""
     content_cell = f"{prefix} {finding}" if prefix else finding
+    detail_str = detail if detail is not None else finding
+    created = datetime.now(timezone.utc).strftime('%Y-%m-%d')
     new_row = {
         "type": type_label,
         "score": str(resolved_score),

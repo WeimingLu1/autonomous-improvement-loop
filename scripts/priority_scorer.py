@@ -47,9 +47,41 @@ def generate_prompt(task_type: str, task_description: str) -> str:
 
 def parse_llm_response(raw: str) -> dict:
     """Parse JSON from LLM response text."""
-    json_match = re.search(r"\{[^{}]*\}", raw, re.DOTALL)
-    if json_match:
-        return json.loads(json_match.group())
+    raw = raw.strip()
+
+    # First try: parse the entire string as JSON directly
+    try:
+        result = json.loads(raw)
+        if isinstance(result, dict):
+            return result
+    except json.JSONDecodeError:
+        pass
+
+    # Second try: find outermost balanced braces and parse
+    try:
+        start = raw.find("{")
+        if start == -1:
+            raise ValueError("No opening brace")
+
+        depth = 0
+        end = start
+        for i, c in enumerate(raw[start:], start):
+            if c == "{":
+                depth += 1
+            elif c == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+
+        if depth == 0:
+            candidate = raw[start : end + 1]
+            result = json.loads(candidate)
+            if isinstance(result, dict):
+                return result
+    except (json.JSONDecodeError, ValueError):
+        pass
+
     return {"score": 50, "reason": "Default score (failed to parse evaluation)"}
 
 

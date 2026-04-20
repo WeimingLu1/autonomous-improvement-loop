@@ -62,7 +62,7 @@ def read_config(heartbeat: Path) -> dict[str, str]:
 
 
 def run(cmd: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=300)
 
 
 def current_head(*, cwd: Path) -> str:
@@ -103,13 +103,18 @@ def write_status(
         print(r.stderr, file=sys.stderr)
 
 
-def revert(commit_to_revert: str, *, cwd: Path) -> str:
-    """Revert the given commit and push. Returns the new HEAD hash."""
-    r = run(["git", "revert", "--no-edit", commit_to_revert], cwd=cwd)
+def revert(start: str, end: str, *, cwd: Path) -> str:
+    """Revert a range of commits (start..end) and push. Returns the new HEAD hash."""
+    r = run(["git", "revert", "-n", f"{start}..{end}"], cwd=cwd)
     if r.returncode != 0:
         print(r.stdout)
         print(r.stderr, file=sys.stderr)
         raise SystemExit(r.returncode)
+    r2 = run(["git", "commit", "--no-edit", "-m", f"Revert {start}..{end}"], cwd=cwd)
+    if r2.returncode != 0:
+        print(r2.stdout)
+        print(r2.stderr, file=sys.stderr)
+        raise SystemExit(r2.returncode)
     push(cwd=cwd)
     return run(["git", "rev-parse", "HEAD"], cwd=cwd).stdout.strip()
 
@@ -148,6 +153,9 @@ def main() -> int:
     verify_cmd = config.get("verification_command", "").strip()
 
     head = current_head(cwd=project)
+    if not head:
+        print("ERROR: No commits in project — cannot verify or revert", file=sys.stderr)
+        return 1
     branch = current_branch(cwd=project)
     print(f"[verify] project={project.name} branch={branch} commit={head}")
     print(f"[verify] task: {args.task}")
@@ -168,7 +176,7 @@ def main() -> int:
         return 0
 
     print("verification failed — reverting commit")
-    reverted = revert(args.commit, cwd=project)
+    reverted = revert(args.commit, head, cwd=project)
     write_status(heartbeat, reverted, "fail", f"rollback after failure: {args.task}")
     print(f"reverted, new HEAD={reverted}")
     return 1

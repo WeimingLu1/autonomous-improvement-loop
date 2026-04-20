@@ -23,6 +23,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 from project_insights import _parse_all_queue_rows, _render_queue_block, _replace_all_queue_sections, detect_project_type as _detect_project_type
+from file_lock import lock_file
 
 # ── Alternation state helpers ───────────────────────────────────────────────
 
@@ -102,7 +103,7 @@ def _get_last_generated_content(heartbeat: Path) -> str | None:
     if not heartbeat.exists():
         return None
     text = heartbeat.read_text(encoding='utf-8', errors='ignore')
-    m = re.search(r'\|\s*last_generated_content\s*\|\s*(.+?)\s*\|', text)
+    m = re.search(r'\|\s*last_generated_content\s*\|\s*(.+?)\s*\|', text, re.DOTALL)
     return m.group(1).strip() if m else None
 
 
@@ -688,7 +689,7 @@ def _load_inspire_questions(project_md_path: Path, language: str) -> list[str]:
 
     text = project_md_path.read_text(encoding="utf-8", errors="ignore")
     # Extract the "开放方向（{kind} 类 inspire 问题）" section
-    m = re.search(r"##\s*开放方向[^#]*##", text, re.DOTALL)
+    m = re.search(r"##\s*开放方向[^\n]*\n[\s\S]*?(?=##\s|\Z)", text)
     if not m:
         return SOFTWARE_ZH if language == "zh" else SOFTWARE_EN
 
@@ -974,71 +975,72 @@ def refresh_inspire_queue(
     """
     heartbeat = heartbeat or HEARTBEAT
     project = project.expanduser().resolve()
-    kind = _detect_project_type(project)
-    existing_rows = _read_queue_rows(heartbeat)
-    user_rows = [row for row in existing_rows if row.get("type", "").strip().lower() == "user"]
+    with lock_file(heartbeat):
+        kind = _detect_project_type(project)
+        existing_rows = _read_queue_rows(heartbeat)
+        user_rows = [row for row in existing_rows if row.get("type", "").strip().lower() == "user"]
 
-    seen: set[str] = {_normalize_text(row.get("content", "")) for row in user_rows}
-    done_tasks = _read_done_log_tasks(heartbeat)
-    seen.update(_normalize_text(task) for task in done_tasks)
+        seen: set[str] = {_normalize_text(row.get("content", "")) for row in user_rows}
+        done_tasks = _read_done_log_tasks(heartbeat)
+        seen.update(_normalize_text(task) for task in done_tasks)
 
-    last_type = _get_last_done_type(heartbeat)
-    counter = _count_trailing_improves_since_last_idea(heartbeat)
-    created = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    generated_rows: list[dict[str, str]] = []
-    generated_types: list[str] = []
+        last_type = _get_last_done_type(heartbeat)
+        counter = _count_trailing_improves_since_last_idea(heartbeat)
+        created = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        generated_rows: list[dict[str, str]] = []
+        generated_types: list[str] = []
 
-    for _ in range(max(target_size, 0)):
-        next_type = _decide_next_type_from_state(last_type, counter)
-        candidates = _build_candidates_for_type(project, kind, language, set(seen), next_type)
-        if not candidates:
-            alt_type = "improve" if next_type == "idea" else "idea"
-            candidates = _build_candidates_for_type(project, kind, language, set(seen), alt_type)
+        for _ in range(max(target_size, 0)):
+            next_type = _decide_next_type_from_state(last_type, counter)
+            candidates = _build_candidates_for_type(project, kind, language, set(seen), next_type)
             if not candidates:
+                alt_type = "improve" if next_type == "idea" else "idea"
+                candidates = _build_candidates_for_type(project, kind, language, set(seen), alt_type)
+                if not candidates:
+                    break
+                next_type = alt_type
+
+            # Pick the best non-duplicate candidate
+            best_text, best_detail, best_score = None, None, None
+            for cand_text, cand_detail, cand_score in sorted(candidates, key=lambda x: -x[2]):
+                if _is_duplicate_of_done_log(cand_text, done_tasks):
+                    continue
+                best_text, best_detail, best_score = cand_text, cand_detail, cand_score
                 break
-            next_type = alt_type
 
-        # Pick the best non-duplicate candidate
-        best_text, best_detail, best_score = None, None, None
-        for cand_text, cand_detail, cand_score in sorted(candidates, key=lambda x: -x[2]):
-            if _is_duplicate_of_done_log(cand_text, done_tasks):
+            if best_text is None:
+                # All candidates are duplicates of done items — advance alternation state
+                # and try to fill the slot with the alternate type next time
+                last_type, counter = _advance_alternation_state(last_type, counter, next_type)
                 continue
-            best_text, best_detail, best_score = cand_text, cand_detail, cand_score
-            break
 
-        if best_text is None:
-            # All candidates are duplicates of done items — advance alternation state
-            # and try to fill the slot with the alternate type next time
+            source = f"inspire: {best_detail}" if next_type == "idea" else "rolling-refresh"
+            prefix = "[[Idea]]" if next_type == "idea" else "[[Improve]]"
+            generated_rows.append(
+                {
+                    "type": next_type,
+                    "score": str(best_score),
+                    "content": _sanitize_cell(f"{prefix} {best_text}"),
+                    "detail": _sanitize_cell(best_text),
+                    "source": _sanitize_cell(source),
+                    "status": "pending",
+                    "created": created,
+                }
+            )
+            seen.add(_normalize_text(best_text))
+            generated_types.append(next_type)
             last_type, counter = _advance_alternation_state(last_type, counter, next_type)
-            continue
 
-        source = f"inspire: {best_detail}" if next_type == "idea" else "rolling-refresh"
-        prefix = "[[Idea]]" if next_type == "idea" else "[[Improve]]"
-        generated_rows.append(
-            {
-                "type": next_type,
-                "score": str(best_score),
-                "content": _sanitize_cell(f"{prefix} {best_text}"),
-                "detail": _sanitize_cell(best_text),
-                "source": _sanitize_cell(source),
-                "status": "pending",
-                "created": created,
-            }
-        )
-        seen.add(_normalize_text(best_text))
-        generated_types.append(next_type)
-        last_type, counter = _advance_alternation_state(last_type, counter, next_type)
+        _write_queue_rows(heartbeat, user_rows + generated_rows)
+        _set_improves_since_idea(heartbeat, _count_trailing_improves_since_last_idea(heartbeat))
 
-    _write_queue_rows(heartbeat, user_rows + generated_rows)
-    _set_improves_since_idea(heartbeat, _count_trailing_improves_since_last_idea(heartbeat))
-
-    return {
-        "generated": len(generated_rows),
-        "target_size": target_size,
-        "types": generated_types,
-        "improves_since_last_idea": _count_trailing_improves_since_last_idea(heartbeat),
-        "first": generated_rows[0]["content"] if generated_rows else "",
-    }
+        return {
+            "generated": len(generated_rows),
+            "target_size": target_size,
+            "types": generated_types,
+            "improves_since_last_idea": _count_trailing_improves_since_last_idea(heartbeat),
+            "first": generated_rows[0]["content"] if generated_rows else "",
+        }
 
 
 # ── Public API ─────────────────────────────────────────────────────────────
@@ -1067,105 +1069,106 @@ def run_inspire_scan(
                         improves_since_last_idea
     """
     heartbeat = heartbeat or HEARTBEAT
-    next_type = _decide_next_type(heartbeat)
-    seen = _detect_existing_queue_content(heartbeat)
-    kind = _detect_project_type(project)
+    with lock_file(heartbeat):
+        next_type = _decide_next_type(heartbeat)
+        seen = _detect_existing_queue_content(heartbeat)
+        kind = _detect_project_type(project)
 
-    # ── Generate candidates ─────────────────────────────────────────────────
-    if next_type == "idea":
-        if kind == "software":
-            candidates = _generate_ideas_for_software(project, language, seen)
+        # ── Generate candidates ─────────────────────────────────────────────────
+        if next_type == "idea":
+            if kind == "software":
+                candidates = _generate_ideas_for_software(project, language, seen)
+            else:
+                project_md = project / "PROJECT.md"
+                if not project_md.exists():
+                    project_md = SKILL_DIR / "PROJECT.md"
+                questions = _load_inspire_questions(project_md, language)
+                candidates = [
+                    (
+                        f"基于问题「{questions[i % len(questions)]}」审视项目，找到最值得改进的地方并实施",
+                        questions[i % len(questions)],
+                        45,
+                    )
+                    for i in range(min(3, len(questions)))
+                ]
         else:
-            project_md = project / "PROJECT.md"
-            if not project_md.exists():
-                project_md = SKILL_DIR / "PROJECT.md"
-            questions = _load_inspire_questions(project_md, language)
-            candidates = [
-                (
-                    f"基于问题「{questions[i % len(questions)]}」审视项目，找到最值得改进的地方并实施",
-                    questions[i % len(questions)],
-                    45,
-                )
-                for i in range(min(3, len(questions)))
-            ]
-    else:
-        generator = IMPROVE_GENERATORS.get(kind, IMPROVE_GENERATORS["generic"])
-        candidates = generator(project, language, seen)
+            generator = IMPROVE_GENERATORS.get(kind, IMPROVE_GENERATORS["generic"])
+            candidates = generator(project, language, seen)
 
-    # ── No candidate found ─────────────────────────────────────────────────
-    if not candidates:
-        return {
-            "generated": next_type,
-            "content": "(no candidate)",
-            "score": 0,
-            "detail": "",
-            "source": "",
-            "improves_since_last_idea": _get_improves_since_idea(heartbeat),
+        # ── No candidate found ─────────────────────────────────────────────────
+        if not candidates:
+            return {
+                "generated": next_type,
+                "content": "(no candidate)",
+                "score": 0,
+                "detail": "",
+                "source": "",
+                "improves_since_last_idea": _get_improves_since_idea(heartbeat),
+            }
+
+        # ── Pick best candidate (highest score, first if tie) ───────────────────
+        best_text, best_detail, best_score = max(candidates, key=lambda x: x[2])
+
+        # ── Set source ─────────────────────────────────────────────────────────
+        if next_type == "idea":
+            source = f"inspire: {best_detail}"
+        else:
+            activity = _get_recent_git_activity(project, n=5)
+            module_name = activity[0][0] if activity else "project"
+            source = f"git: {module_name}"
+
+        # ── Build queue row ─────────────────────────────────────────────────────
+        created = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        type_label = "idea" if next_type == "idea" else "improve"
+        prefix = "[[Idea]]" if next_type == "idea" else "[[Improve]]"
+        new_row = {
+            "type": type_label,
+            "score": str(best_score),
+            "content": _sanitize_cell(f"{prefix} {best_text}"),
+            "detail": _sanitize_cell(best_text),
+            "source": _sanitize_cell(source),
+            "status": "pending",
+            "created": created,
         }
 
-    # ── Pick best candidate (highest score, first if tie) ───────────────────
-    best_text, best_detail, best_score = max(candidates, key=lambda x: x[2])
-
-    # ── Set source ─────────────────────────────────────────────────────────
-    if next_type == "idea":
-        source = f"inspire: {best_detail}"
-    else:
-        activity = _get_recent_git_activity(project, n=5)
-        module_name = activity[0][0] if activity else "project"
-        source = f"git: {module_name}"
-
-    # ── Build queue row ─────────────────────────────────────────────────────
-    created = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    type_label = "idea" if next_type == "idea" else "improve"
-    prefix = "[[Idea]]" if next_type == "idea" else "[[Improve]]"
-    new_row = {
-        "type": type_label,
-        "score": str(best_score),
-        "content": _sanitize_cell(f"{prefix} {best_text}"),
-        "detail": _sanitize_cell(best_text),
-        "source": _sanitize_cell(source),
-        "status": "pending",
-        "created": created,
-    }
-
-    # ── Read, replace same-type rows, append, sort, write ──────────────────
-    rows = _read_queue_rows(heartbeat)
-    rows = [r for r in rows if r.get("type", "").strip().lower() != next_type]
-    rows.append(new_row)
-    rows.sort(
-        key=lambda r: (
-            0 if r.get("status", "").strip().lower() == "pending" else 1,
-            -int(r.get("score", "0") or 0),
-            r.get("created", ""),
+        # ── Read, replace same-type rows, append, sort, write ──────────────────
+        rows = _read_queue_rows(heartbeat)
+        rows = [r for r in rows if r.get("type", "").strip().lower() != next_type]
+        rows.append(new_row)
+        rows.sort(
+            key=lambda r: (
+                0 if r.get("status", "").strip().lower() == "pending" else 1,
+                -int(r.get("score", "0") or 0),
+                r.get("created", ""),
+            )
         )
-    )
-    _write_queue_rows(heartbeat, rows)
+        _write_queue_rows(heartbeat, rows)
 
-    # ── Update alternation counter in Run Status ──────────────────────────
-    # Counter = how many improves have been GENERATED since last idea.
-    # Increment AFTER generation so the NEXT _decide_next_type call sees
-    # the correct count and flips at exactly 2.
-    #
-    # Semantics per cycle:
-    #   - Generate idea → counter=0 (new streak starts; next call sees
-    #     last_type=idea → improve, counter stays 0)
-    #   - Generate improve → counter=1 (one improve in flight; next call
-    #     sees last_type=improve, counter bumps to 2 → flip to idea)
-    #
-    # Ratio: 2 improves per idea ✓
-    current = _get_improves_since_idea(heartbeat)
-    new_counter = (current + 1) if next_type == "improve" else 0
-    _set_improves_since_idea(heartbeat, new_counter)
-    _set_last_generated_content(heartbeat, best_text)
+        # ── Update alternation counter in Run Status ──────────────────────────
+        # Counter = how many improves have been GENERATED since last idea.
+        # Increment AFTER generation so the NEXT _decide_next_type call sees
+        # the correct count and flips at exactly 2.
+        #
+        # Semantics per cycle:
+        #   - Generate idea → counter=0 (new streak starts; next call sees
+        #     last_type=idea → improve, counter stays 0)
+        #   - Generate improve → counter=1 (one improve in flight; next call
+        #     sees last_type=improve, counter bumps to 2 → flip to idea)
+        #
+        # Ratio: 2 improves per idea ✓
+        current = _get_improves_since_idea(heartbeat)
+        new_counter = (current + 1) if next_type == "improve" else 0
+        _set_improves_since_idea(heartbeat, new_counter)
+        _set_last_generated_content(heartbeat, best_text)
 
-    return {
-        "generated": next_type,
-        "content": best_text,
-        "score": best_score,
-        "detail": best_detail,
-        "source": source,
-        "improves_since_last_idea": new_counter,
-    }
+        return {
+            "generated": next_type,
+            "content": best_text,
+            "score": best_score,
+            "detail": best_detail,
+            "source": source,
+            "improves_since_last_idea": new_counter,
+        }
 
 
 # ── CLI ─────────────────────────────────────────────────────────────────────

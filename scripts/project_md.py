@@ -59,17 +59,31 @@ def detect_version(project: Path) -> str:
 
 
 def detect_tech_stack(project: Path, kind: str) -> str:
-    files = {p.name for p in _walk_files(project)}
+    # Walk once and collect all relevant data
+    all_files = list(_walk_files(project))
+    files = {p.name for p in all_files}
     dirs = {p.name for p in project.iterdir() if p.is_dir()} if project.exists() else set()
+
+    # Pre-filter files by suffix to avoid repeated walking
+    py_files = [p for p in all_files if p.suffix == ".py"]
+    config_files = [p for p in all_files if p.suffix in {".py", ".toml", ".yaml", ".yml"}]
+
+    # Cache file contents to avoid repeated reads
+    content_cache: dict[Path, str] = {}
+    def get_content(p: Path) -> str:
+        if p not in content_cache:
+            content_cache[p] = p.read_text(encoding="utf-8", errors="ignore").lower()
+        return content_cache[p]
+
     stack: list[str] = []
     if kind == "software":
-        if "pyproject.toml" in files or any(p.suffix == ".py" for p in _walk_files(project)):
+        if "pyproject.toml" in files or any(p.suffix == ".py" for p in all_files):
             stack.append("Python")
-        if any("typer" in p.read_text(encoding="utf-8", errors="ignore").lower() for p in _walk_files(project) if p.suffix == ".py"):
+        if any("typer" in get_content(p) for p in py_files):
             stack.append("Typer")
-        if any("sqlalchemy" in p.read_text(encoding="utf-8", errors="ignore").lower() for p in _walk_files(project) if p.suffix == ".py"):
+        if any("sqlalchemy" in get_content(p) for p in py_files):
             stack.append("SQLAlchemy")
-        if any("sqlite" in p.read_text(encoding="utf-8", errors="ignore").lower() for p in _walk_files(project) if p.suffix in {".py", ".toml", ".yaml", ".yml"}):
+        if any("sqlite" in get_content(p) for p in config_files):
             stack.append("SQLite")
         if "package.json" in files:
             stack.append("Node.js")
@@ -187,8 +201,8 @@ def architecture_block(project: Path, kind: str, lang: str) -> str:
     return "```\nproject root\n└── content organized by project type\n```"
 
 
-def render_project_md(project: Path, repo: str | None = None, language: str = "zh") -> str:
-    kind = detect_project_type(project)
+def render_project_md(project: Path, repo: str | None = None, language: str = "zh", project_type: str | None = None) -> str:
+    kind = project_type if project_type is not None else detect_project_type(project)
     repo = repo or detect_repo(project)
     version = detect_version(project)
     stack = detect_tech_stack(project, kind)
@@ -325,8 +339,8 @@ def render_project_md(project: Path, repo: str | None = None, language: str = "z
     return "\n".join(lines)
 
 
-def generate_project_md(project: Path, output: Path, language: str = "zh", repo: str | None = None) -> None:
-    output.write_text(render_project_md(project, repo=repo, language=language), encoding="utf-8")
+def generate_project_md(project: Path, output: Path, language: str = "zh", repo: str | None = None, project_type: str | None = None) -> None:
+    output.write_text(render_project_md(project, repo=repo, language=language, project_type=project_type), encoding="utf-8")
 
 
 def main() -> int:

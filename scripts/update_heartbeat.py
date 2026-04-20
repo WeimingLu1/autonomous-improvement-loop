@@ -31,6 +31,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from file_lock import lock_file
+
 HERE = Path(__file__).parent.resolve()
 SKILL_DIR = HERE.parent
 
@@ -125,108 +127,130 @@ def _update_heartbeat(
     language: str,
 ) -> None:
     """Perform all post-task HEARTBEAT updates atomically."""
-    content = heartbeat.read_text(encoding="utf-8")
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with lock_file(heartbeat):
+        content = heartbeat.read_text(encoding="utf-8")
+        ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # ── 1. Mark target task as done ──────────────────────────────────────────
-    all_rows = _parse_all_queue_rows(content)
-    if not all_rows:
-        print("WARNING: no queue rows found", file=sys.stderr)
+        # ── 1. Mark target task as done ──────────────────────────────────────────
+        all_rows = _parse_all_queue_rows(content)
+        if not all_rows:
+            print("WARNING: no queue rows found", file=sys.stderr)
 
-    # Find target row
-    target_idx: int | None = None
-    if task_num is not None:
-        for i, row in enumerate(all_rows):
-            if row["num"] == str(task_num) and row["status"].lower() == "pending":
-                target_idx = i
-                break
-    if target_idx is None:
-        # Default: first pending row
-        for i, row in enumerate(all_rows):
-            if row["status"].lower() == "pending":
-                target_idx = i
-                break
+        # Find target row
+        target_idx: int | None = None
+        if task_num is not None:
+            for i, row in enumerate(all_rows):
+                if row["num"] == str(task_num) and row["status"].lower() == "pending":
+                    target_idx = i
+                    break
+        if target_idx is None:
+            # Default: first pending row
+            for i, row in enumerate(all_rows):
+                if row["status"].lower() == "pending":
+                    target_idx = i
+                    break
 
-    if target_idx is not None:
-        all_rows[target_idx]["status"] = "done" if result == "pass" else "skip"
-        print(
-            f"Marked row {all_rows[target_idx]['num']} as {all_rows[target_idx]['status']}: "
-            f"{all_rows[target_idx]['content'][:50]}"
+        if target_idx is not None:
+            all_rows[target_idx]["status"] = "done" if result == "pass" else "skip"
+            print(
+                f"Marked row {all_rows[target_idx]['num']} as {all_rows[target_idx]['status']}: "
+                f"{all_rows[target_idx]['content'][:50]}"
+            )
+        else:
+            print("No pending task found to mark as done")
+
+        new_block = _render_queue_block(all_rows)
+        content = _replace_all_queue_sections(content, new_block)
+
+        # ── 2. Append Done Log entry ─────────────────────────────────────────────
+        done_entry = f"| {ts} | {commit} | {task} | {result} |\n"
+        # Match the entire Done Log section: header + all rows (not just first two)
+        dl_section_match = re.search(r"(\n## Done Log\n\n((?:\|[^\n]+\n)*))", content)
+        if dl_section_match:
+            # Within the section, find the last row to insert after it
+            rows_content = dl_section_match.group(2)  # all rows (without header/newlines)
+            last_row_match = re.search(r"\|[^\n]+\n", rows_content)
+            if last_row_match:
+                insert_pos = dl_section_match.start() + last_row_match.end()
+                content = content[:insert_pos] + done_entry + content[insert_pos:]
+        else:
+            print("WARNING: Done Log section not found, appending after Run Status", file=sys.stderr)
+            rs_match = re.search(r"(\n## Run Status\n)", content)
+            if rs_match:
+                content = content[:rs_match.start()] + "\n## Done Log\n\n| Time | Commit | Task | Result |\n|------|--------|------|--------|\n" + done_entry + content[rs_match.start():]
+
+        # ── 3. Update Run Status ─────────────────────────────────────────────────
+        content = re.sub(
+            r"(\| last_run_time \|) [^|]+ (\|)",
+            f"\\1 {ts} \\2", content
         )
-    else:
-        print("No pending task found to mark as done")
-
-    new_block = _render_queue_block(all_rows)
-    content = _replace_all_queue_sections(content, new_block)
-
-    # ── 2. Append Done Log entry ─────────────────────────────────────────────
-    done_entry = f"| {ts} | {commit} | {task} | {result} |\n"
-    dl_match = re.search(r"(\n## Done Log\n\n\| Time \|[^\n]+\n)(\|[^\n]+\n)", content)
-    if dl_match:
-        content = content[:dl_match.end()] + done_entry + content[dl_match.end():]
-    else:
-        print("WARNING: Done Log section not found, appending after Run Status", file=sys.stderr)
-        rs_match = re.search(r"(\n## Run Status\n)", content)
-        if rs_match:
-            content = content[:rs_match.start()] + "\n## Done Log\n\n| Time | Commit | Task | Result |\n|------|--------|------|--------|\n" + done_entry + content[rs_match.start():]
-
-    # ── 3. Update Run Status ─────────────────────────────────────────────────
-    content = re.sub(
-        r"(\| last_run_time \|) [^|]+ (\|)",
-        f"\\1 {ts} \\2", content
-    )
-    content = re.sub(
-        r"(\| last_run_commit \|) [^|]+ (\|)",
-        f"\\1 {commit} \\2", content
-    )
-    content = re.sub(
-        r"(\| last_run_result \|) [^|]+ (\|)",
-        f"\\1 {result} \\2", content
-    )
-    content = re.sub(
-        r"(\| last_run_task \|) [^\|]+ (\|)",
-        f"\\1 {task} \\2", content
-    )
-    content = re.sub(
-        r"(\| cron_lock \|) [^|]+ (\|)",
-        r"\1 false \2", content
-    )
-
-    heartbeat.write_text(content, encoding="utf-8")
-    print(f"Run Status updated, cron_lock released")
-
-    # ── 4. Rebuild rolling queue ────────────────────────────────────────────
-    # inspire_scanner.py refreshes the non-user queue from the latest project
-    # snapshot, keeping a rolling backlog with a 2 Improve : 1 Idea ratio.
-    project = project.expanduser().resolve()
-    heartbeat_p = heartbeat
-    try:
-        from inspire_scanner import refresh_inspire_queue
-        result = refresh_inspire_queue(
-            project=project,
-            heartbeat=heartbeat_p,
-            language=language,
-            target_size=min_queue,
+        content = re.sub(
+            r"(\| last_run_commit \|) [^|]+ (\|)",
+            f"\\1 {commit} \\2", content
         )
-        print(f"Queue rebuilt: {result['generated']}/{result['target_size']} item(s)")
-        print(f"Queue types: {' → '.join(result['types'])}")
-    except Exception as e:
-        print(f"WARNING: inspire scan failed: {e}", file=sys.stderr)
+        content = re.sub(
+            r"(\| last_run_result \|) [^|]+ (\|)",
+            f"\\1 {result} \\2", content
+        )
+        content = re.sub(
+            r"(\| last_run_task \|) [^\|]+ (\|)",
+            f"\\1 {task} \\2", content
+        )
+        content = re.sub(
+            r"(\| cron_lock \|) [^|]+ (\|)",
+            r"\1 false \2", content
+        )
 
-    # ── 6. Rebuild PROJECT.md ───────────────────────────────────────────────
-    try:
-        from project_md import generate_project_md
+        heartbeat.write_text(content, encoding="utf-8")
+        print(f"Run Status updated, cron_lock released")
 
-        generate_project_md(project, SKILL_DIR / "PROJECT.md", language=language)
-        print("PROJECT.md rebuilt from current project snapshot")
-    except Exception as e:
-        print(f"WARNING: PROJECT.md rebuild failed: {e}", file=sys.stderr)
+        # ── 4. Rebuild rolling queue ────────────────────────────────────────────
+        # inspire_scanner.py refreshes the non-user queue from the latest project
+        # snapshot, keeping a rolling backlog with a 2 Improve : 1 Idea ratio.
+        project = project.expanduser().resolve()
+        heartbeat_p = heartbeat
+        try:
+            from inspire_scanner import refresh_inspire_queue
+            result = refresh_inspire_queue(
+                project=project,
+                heartbeat=heartbeat_p,
+                language=language,
+                target_size=min_queue,
+            )
+            print(f"Queue rebuilt: {result['generated']}/{result['target_size']} item(s)")
+            print(f"Queue types: {' → '.join(result['types'])}")
+        except Exception as e:
+            print(f"WARNING: inspire scan failed: {e}", file=sys.stderr)
 
-    # ── 7. Done ──────────────────────────────────────────────────────────────
-    print(f"\nHEARTBEAT update complete: {ts}")
+        # ── 6. Rebuild PROJECT.md ───────────────────────────────────────────────
+        try:
+            from project_md import generate_project_md
+            from project_insights import detect_project_type
+
+            project_type = detect_project_type(project)
+            generate_project_md(project, SKILL_DIR / "PROJECT.md", language=language, project_type=project_type)
+            print("PROJECT.md rebuilt from current project snapshot")
+        except Exception as e:
+            print(f"WARNING: PROJECT.md rebuild failed: {e}", file=sys.stderr)
+
+        # ── 7. Done ──────────────────────────────────────────────────────────────
+        print(f"\nHEARTBEAT update complete: {ts}")
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
+
+def _read_config_heartbeat() -> Path | None:
+    """Read heartbeat_path from config.md if set."""
+    config_path = SKILL_DIR / "config.md"
+    if not config_path.exists():
+        return None
+    for line in config_path.read_text(encoding="utf-8").splitlines():
+        if line.strip().startswith("heartbeat_path:"):
+            value = line.split(":", 1)[1].strip()
+            if value:
+                return Path(value)
+    return None
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -234,8 +258,8 @@ def main() -> int:
         "Automatically marks task done, appends Done Log, refreshes queue, "
         "and releases cron_lock."
     )
-    parser.add_argument("--heartbeat", required=True, type=Path,
-                        help="Path to HEARTBEAT.md")
+    parser.add_argument("--heartbeat", required=False, type=Path,
+                        help="Path to HEARTBEAT.md (default: from config.md or SKILL_DIR/HEARTBEAT.md)")
     parser.add_argument("--project", required=True, type=Path,
                         help="Path to the project being improved")
     parser.add_argument("--commit", required=True,
@@ -252,6 +276,12 @@ def main() -> int:
                         help="Project/output language (default: en)")
 
     args = parser.parse_args()
+
+    # Resolve heartbeat path: CLI arg -> config.md -> SKILL_DIR/HEARTBEAT.md
+    if args.heartbeat is None:
+        args.heartbeat = _read_config_heartbeat()
+    if args.heartbeat is None:
+        args.heartbeat = SKILL_DIR / "HEARTBEAT.md"
 
     if not args.heartbeat.exists():
         print(f"ERROR: HEARTBEAT not found: {args.heartbeat}", file=sys.stderr)

@@ -20,6 +20,8 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from file_lock import lock_file
+
 BLOCK_RE = re.compile(r"## Run Status\n\n>[\s\S]*?\n---\n", re.MULTILINE)
 
 
@@ -86,8 +88,9 @@ def ensure_block(content: str) -> str:
 
 
 def read_status(heartbeat: Path) -> dict[str, str]:
-    content = ensure_block(heartbeat.read_text(encoding="utf-8"))
-    status = extract_status(content)
+    with lock_file(heartbeat):
+        content = ensure_block(heartbeat.read_text(encoding="utf-8"))
+        status = extract_status(content)
     for key, value in status.items():
         print(f"{key}={value}")
     return status
@@ -101,21 +104,22 @@ def write_status(
     cron_lock: str = "unchanged",
     mode: str = "unchanged",
 ) -> None:
-    content = ensure_block(heartbeat.read_text(encoding="utf-8"))
-    status = extract_status(content)
-    current_cron_lock = status.get("cron_lock", "false")
-    resolved_cron_lock = current_cron_lock if cron_lock == "unchanged" else cron_lock
-    current_mode = status.get("mode", "normal")
-    resolved_mode = current_mode if mode == "unchanged" else mode
-    new_block = render_block(
-        now_shanghai(), commit, result, task, resolved_cron_lock, resolved_mode
-    )
-    updated = (
-        BLOCK_RE.sub(new_block, content, count=1)
-        if BLOCK_RE.search(content)
-        else new_block + "\n" + content
-    )
-    heartbeat.write_text(updated, encoding="utf-8")
+    with lock_file(heartbeat):
+        content = ensure_block(heartbeat.read_text(encoding="utf-8"))
+        status = extract_status(content)
+        current_cron_lock = status.get("cron_lock", "false")
+        resolved_cron_lock = current_cron_lock if (cron_lock == "unchanged" or cron_lock is None) else cron_lock
+        current_mode = status.get("mode", "normal")
+        resolved_mode = current_mode if (mode == "unchanged" or mode is None) else mode
+        new_block = render_block(
+            now_shanghai(), commit, result, task, resolved_cron_lock, resolved_mode
+        )
+        updated = (
+            BLOCK_RE.sub(new_block, content, count=1)
+            if BLOCK_RE.search(content)
+            else new_block + "\n" + content
+        )
+        heartbeat.write_text(updated, encoding="utf-8")
     print(f"Run Status updated: commit={commit} result={result} mode={resolved_mode}")
 
 
@@ -128,7 +132,7 @@ def main() -> int:
     subparsers.add_parser("read")
     write_parser = subparsers.add_parser("write")
     write_parser.add_argument("--commit", required=True)
-    write_parser.add_argument("--result", required=True, choices=["pass", "fail"])
+    write_parser.add_argument("--result", required=True, choices=["pass", "fail", "unverified"])
     write_parser.add_argument("--task", required=True)
     write_parser.add_argument("--cron-lock", choices=["true", "false"])
     write_parser.add_argument("--mode", choices=["bootstrap", "normal"])
