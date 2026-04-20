@@ -167,12 +167,22 @@ def _update_heartbeat(
         # Match the entire Done Log section: header + all rows (not just first two)
         dl_section_match = re.search(r"(\n## Done Log\n\n((?:\|[^\n]+\n)*))", content)
         if dl_section_match:
-            # Within the section, find the last row to insert after it
+            # Within the section, find the LAST actual data row (skip header separator)
             rows_content = dl_section_match.group(2)  # all rows (without header/newlines)
-            last_row_match = re.search(r"\|[^\n]+\n", rows_content)
-            if last_row_match:
-                insert_pos = dl_section_match.start() + last_row_match.end()
-                content = content[:insert_pos] + done_entry + content[insert_pos:]
+            all_rows_in_section = re.findall(r"\|[^\n]+\n", rows_content)
+            if all_rows_in_section:
+                # Last row might be the separator; if so use the one before it
+                last_row_text = all_rows_in_section[-1]
+                if all_rows_in_section[-1].startswith("|------"):
+                    last_row_text = all_rows_in_section[-2] if len(all_rows_in_section) > 1 else all_rows_in_section[-1]
+                last_row_match = re.search(re.escape(last_row_text), rows_content)
+                if last_row_match:
+                    insert_pos = dl_section_match.start() + last_row_match.end()
+                    content = content[:insert_pos] + done_entry + content[insert_pos:]
+                else:
+                    print("WARNING: could not locate last Done Log row", file=sys.stderr)
+            else:
+                print("WARNING: no Done Log rows found", file=sys.stderr)
         else:
             print("WARNING: Done Log section not found, appending after Run Status", file=sys.stderr)
             rs_match = re.search(r"(\n## Run Status\n)", content)
