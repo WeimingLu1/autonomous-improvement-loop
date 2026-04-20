@@ -1111,7 +1111,8 @@ def cmd_start() -> None:
                --result pass \
                --task "<task description>" \
                --language {project_language} \
-               --min-queue 5
+               --task-num 1 \
+               --min-queue 6
         6. Send a concise final summary (commit, result, next item).
 
         IMPORTANT: Do NOT manually edit HEARTBEAT.md. Use update_heartbeat.py for all post-task updates.

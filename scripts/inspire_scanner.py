@@ -871,6 +871,31 @@ def _read_done_log_tasks(heartbeat_path: Path) -> list[str]:
     return [task.strip() for task in re.findall(r"\|\s*\d{4}-\d{2}-\d{2}[^|]*?\s*\|\s*`?[a-f0-9]+`?\s*\|\s*([^|]+?)\s*\|", m.group(0))]
 
 
+def _is_duplicate_of_done_log(content: str, done_log_tasks: list[str]) -> bool:
+    """Check if content is already recorded in Done Log as a completed task.
+
+    Uses two strategies:
+    1. Exact normalized match (Content field stored verbatim in Done Log)
+    2. Prefix match — if Done Log entry starts with content (agent appended
+       execution notes in parentheses), they refer to the same task.
+    Requires content >= 15 chars to use prefix match (avoids false positives).
+    """
+    if len(content) < 8:
+        return False
+    content_norm = _normalize_text(content)
+    for task in done_log_tasks:
+        task_norm = _normalize_text(task)
+        # Strategy 1: exact normalized match
+        if content_norm == task_norm:
+            return True
+        # Strategy 2: content is a prefix of done task (execution notes appended
+        # in parentheses after the original task description, e.g.
+        # "添加交互式 health interactive 命令（已于 f73d5a3 实现...）")
+        if len(content) >= 15 and task.startswith(content.strip().replace("`", "")):
+            return True
+    return False
+
+
 def _count_trailing_improves_since_last_idea(heartbeat_path: Path) -> int:
     count = 0
     for task in reversed(_read_done_log_tasks(heartbeat_path)):
@@ -954,7 +979,8 @@ def refresh_inspire_queue(
     user_rows = [row for row in existing_rows if row.get("type", "").strip().lower() == "user"]
 
     seen: set[str] = {_normalize_text(row.get("content", "")) for row in user_rows}
-    seen.update(_normalize_text(task) for task in _read_done_log_tasks(heartbeat))
+    done_tasks = _read_done_log_tasks(heartbeat)
+    seen.update(_normalize_text(task) for task in done_tasks)
 
     last_type = _get_last_done_type(heartbeat)
     counter = _count_trailing_improves_since_last_idea(heartbeat)
@@ -972,7 +998,20 @@ def refresh_inspire_queue(
                 break
             next_type = alt_type
 
-        best_text, best_detail, best_score = max(candidates, key=lambda x: x[2])
+        # Pick the best non-duplicate candidate
+        best_text, best_detail, best_score = None, None, None
+        for cand_text, cand_detail, cand_score in sorted(candidates, key=lambda x: -x[2]):
+            if _is_duplicate_of_done_log(cand_text, done_tasks):
+                continue
+            best_text, best_detail, best_score = cand_text, cand_detail, cand_score
+            break
+
+        if best_text is None:
+            # All candidates are duplicates of done items — advance alternation state
+            # and try to fill the slot with the alternate type next time
+            last_type, counter = _advance_alternation_state(last_type, counter, next_type)
+            continue
+
         source = f"inspire: {best_detail}" if next_type == "idea" else "rolling-refresh"
         prefix = "[[Idea]]" if next_type == "idea" else "[[Improve]]"
         generated_rows.append(
