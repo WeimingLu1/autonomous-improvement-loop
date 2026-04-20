@@ -362,9 +362,14 @@ def detect_pytest_available() -> bool:
 
 
 def detect_any_test_command(project: Path) -> tuple[bool, str]:
-    """Detect whether a runnable verification/test command is available."""
+    """Detect whether a runnable verification/test command is available.
+
+    Uses --co -q (collect-only) instead of running tests to avoid subprocess
+    deadlock when pytest forks child processes from the project directory.
+    """
+    python_bin = shutil.which("python3") or "python3"
     runners = [
-        (["python3", "-m", "pytest"], "pytest", None),
+        ([python_bin, "-m", "pytest", "--co", "-q"], "pytest", None),
         (["npm", "test"], "npm test", "npm"),
         (["cargo", "test"], "cargo test", "cargo"),
         (["go", "test", "./..."], "go test ./...", "go"),
@@ -374,7 +379,7 @@ def detect_any_test_command(project: Path) -> tuple[bool, str]:
         if binary and shutil.which(binary) is None:
             continue
         try:
-            r = run(cmd, cwd=project, timeout=10)
+            r = run(cmd, cwd=project, timeout=15)
         except FileNotFoundError:
             continue
         if r.returncode in (0, 1):
