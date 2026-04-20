@@ -16,7 +16,7 @@
 
 | Field | Value |
 |-------|-------|
-| last_run_time | 2026-04-20T17:36:45Z |
+| last_run_time | 2026-04-21T17:59:00Z |
 | last_run_commit | 6d2485815d69cd3e8d342063f91e32294ccfe47b |
 | last_run_result | pass |
 | last_run_task | 为关键用户流程增加集成测试，确保真实 CLI 调用链在重构后仍然稳定 |
