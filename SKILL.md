@@ -129,6 +129,9 @@ Users insert tasks via message → directly written to HEARTBEAT.md Queue with s
 ## Scripts Reference
 
 ```
+# Bump version (run BEFORE git commit to include VERSION in same commit)
+python bump_version.py --path . [--commit]
+
 # Scan once, append best candidate
 python project_insights.py --project . --heartbeat HEARTBEAT.md --language en
 
