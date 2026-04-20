@@ -3,20 +3,20 @@
 > Fill in this file after installing the skill to bind it to your project.
 
 ## Project
-project_path: /path/to/your/project
+project_path: /Users/weiminglu/Projects/autonomous-improvement-loop
 project_kind: software   # software | writing | video | research | generic
 
 ## GitHub Repository
-repo: https://github.com/YOUR_USERNAME/YOUR_REPO
+repo: https://github.com/WeimingLu1/autonomous-improvement-loop
 
 ## OpenClaw Agent ID
-agent_id: YOUR_AGENT_ID
+agent_id: mia
 
 ## Telegram Chat ID
-chat_id: YOUR_CHAT_ID
+chat_id: 5535183090
 
 ## Project Language
-project_language: en   # "en" = English, "zh" = Chinese
+project_language: zh
 
 ## Queue
 min_queue_items: 6
