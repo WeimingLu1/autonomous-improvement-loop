@@ -24,3 +24,7 @@ env/
 
 # Local working files (not pushed to GitHub / ClawHub)
 .do_scan_cache/
+
+# Private runtime files (contain chat_id, agent_id, project-specific state)
+HEARTBEAT.md
+config.md
