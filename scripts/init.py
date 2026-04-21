@@ -1045,11 +1045,9 @@ def cmd_start() -> None:
         5. At the END of your response, output this line on its own line to record the result:
            `python3 {HERE / 'init.py'} a-trigger --force`
 
-        Example response format:
-          "Done. Implemented feature X, ran tests, all pass. Commit abc123."
+        Example response:
+          Done. Implemented feature X, ran tests, all pass. Commit abc123.
           python3 {HERE / 'init.py'} a-trigger --force
-
-        IMPORTANT: You ARE the execution layer. Do the work first, then output the a-trigger command as the last line of your response so it runs in THIS session.
         """
     ).strip()
 
@@ -1531,24 +1529,51 @@ def cmd_trigger(force: bool = False) -> None:
         fail("ROADMAP.md not found. Run a-plan first.")
         sys.exit(1)
 
+    # Check if we're already running inside a cron session (no recursion)
+    if os.environ.get("OPENCLAW_CRON_SESSION") == "1":
+        _record_result_only(project, roadmap_path, force)
+        return
+
+    # Spawn cron session to execute — blocks until cron session finishes
+    config = read_current_config()
+    cron_job_id = config.get("cron_job_id", "").strip()
+    if not cron_job_id:
+        fail("No cron job configured. Run a-start first.")
+        sys.exit(1)
+
+    cron_timeout = config.get("cron_timeout", str(DEFAULT_TIMEOUT_S)).strip()
+    try:
+        timeout_ms = str(int(int(cron_timeout) * 1000))
+    except ValueError:
+        timeout_ms = str(DEFAULT_TIMEOUT_S * 1000)
+
+    step(f"Starting cron session: {cron_job_id}")
+    r = run(
+        ["openclaw", "cron", "run", cron_job_id, "--expect-final", "--timeout", timeout_ms],
+        timeout=int(cron_timeout) + 10,
+        env={**os.environ, "OPENCLAW_CRON_SESSION": "1"},
+    )
+    if r.returncode != 0:
+        fail(f"Cron session failed: {r.stderr.strip() or r.stdout.strip() or 'unknown error'}")
+        sys.exit(1)
+    ok("Cron session completed")
+
+
+def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
+    """Record task result — called from within a cron session."""
     from scripts.roadmap import load_roadmap, append_done_log, set_current_task, CurrentTask
     roadmap = load_roadmap(roadmap_path)
     if not roadmap.current_task:
-        fail("No current task found. Run a-plan first.")
+        fail("No current task found.")
         sys.exit(1)
 
     current = roadmap.current_task
-    # If already doing and --force: assume cron/Mia is recording post-execution (don't re-execute)
-    if current.status == "doing" and force:
-        ok(f"[{current.task_id}] already executing — recording result without re-execution")
-        exec_ok, exec_msg = True, "result recorded from prior execution"
-    elif current.status == "doing" and not force:
-        warn("Current task is already doing. Use --force to re-run.")
+    if current.status == "doing" and not force:
+        warn(f"Current task {current.task_id} is already doing. Use --force to re-record.")
         sys.exit(1)
-    else:
-        # Plan validated — real execution is done by Mia in her session before calling a-trigger
-        ok(f"Recording result for {current.task_id}: {current.title}")
-        exec_ok, exec_msg = _execute_task_plan(project, current)
+
+    ok(f"Recording result for {current.task_id}: {current.title}")
+    exec_ok, exec_msg = _execute_task_plan(project, current)
 
     commit = _git_head_short(project)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
