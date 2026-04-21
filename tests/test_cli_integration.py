@@ -217,18 +217,20 @@ def test_scan_triggers_inspire_scanner():
 
 
 def test_config_set_updates_value():
-    """a-config set updates a config value and exits 0."""
-    hb_path = PROJECT / "config.md"
-    original = hb_path.read_text(encoding="utf-8")
+    """a-config set updates the persistent config value and exits 0."""
+    cfg_path = Path.home() / ".openclaw" / "skills-config" / "autonomous-improvement-loop" / "config.md"
+    original = cfg_path.read_text(encoding="utf-8") if cfg_path.exists() else None
     try:
         result = _run(["a-config", "set", "project_language", "en"])
         assert result.returncode == 0, f"a-config set failed: {result.stderr}"
 
-        content = hb_path.read_text(encoding="utf-8")
-        # Verify the config was updated (look for project_language: en)
+        content = cfg_path.read_text(encoding="utf-8")
         assert "project_language: en" in content or "project_language=en" in content
     finally:
-        hb_path.write_text(original, encoding="utf-8")
+        if original is None:
+            cfg_path.unlink(missing_ok=True)
+        else:
+            cfg_path.write_text(original, encoding="utf-8")
 
 
 def test_status_shows_project_info():

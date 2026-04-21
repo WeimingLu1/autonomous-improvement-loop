@@ -83,7 +83,30 @@ from zoneinfo import ZoneInfo
 HERE = Path(__file__).parent.resolve()
 SKILL_DIR = HERE.parent
 HEARTBEAT = SKILL_DIR / "HEARTBEAT.md"
-CONFIG_FILE = SKILL_DIR / "config.md"
+# Persistent config location — OUTSIDE the skill dir so clawhub update won't wipe it.
+# Main session and cron agent both share ~/.openclaw so this path is accessible to both.
+CONFIG_FILE = Path.home() / ".openclaw" / "skills-config" / "autonomous-improvement-loop" / "config.md"
+
+# ── Config path helpers ────────────────────────────────────────────────────────
+
+def _config_template() -> Path:
+    """Path to the skill's template config (shipped with the package)."""
+    return SKILL_DIR / "config.md"
+
+
+def read_current_config() -> dict[str, str]:
+    """Read existing config values. Falls back to template if persistent config missing."""
+    conf_file = CONFIG_FILE if CONFIG_FILE.exists() else _config_template()
+    if not conf_file.exists():
+        return {}
+    text = read_file(conf_file)
+    result = {}
+    for line in text.splitlines():
+        m = re.match(r"^(\w[\w_]*):\s*(.+)$", line.strip())
+        if m:
+            value = re.sub(r"\s+#.*$", "", m.group(2)).strip()
+            result[m.group(1)] = value
+    return result
 
 DEFAULT_SCHEDULE_MS = 30 * 60 * 1000   # 30 min
 DEFAULT_TIMEOUT_S = 3600                # 1 hour
@@ -139,6 +162,7 @@ def read_file(p: Path) -> str:
 
 
 def write_file(p: Path, content: str) -> None:
+    p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding="utf-8")
 
 
@@ -311,8 +335,9 @@ def detect_openclaw_agent_id() -> str | None:
 
     workspace = Path.home() / ".openclaw"
     # Fallback: existing config in this skill
-    if CONFIG_FILE.exists():
-        m = re.search(r"^agent_id:\s*([^#\n]+)", read_file(CONFIG_FILE), re.MULTILINE)
+    conf = CONFIG_FILE if CONFIG_FILE.exists() else _config_template()
+    if conf.exists():
+        m = re.search(r"^agent_id:\s*([^#\n]+)", read_file(conf), re.MULTILINE)
         if m:
             return m.group(1).strip()
 
@@ -333,8 +358,9 @@ def detect_openclaw_agent_id() -> str | None:
 
 def detect_telegram_chat_id() -> str | None:
     """Read chat_id from existing config.md."""
-    if CONFIG_FILE.exists():
-        m = re.search(r"chat_id:\s*(\d+)", read_file(CONFIG_FILE))
+    conf = CONFIG_FILE if CONFIG_FILE.exists() else _config_template()
+    if conf.exists():
+        m = re.search(r"chat_id:\s*(\d+)", read_file(conf))
         if m:
             return m.group(1)
     return None
@@ -413,9 +439,10 @@ def detect_gh_authenticated() -> bool:
 
 def _read_kind_from_config() -> str:
     """Try to read project_kind from config.md."""
-    if not CONFIG_FILE.exists():
+    conf = CONFIG_FILE if CONFIG_FILE.exists() else _config_template()
+    if not conf.exists():
         return "generic"
-    for line in CONFIG_FILE.read_text(encoding="utf-8").splitlines():
+    for line in conf.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if line.startswith("project_kind:"):
             val = line.partition(":")[2].strip()
@@ -537,20 +564,6 @@ def write_config(
         agent_id, chat_id, language, cron_job_id, project_kind,
     )
     write_file(CONFIG_FILE, config + "\n")
-
-
-def read_current_config() -> dict[str, str]:
-    """Read existing config values."""
-    if not CONFIG_FILE.exists():
-        return {}
-    text = read_file(CONFIG_FILE)
-    result = {}
-    for line in text.splitlines():
-        m = re.match(r"^(\w[\w_]*):\s*(.+)$", line.strip())
-        if m:
-            value = re.sub(r"\s+#.*$", "", m.group(2)).strip()
-            result[m.group(1)] = value
-    return result
 
 
 # ── Cron management ─────────────────────────────────────────────────────────────
@@ -1580,6 +1593,7 @@ def cmd_trigger(force: bool = False) -> None:
 # ── a_config: get/set config values ─────────────────────────────────────────
 
 def cmd_config(action: str, key: str, value: str | None = None) -> None:
+    conf = CONFIG_FILE if CONFIG_FILE.exists() else _config_template()
     if action == "get":
         step(f"⚙  Config: {key}")
         config = read_current_config()
@@ -1587,11 +1601,14 @@ def cmd_config(action: str, key: str, value: str | None = None) -> None:
         if val:
             ok(f"{key} = {val}")
         else:
-            # Try reading directly from config.md
-            raw = read_file(CONFIG_FILE)
-            m = re.search(rf"^(\s*{re.escape(key)}:\s*)(.*)$", raw, re.MULTILINE)
-            if m:
-                print(f"  {key} = {m.group(2).strip()}")
+            # Try reading directly from config.md (persistent or template)
+            if conf.exists():
+                raw = read_file(conf)
+                m = re.search(rf"^(\s*{re.escape(key)}:\s*)(.*)$", raw, re.MULTILINE)
+                if m:
+                    print(f"  {key} = {m.group(2).strip()}")
+                else:
+                    warn(f"Key '{key}' not found in config.md")
             else:
                 warn(f"Key '{key}' not found in config.md")
     elif action == "set":
@@ -1599,10 +1616,15 @@ def cmd_config(action: str, key: str, value: str | None = None) -> None:
             fail("'set' requires a value argument")
             sys.exit(1)
         step(f"⚙  Config: {key} = {value}")
-        raw = read_file(CONFIG_FILE)
+        # Read from template if persistent doesn't exist yet
+        raw = read_file(conf) if conf.exists() else ""
         if not re.search(rf"^{re.escape(key)}:", raw, re.MULTILINE):
             fail(f"Key '{key}' not found in config.md — cannot set unregistered key")
             sys.exit(1)
+        current_match = re.search(rf"^\s*{re.escape(key)}:\s*(.+)$", raw, re.MULTILINE)
+        if current_match and re.sub(r"\s+#.*$", "", current_match.group(1)).strip() == value:
+            ok(f"Set {key} = {value} (unchanged)")
+            return
         new_raw = re.sub(
             rf"(^\s*{re.escape(key)}:\s*).+$",
             rf"\g<1>{value}",
