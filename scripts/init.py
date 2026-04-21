@@ -1037,15 +1037,19 @@ def cmd_start() -> None:
 
         Project: {project_path or '(unset)'}
 
-        Steps:
-        1. Read ROADMAP: {CONFIG_FILE} and {_ail_roadmap}. If {_ail_project_md} exists, read it too.
+        Your job:
+        1. Read ROADMAP: {CONFIG_FILE} and {_ail_roadmap}
         2. Read current task plan: `.ail/plans/TASK-xxx.md`
-        3. EXECUTE the task described in the plan — implement it, run tests, verify acceptance criteria
-        4. Mark the task as doing (update ROADMAP.md: status=done, commit hash)
-        5. Record result: `python3 {HERE / 'init.py'} a-trigger --force`
-        6. Summarize: what was done, commit SHA, result (pass/fail), next task if any
+        3. EXECUTE the task — implement it, run tests, verify acceptance criteria
+        4. Mark it done and commit your changes
+        5. At the END of your response, output this line on its own line to record the result:
+           `python3 {HERE / 'init.py'} a-trigger --force`
 
-        IMPORTANT: You ARE the execution layer. Read the plan, do the work, then run a-trigger --force to record.
+        Example response format:
+          "Done. Implemented feature X, ran tests, all pass. Commit abc123."
+          python3 {HERE / 'init.py'} a-trigger --force
+
+        IMPORTANT: You ARE the execution layer. Do the work first, then output the a-trigger command as the last line of your response so it runs in THIS session.
         """
     ).strip()
 
