@@ -71,6 +71,39 @@ def _get_rhythm_value(text: str, field: str, default: str = "") -> str:
     return m.group(1).strip() if m else default
 
 
+def _extract_done_log_block(text: str) -> str:
+    match = re.search(r"## Done Log\n\n([\s\S]*)\Z", text)
+    if match:
+        block = match.group(1).strip("\n")
+        if block:
+            return block + "\n"
+    return DONE_LOG_HEADER + "\n|------|---------|------|--------|-------|--------|--------|\n"
+
+
+def _render_roadmap(task: CurrentTask | None, *, next_default_type: str, improves_since_last_idea: int, plan_path: str, reserved_user_task_id: str, done_log_block: str) -> str:
+    current_row = ""
+    if task is not None:
+        current_row = f"| {task.task_id} | {task.task_type} | {task.source} | {task.title} | {task.status} | {task.created} |\n"
+    return (
+        "# Roadmap\n\n"
+        "## Current Task\n\n"
+        f"{CURRENT_TASK_HEADER}\n"
+        "|--------|------|--------|-------|--------|---------|\n"
+        f"{current_row}\n"
+        "## Rhythm State\n\n"
+        "| field | value |\n"
+        "|------|-------|\n"
+        f"| next_default_type | {next_default_type} |\n"
+        f"| improves_since_last_idea | {improves_since_last_idea} |\n"
+        f"| current_plan_path | {plan_path} |\n"
+        f"| reserved_user_task_id | {reserved_user_task_id} |\n\n"
+        "## PM Notes\n\n"
+        "- Roadmap initialized.\n\n"
+        "## Done Log\n\n"
+        f"{done_log_block.rstrip()}\n"
+    )
+
+
 def load_roadmap(path: Path) -> RoadmapState:
     text = path.read_text(encoding="utf-8")
     return RoadmapState(
@@ -82,36 +115,37 @@ def load_roadmap(path: Path) -> RoadmapState:
     )
 
 
-def set_current_task(path: Path, task: CurrentTask, plan_path: str, next_default_type: str, improves_since_last_idea: int, reserved_user_task_id: str = "") -> None:
+def set_current_task(path: Path, task: CurrentTask | None, plan_path: str, next_default_type: str, improves_since_last_idea: int, reserved_user_task_id: str = "") -> None:
     text = path.read_text(encoding="utf-8") if path.exists() else ""
-    current_block = (
-        "## Current Task\n\n"
-        f"{CURRENT_TASK_HEADER}\n"
-        "|--------|------|--------|-------|--------|---------|\n"
-        f"| {task.task_id} | {task.task_type} | {task.source} | {task.title} | {task.status} | {task.created} |\n\n"
+    done_log_block = _extract_done_log_block(text)
+    path.write_text(
+        _render_roadmap(
+            task,
+            next_default_type=next_default_type,
+            improves_since_last_idea=improves_since_last_idea,
+            plan_path=plan_path,
+            reserved_user_task_id=reserved_user_task_id,
+            done_log_block=done_log_block,
+        ),
+        encoding="utf-8",
     )
-    rhythm_block = (
-        "## Rhythm State\n\n"
-        "| field | value |\n"
-        "|------|-------|\n"
-        f"| next_default_type | {next_default_type} |\n"
-        f"| improves_since_last_idea | {improves_since_last_idea} |\n"
-        f"| current_plan_path | {plan_path} |\n"
-        f"| reserved_user_task_id | {reserved_user_task_id} |\n\n"
-    )
-    if not text:
-        init_roadmap(path)
-        text = path.read_text(encoding="utf-8")
-    text = re.sub(r"## Current Task\n\n[\s\S]*?\n## Rhythm State\n\n", current_block + rhythm_block, text, count=1)
-    path.write_text(text, encoding="utf-8")
 
 
 def append_done_log(path: Path, *, timestamp: str, task_id: str, task_type: str, source: str, title: str, result: str, commit: str) -> None:
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
     row = f"| {timestamp} | {task_id} | {task_type} | {source} | {title} | {result} | {commit} |\n"
-    marker = DONE_LOG_HEADER + "\n|------|---------|------|--------|-------|--------|--------|\n"
-    if marker in text:
-        text = text.replace(marker, marker + row)
-    else:
-        text += "\n## Done Log\n\n" + marker + row
-    path.write_text(text, encoding="utf-8")
+    done_log_block = _extract_done_log_block(text)
+    if row not in done_log_block:
+        done_log_block += row
+    state = load_roadmap(path) if path.exists() else RoadmapState(None, "idea", 0, "", "")
+    path.write_text(
+        _render_roadmap(
+            state.current_task,
+            next_default_type=state.next_default_type,
+            improves_since_last_idea=state.improves_since_last_idea,
+            plan_path=state.current_plan_path,
+            reserved_user_task_id=state.reserved_user_task_id,
+            done_log_block=done_log_block,
+        ),
+        encoding="utf-8",
+    )

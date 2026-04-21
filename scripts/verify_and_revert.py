@@ -10,9 +10,9 @@ HOW IT WORKS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. Run the configured verification command (from config.md → verification_command)
-2. If it passes → write "pass" to Run Status
-3. If it fails → revert the commit, write "fail" to Run Status
-4. If no verification command is configured → write "unverified" and skip
+2. If it passes → report "pass"
+3. If it fails → revert the commit and report "fail"
+4. If no verification command is configured → report "unverified" and skip
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUPPORTED PROJECT TYPES
@@ -30,7 +30,6 @@ USAGE
 
   python verify_and_revert.py \
     --project /path/to/project \
-    --heartbeat /path/to/HEARTBEAT.md \
     --commit <git-hash> \
     --task "description of what was done"
 """
@@ -46,7 +45,7 @@ from pathlib import Path
 SKILL_DIR = Path(__file__).parent.parent
 
 
-def read_config(heartbeat: Path) -> dict[str, str]:
+def read_config(project: Path) -> dict[str, str]:
     """Read key values from the skill's config.md."""
     config_path = SKILL_DIR / "config.md"
     if not config_path.exists():
@@ -80,27 +79,8 @@ def push(*, cwd: Path) -> None:
         print(result.stderr, file=sys.stderr)
 
 
-def write_status(
-    heartbeat: Path,
-    commit: str,
-    result: str,
-    task: str,
-) -> None:
-    run_status_bin = Path(__file__).parent / "run_status.py"
-    cmd = [
-        sys.executable,
-        str(run_status_bin),
-        "--heartbeat", str(heartbeat),
-        "write",
-        "--commit", commit,
-        "--result", result,
-        "--task", task,
-    ]
-    r = subprocess.run(cmd, capture_output=True, text=True)
-    if r.stdout:
-        print(r.stdout)
-    if r.returncode != 0:
-        print(r.stderr, file=sys.stderr)
+def write_status(commit: str, result: str, task: str) -> None:
+    print(f"[verify] status={result} commit={commit} task={task}")
 
 
 def revert(start: str, end: str, *, cwd: Path) -> str:
@@ -141,15 +121,12 @@ def main() -> int:
         "Type-agnostic: reads verification_command from config.md.",
     )
     parser.add_argument("--project", required=True, type=Path, help="Project root")
-    parser.add_argument("--heartbeat", required=True, type=Path, help="Path to HEARTBEAT.md")
     parser.add_argument("--commit", required=True, help="Git hash before the task was done")
     parser.add_argument("--task", required=True, help="Task description")
     args = parser.parse_args()
 
     project = args.project.resolve()
-    heartbeat = args.heartbeat.resolve()
-
-    config = read_config(heartbeat)
+    config = read_config(project)
     verify_cmd = config.get("verification_command", "").strip()
 
     head = current_head(cwd=project)
@@ -166,18 +143,18 @@ def main() -> int:
 
     if result is None:
         print("[verify] no verification_command configured — marking as unverified")
-        write_status(heartbeat, head, "unverified", f"unverified: {args.task}")
+        write_status(head, "unverified", f"unverified: {args.task}")
         print("push done, no verification — manual check required")
         return 0
 
     if result is True:
-        write_status(heartbeat, head, "pass", args.task)
+        write_status(head, "pass", args.task)
         print("verification passed")
         return 0
 
     print("verification failed — reverting commit")
     reverted = revert(args.commit, head, cwd=project)
-    write_status(heartbeat, reverted, "fail", f"rollback after failure: {args.task}")
+    write_status(reverted, "fail", f"rollback after failure: {args.task}")
     print(f"reverted, new HEAD={reverted}")
     return 1
 

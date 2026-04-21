@@ -120,43 +120,6 @@ def test_invalid_command_exits_nonzero():
 
 # ── State-modifying tests ─────────────────────────────────────────────────────
 
-def test_clear_removes_rolling_rows_preserving_user_rows():
-    """a-clear deletes rolling-refresh rows but leaves user-sourced rows intact."""
-    hb_path = PROJECT / "HEARTBEAT.md"
-    original = hb_path.read_text(encoding="utf-8")
-    try:
-        # Write a clean HEARTBEAT with exactly the rows we need to test.
-        # This avoids relying on the exact format produced by a-refresh.
-        test_heartbeat = (
-            "## Queue\n\n"
-            "| # | Type | Score | Content | Detail | Source | Status | Created |\n"
-            "| 1 | improve | 45 | [[Improve]] 滚动测试行 | detail | rolling-refresh | pending | 2026-04-20 |\n"
-            "| 2 | user | 100 | [[User]] 用户测试行 | detail | user | pending | 2026-04-20 |\n\n"
-            "---\n\n"
-            "## Run Status\n\n"
-            "| Field | Value |\n"
-            "|-------|-------|\n"
-            "| cron_lock | false |\n\n"
-            "---\n\n"
-            "## Done Log\n\n"
-            "| Time | Commit | Task | Result |\n"
-            "|------|--------|------|--------|\n"
-        )
-        hb_path.write_text(test_heartbeat, encoding="utf-8")
-
-        result = _run(["a-clear"])
-        assert result.returncode == 0, f"a-clear failed: {result.stderr}"
-
-        content = hb_path.read_text(encoding="utf-8")
-        # rolling-refresh row must be removed; user row must survive
-        assert "rolling-refresh" not in content, "rolling-refresh row should be removed"
-        assert "滚动测试行" not in content
-        assert "用户测试行" in content, \
-            f"User row not found. Content:\n{content}"
-    finally:
-        hb_path.write_text(original, encoding="utf-8")
-
-
 def test_refresh_rebuilds_queue():
     """a-refresh exits 0 and reports a successful rolling rebuild."""
     result = _run(["a-refresh"])
@@ -170,10 +133,10 @@ def test_refresh_rebuilds_queue():
     ), f"Unexpected output: {combined[:300]}"
 
 
-def test_refresh_min_flag_respects_target():
-    """a-refresh --min 3 stays accepted as a deprecated alias and generates a PM task."""
-    result = _run(["a-refresh", "--min", "3"])
-    assert result.returncode == 0, f"a-refresh --min failed: {result.stderr}"
+def test_refresh_alias_generates_pm_task():
+    """a-refresh remains a deprecated alias to a-plan."""
+    result = _run(["a-refresh"])
+    assert result.returncode == 0, f"a-refresh failed: {result.stderr}"
     combined = result.stdout + result.stderr
     assert "TASK-" in combined
     assert "Goal" in combined or "Acceptance Criteria" in combined
@@ -227,16 +190,6 @@ def test_add_creates_user_task_plan_and_sets_current_task():
                     p.unlink(missing_ok=True)
             for name, data in existing_plans.items():
                 (plans_dir / name).write_bytes(data)
-
-
-def test_scan_triggers_inspire_scanner():
-    """a-scan runs the inspire scanner and exits 0 (when project path is configured)."""
-    result = _run(["a-scan"])
-    # a-scan may fail if project_path in config.md is not set correctly,
-    # which is a configuration issue, not a test issue
-    combined = result.stdout + result.stderr
-    # Should mention scanning
-    assert "scan" in combined.lower() or "trigger" in combined.lower()
 
 
 def test_config_set_updates_value():
@@ -310,6 +263,30 @@ def test_a_current_shows_current_task_and_full_plan():
             roadmap_path.unlink(missing_ok=True)
 
 
+def test_plan_idempotent_without_force_when_task_pending():
+    roadmap_path = PROJECT / "ROADMAP.md"
+    plans_dir = PROJECT / "plans"
+    original_roadmap = roadmap_path.read_bytes() if roadmap_path.exists() else None
+    existing_plans = {p.name for p in plans_dir.glob('TASK-*.md')} if plans_dir.exists() else set()
+    try:
+        first = _run(["a-plan"])
+        assert first.returncode == 0
+        before = {p.name for p in plans_dir.glob('TASK-*.md')} if plans_dir.exists() else set()
+        second = _run(["a-plan"])
+        assert second.returncode == 0
+        after = {p.name for p in plans_dir.glob('TASK-*.md')} if plans_dir.exists() else set()
+        assert before == after
+    finally:
+        if original_roadmap is not None:
+            roadmap_path.write_bytes(original_roadmap)
+        else:
+            roadmap_path.unlink(missing_ok=True)
+        if plans_dir.exists():
+            for p in plans_dir.glob('TASK-*.md'):
+                if p.name not in existing_plans:
+                    p.unlink(missing_ok=True)
+
+
 def test_a_queue_alias_shows_current_task():
     """a-queue (deprecated alias) points to a-current and shows task + plan."""
     roadmap_path = PROJECT / "ROADMAP.md"
@@ -342,3 +319,44 @@ def test_a_refresh_alias_calls_a_plan():
             roadmap_path.write_bytes(original_roadmap)
         else:
             roadmap_path.unlink(missing_ok=True)
+
+
+def test_add_preserves_doing_task_and_reserves_user_task_id():
+    roadmap_path = PROJECT / "ROADMAP.md"
+    plans_dir = PROJECT / "plans"
+    original_roadmap = roadmap_path.read_bytes() if roadmap_path.exists() else None
+    existing_plans = {p.name for p in plans_dir.glob('TASK-*.md')} if plans_dir.exists() else set()
+    try:
+        roadmap_path.write_text(
+            "# Roadmap\n\n"
+            "## Current Task\n\n"
+            "| task_id | type | source | title | status | created |\n"
+            "|--------|------|--------|-------|--------|---------|\n"
+            "| TASK-001 | idea | pm | Existing task | doing | 2026-04-21 |\n\n"
+            "## Rhythm State\n\n"
+            "| field | value |\n"
+            "|------|-------|\n"
+            "| next_default_type | improve |\n"
+            "| improves_since_last_idea | 0 |\n"
+            "| current_plan_path | plans/TASK-001.md |\n"
+            "| reserved_user_task_id |  |\n\n"
+            "## PM Notes\n\n- Roadmap initialized.\n\n"
+            "## Done Log\n\n"
+            "| time | task_id | type | source | title | result | commit |\n"
+            "|------|---------|------|--------|-------|--------|--------|\n",
+            encoding="utf-8",
+        )
+        result = _run(["a-add", "紧急用户请求"])
+        assert result.returncode == 0, result.stderr
+        text = roadmap_path.read_text(encoding="utf-8")
+        assert "| TASK-001 | idea | pm | Existing task | doing | 2026-04-21 |" in text
+        assert "reserved_user_task_id | TASK-" in text
+    finally:
+        if original_roadmap is not None:
+            roadmap_path.write_bytes(original_roadmap)
+        else:
+            roadmap_path.unlink(missing_ok=True)
+        if plans_dir.exists():
+            for p in plans_dir.glob('TASK-*.md'):
+                if p.name not in existing_plans:
+                    p.unlink(missing_ok=True)

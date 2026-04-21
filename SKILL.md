@@ -18,7 +18,7 @@ Type-agnostic: works for software, writing, video, research, or generic projects
 
 ### Project Types
 
-The skill auto-detects your project type via `project_insights.py`. You can also set `project_kind` in `config.md`:
+The skill auto-detects your project type heuristically during setup. You can also set `project_kind` in `config.md`:
 
 | Type | Indicators | Description |
 |------|-----------|-------------|
@@ -94,10 +94,7 @@ The skill auto-detects your project type via `project_insights.py`. You can also
 | Script | Role | Interface |
 |--------|------|----------|
 | `init.py` | Setup + roadmap / PM commands | CLI |
-| `project_insights.py` | Used internally by inspire_scanner for git-activity-based Improve candidates | `--project`, `--heartbeat`, `--language`, `--refresh`, `--min` |
-| `priority_scorer.py` | Score queue entries | stdin/stdout |
 | `project_md.py` | Generate PROJECT.md from current project tree | `--project`, `--output`, `--language`, `--repo` |
-| `inspire_scanner.py` | Legacy scanner for older queue-based flow | `--project`, `--heartbeat`, `--language`, `--target-size` |
 | `roadmap.py` | ROADMAP.md data model + parsing/writing | module |
 | `task_ids.py` | Stable `TASK-xxx` id allocation | module |
 | `plan_writer.py` | Write full `plans/TASK-xxx.md` docs | module |
@@ -125,26 +122,17 @@ Users insert tasks via `a-add` → written as full `plans/TASK-xxx.md` docs with
 ## Scripts Reference
 
 ```
-# Bump version (run BEFORE git commit to include VERSION in same commit)
-python bump_version.py --path . [--commit] [--release]
-# --release: git push + GitHub release (implies --commit)
+# Generate next PM task
+python init.py a-plan
 
-# Scan once, append best candidate
-python project_insights.py --project . --heartbeat HEARTBEAT.md --language en
+# Show current task + full plan
+python init.py a-current
 
-# Keep scanning until queue has at least N items
-python project_insights.py --project . --heartbeat HEARTBEAT.md --language en --refresh --min 6
+# Add user task
+python init.py a-add "Implement dark mode support"
 
-# Rebuild non-user queue after a cron task
-python init.py a-clear
-python project_insights.py --project . --heartbeat HEARTBEAT.md --language en --refresh --min 6
-
-# Verify and auto-revert on failure
-python verify_and_revert.py \
-  --project /path/to/project \
-  --heartbeat HEARTBEAT.md \
-  --commit <git-hash> \
-  --task "description of what was done"
+# Execute current task
+python init.py a-trigger --force
 
 # Setup
 python init.py a-adopt ~/Projects/MY_PROJECT
@@ -164,13 +152,11 @@ The skill is invoked via OpenClaw's skill router. Incoming message text is parse
 | `a-start` | Start cron hosting (create the cron job) |
 | `a-stop` | Stop cron hosting (remove the cron job) |
 | `a-add <content>` | Create a user-sourced `TASK-xxx` + full plan doc |
-| `a-scan` | Legacy scan command |
-| `a-clear` | Legacy queue cleanup command |
 | `a-current` | Show current task + full plan doc |
-| `a-queue [--all]` | Alias to `a-current` |
+| `a-queue` | Alias to `a-current` |
 | `a-log [-n N]` | Show recent roadmap Done Log entries |
 | `a-plan [--force]` | Generate the next PM task + full plan doc |
-| `a-refresh [--min N]` | Alias to `a-plan` |
+| `a-refresh` | Alias to `a-plan` |
 | `a-trigger [--force]` | Execute current roadmap task and record Done Log |
 | `a-config get <key>` | Read a config value |
 | `a-config set <key> <value>` | Write a config value |
