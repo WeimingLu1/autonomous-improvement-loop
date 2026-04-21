@@ -71,6 +71,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+if str(Path(__file__).resolve().parent.parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 HERE = Path(__file__).parent.resolve()
