@@ -1491,6 +1491,69 @@ def _git_head_short(project: Path) -> str:
     return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else "manual"
 
 
+def _execute_task_plan(project: Path, task: CurrentTask) -> tuple[bool, str]:
+    """
+    Execute a task plan by spawning a subagent with the plan content.
+    Returns (success: bool, message: str).
+    For type=user tasks, marks as needs-attention and returns success.
+    """
+    plans_dir = ail_plans_dir(project)
+    plan_path = plans_dir / f"{task.task_id}.md"
+
+    if not plan_path.exists():
+        return False, f"Plan file not found: {plan_path}"
+
+    # User tasks need human attention — just leave as pending
+    if task.task_type == "user":
+        return True, "user task — requires human attention"
+
+    # Read the plan document
+    plan_content = plan_path.read_text(encoding="utf-8")
+
+    # Extract task title from first line
+    first_line = plan_content.splitlines()[0].strip()
+    m = re.match(r"#\s+TASK-\d+\s+·\s+(.+)$", first_line)
+    title = m.group(1).strip() if m else task.title
+
+    # Build the agent message
+    message = (
+        f"Execute the following task from the Autonomous Improvement Loop:\n\n"
+        f"## Task: {task.task_id} — {title}\n\n"
+        f"{plan_content}\n\n"
+        f"## Your mission\n"
+        f"1. Read the plan document above carefully\n"
+        f"2. Execute the work as described\n"
+        f"3. For each step in 'Execution Plan', implement it\n"
+        f"4. When done, run verification commands from the 'Verification' section\n"
+        f"5. Report success only if all acceptance criteria are met and verifications pass\n\n"
+        f"Project: {project}\n"
+        f"Working directory: {project}\n"
+    )
+
+    # Get agent_id from config
+    config = read_current_config()
+    agent_id = config.get("agent_id", "mia").strip() or "mia"
+
+    # Spawn subagent to execute — use isolated session + expect-final to wait
+    cmd = [
+        "openclaw", "agent",
+        "--agent", agent_id,
+        "--session", "isolated",
+        "--expect-final",
+        "--timeout", "3600",
+        "--message", message,
+    ]
+
+    print(f"  Spawning subagent for {task.task_id}...")
+    r = run(cmd, cwd=project, timeout=3700)
+
+    if r.returncode == 0:
+        return True, "Task executed successfully"
+    else:
+        err = r.stderr.strip() if r.stderr.strip() else r.stdout.strip() or "unknown error"
+        return False, err
+
+
 def cmd_trigger(force: bool = False) -> None:
     step("⚡ Triggering plan execution")
     project, roadmap_path = _get_roadmap_and_project()
@@ -1511,6 +1574,10 @@ def cmd_trigger(force: bool = False) -> None:
         sys.exit(1)
 
     ok(f"Started {current.task_id}: {current.title}")
+
+    # ACTUALLY EXECUTE THE TASK
+    exec_ok, exec_msg = _execute_task_plan(project, current)
+
     commit = _git_head_short(project)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     append_done_log(
@@ -1520,9 +1587,15 @@ def cmd_trigger(force: bool = False) -> None:
         task_type=current.task_type,
         source=current.source,
         title=current.title,
-        result="pass",
+        result="pass" if exec_ok else "fail",
         commit=commit,
     )
+
+    if not exec_ok:
+        fail(f"Task execution failed: {exec_msg}")
+        sys.exit(1)
+
+    ok(f"Execution completed: {exec_msg}")
 
     next_task = None
     next_plan_path = ""
