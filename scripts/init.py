@@ -1529,8 +1529,17 @@ def cmd_trigger(force: bool = False) -> None:
         fail("ROADMAP.md not found. Run a-plan first.")
         sys.exit(1)
 
-    # Check if we're already running inside a cron session (no recursion)
-    if os.environ.get("OPENCLAW_CRON_SESSION") == "1":
+    # Detect re-entry: if a trigger is already running (cron session or manual),
+    # just record the result without spawning another cron.
+    import fcntl
+    lock_path = project / ".ail" / ".trigger.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_fd = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (IOError, OSError):
+        # Already locked — either Mia is executing or a-trigger is recording
+        lock_fd.close()
         _record_result_only(project, roadmap_path, force)
         return
 
@@ -1539,6 +1548,8 @@ def cmd_trigger(force: bool = False) -> None:
     cron_job_id = config.get("cron_job_id", "").strip()
     if not cron_job_id:
         fail("No cron job configured. Run a-start first.")
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        lock_fd.close()
         sys.exit(1)
 
     cron_timeout = config.get("cron_timeout", str(DEFAULT_TIMEOUT_S)).strip()
@@ -1551,8 +1562,11 @@ def cmd_trigger(force: bool = False) -> None:
     r = run(
         ["openclaw", "cron", "run", cron_job_id, "--expect-final", "--timeout", timeout_ms],
         timeout=int(cron_timeout) + 10,
-        env={**os.environ, "OPENCLAW_CRON_SESSION": "1"},
     )
+    fcntl.flock(lock_fd, fcntl.LOCK_UN)
+    lock_fd.close()
+    lock_path.unlink(missing_ok=True)
+
     if r.returncode != 0:
         fail(f"Cron session failed: {r.stderr.strip() or r.stdout.strip() or 'unknown error'}")
         sys.exit(1)
