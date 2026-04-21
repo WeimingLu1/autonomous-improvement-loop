@@ -119,6 +119,59 @@ def ail_config(project: Path) -> Path:
     """Path to project-level config.md for a project."""
     return project / ".ail" / "config.md"
 
+# ── Backward Compatibility Migration ──────────────────────────────────────────
+
+def _migrate_to_ail(project: Path) -> bool:
+    """Migrate legacy project-root state files to .ail/ directory.
+
+    Before the .ail/ convention, state was stored at:
+      project/ROADMAP.md, project/HEARTBEAT.md, project/PROJECT.md,
+      project/plans/, project/config.md
+
+    After the change, all files go into project/.ail/.
+
+    Returns True if migration happened, False if not needed (idempotent).
+    """
+    legacy_files = {
+        project / "ROADMAP.md": ail_roadmap(project),
+        project / "HEARTBEAT.md": ail_heartbeat(project),
+        project / "PROJECT.md": ail_project_md(project),
+        project / "config.md": ail_config(project),
+    }
+    legacy_dirs = {
+        project / "plans": ail_plans_dir(project),
+    }
+
+    needs_migration = False
+    for old_path in list(legacy_files) + list(legacy_dirs):
+        if old_path.exists():
+            needs_migration = True
+            break
+
+    if not needs_migration:
+        return False
+
+    # Create .ail/ directory
+    ail_dir = ail_state_dir(project)
+    ail_dir.mkdir(parents=True, exist_ok=True)
+
+    migrated = False
+
+    # Move legacy files (skip if new already exists)
+    for old_path, new_path in legacy_files.items():
+        if old_path.exists() and not new_path.exists():
+            shutil.move(str(old_path), str(new_path))
+            migrated = True
+
+    # Move legacy directory (skip if new already exists)
+    for old_path, new_path in legacy_dirs.items():
+        if old_path.exists() and old_path.is_dir() and not new_path.exists():
+            shutil.move(str(old_path), str(new_path))
+            migrated = True
+
+    return migrated
+
+
 # ── Config path helpers ────────────────────────────────────────────────────────
 
 def _config_template() -> Path:
@@ -639,6 +692,7 @@ def delete_cron(cron_id: str) -> None:
 
 def seed_queue(project: Path, mode: str, language: str) -> None:
     """Populate initial roadmap state after init so the user gets value immediately."""
+    _migrate_to_ail(project)
     roadmap_path = ail_roadmap(project)
     from scripts.roadmap import init_roadmap
     if not roadmap_path.exists():
@@ -653,6 +707,7 @@ def seed_queue(project: Path, mode: str, language: str) -> None:
 
 def init_queue_heartbeat(project: Path, mode: str, language: str) -> None:
     """Initialize or update the Run Status + empty Queue section."""
+    _migrate_to_ail(project)
     if not ail_heartbeat(project).exists():
         raise RuntimeError(f"HEARTBEAT.md not found at {ail_heartbeat(project)}")
 
@@ -775,6 +830,9 @@ def cmd_adopt(
     force_new_cron: bool = False,
 ) -> None:
     step("🔍 Existing project takeover — setup wizard")
+
+    # Migrate legacy state files from project root to .ail/
+    _migrate_to_ail(project)
 
     # Detect / validate project
     if not project.exists():
@@ -989,6 +1047,9 @@ def cmd_onboard(
 ) -> None:
     step("🆕 Bootstrapping a new project")
 
+    # Migrate legacy state files from project root to .ail/
+    _migrate_to_ail(project)
+
     if project.exists() and any(project.iterdir()):
         warn(f"Directory {project} is not empty. Use adopt mode for an existing project.")
         print(f"  python init.py adopt {project}")
@@ -1130,6 +1191,10 @@ def cmd_start() -> None:
     project_language = config.get("project_language", DEFAULT_LANGUAGE).strip() or DEFAULT_LANGUAGE
     project = Path(project_path).expanduser().resolve() if project_path else None
 
+    # Migrate legacy state files from project root to .ail/
+    if project:
+        _migrate_to_ail(project)
+
     # Clean up ANY existing "Autonomous Improvement Loop" cron jobs first.
     # This ensures a-start always results in exactly 1 cron — idempotent.
     r = run(["openclaw", "cron", "list"], timeout=15)
@@ -1260,6 +1325,9 @@ def cmd_stop() -> None:
 def cmd_add(content_text: str) -> None:
     step("📝 Adding user request as current task")
 
+    project, roadmap_path = _get_roadmap_and_project()
+    _migrate_to_ail(project)
+
     if not content_text or not content_text.strip():
         fail("Empty content — nothing to add")
         sys.exit(1)
@@ -1354,6 +1422,9 @@ def cmd_add(content_text: str) -> None:
 def cmd_status(project: Path) -> None:
     step("📋 Project readiness")
 
+    # Migrate legacy state files from project root to .ail/
+    _migrate_to_ail(project)
+
     if not project.exists():
         fail(f"Project path does not exist: {project}")
         sys.exit(1)
@@ -1433,6 +1504,7 @@ def _get_roadmap_and_project():
 def cmd_plan(force: bool = False) -> None:
     step("🗺️  Generating current task + plan")
     project, roadmap_path = _get_roadmap_and_project()
+    _migrate_to_ail(project)
     from scripts.roadmap import load_roadmap, set_current_task, init_roadmap, CurrentTask
     from scripts.task_planner import choose_next_task
     from scripts.task_ids import next_task_id
@@ -1522,6 +1594,7 @@ def cmd_plan(force: bool = False) -> None:
 def cmd_current() -> None:
     step("📌 Current Task")
     project, roadmap_path = _get_roadmap_and_project()
+    _migrate_to_ail(project)
     if not roadmap_path.exists():
         ok("ROADMAP.md not found. Run a-plan to generate the first task.")
         return
@@ -1575,6 +1648,8 @@ def _print_plan_doc(path: Path) -> None:
 
 def cmd_queue(all_items: bool = False) -> None:
     step("📋 Current Queue")
+    project, _ = _get_roadmap_and_project()
+    _migrate_to_ail(project)
     if not ail_heartbeat(project).exists():
         fail(f"HEARTBEAT.md not found at {ail_heartbeat(project)}")
         return
@@ -1636,6 +1711,7 @@ def cmd_queue(all_items: bool = False) -> None:
 def cmd_log(n: int = 10) -> None:
     step("📜 Recent Done Log")
     project, roadmap_path = _get_roadmap_and_project()
+    _migrate_to_ail(project)
     if not roadmap_path.exists():
         ok("ROADMAP.md not found")
         return
@@ -1678,6 +1754,7 @@ def _git_head_short(project: Path) -> str:
 def cmd_trigger(force: bool = False) -> None:
     step("⚡ Triggering plan execution")
     project, roadmap_path = _get_roadmap_and_project()
+    _migrate_to_ail(project)
     if not roadmap_path.exists():
         fail("ROADMAP.md not found. Run a-plan first.")
         sys.exit(1)
