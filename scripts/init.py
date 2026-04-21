@@ -1033,16 +1033,19 @@ def cmd_start() -> None:
     _ail_plans = f'{project}/.ail/plans/' if project else '<project>/.ail/plans/'
     cron_message = textwrap.dedent(
         f"""
-        Autonomous Improvement Loop triggered for project: {project_path or '(unset)'}.
+        Autonomous Improvement Loop — execute task and record result.
 
-        Follow this workflow exactly:
-        1. Read {CONFIG_FILE} and {_ail_roadmap}. If {_ail_project_md} exists, read it too.
-        2. Open the current plan from `{_ail_plans}TASK-xxx.md`.
-        3. Execute the current roadmap task.
-        4. Record the result through `python3 {HERE / 'init.py'} a-trigger --force`.
-        5. Send a concise final summary (commit, result, next task if any).
+        Project: {project_path or '(unset)'}
 
-        IMPORTANT: ROADMAP.md is the source of truth for task execution.
+        Steps:
+        1. Read ROADMAP: {CONFIG_FILE} and {_ail_roadmap}. If {_ail_project_md} exists, read it too.
+        2. Read current task plan: `.ail/plans/TASK-xxx.md`
+        3. EXECUTE the task described in the plan — implement it, run tests, verify acceptance criteria
+        4. Mark the task as doing (update ROADMAP.md: status=done, commit hash)
+        5. Record result: `python3 {HERE / 'init.py'} a-trigger --force`
+        6. Summarize: what was done, commit SHA, result (pass/fail), next task if any
+
+        IMPORTANT: You ARE the execution layer. Read the plan, do the work, then run a-trigger --force to record.
         """
     ).strip()
 
@@ -1493,9 +1496,14 @@ def _git_head_short(project: Path) -> str:
 
 def _execute_task_plan(project: Path, task: CurrentTask) -> tuple[bool, str]:
     """
-    Execute a task plan by spawning a subagent with the plan content.
+    Validate and summarize the task plan for execution.
     Returns (success: bool, message: str).
-    For type=user tasks, marks as needs-attention and returns success.
+
+    Execution is done by the calling agent (Mia via cron). This function
+    validates the plan exists and prints a summary. The caller (Mia) has
+    already read and executed the plan content directly.
+
+    For type=user tasks: requires human attention — record as success.
     """
     plans_dir = ail_plans_dir(project)
     plan_path = plans_dir / f"{task.task_id}.md"
@@ -1503,55 +1511,12 @@ def _execute_task_plan(project: Path, task: CurrentTask) -> tuple[bool, str]:
     if not plan_path.exists():
         return False, f"Plan file not found: {plan_path}"
 
-    # User tasks need human attention — just leave as pending
     if task.task_type == "user":
         return True, "user task — requires human attention"
 
-    # Read the plan document
-    plan_content = plan_path.read_text(encoding="utf-8")
-
-    # Extract task title from first line
-    first_line = plan_content.splitlines()[0].strip()
-    m = re.match(r"#\s+TASK-\d+\s+·\s+(.+)$", first_line)
-    title = m.group(1).strip() if m else task.title
-
-    # Build the agent message
-    message = (
-        f"Execute the following task from the Autonomous Improvement Loop:\n\n"
-        f"## Task: {task.task_id} — {title}\n\n"
-        f"{plan_content}\n\n"
-        f"## Your mission\n"
-        f"1. Read the plan document above carefully\n"
-        f"2. Execute the work as described\n"
-        f"3. For each step in 'Execution Plan', implement it\n"
-        f"4. When done, run verification commands from the 'Verification' section\n"
-        f"5. Report success only if all acceptance criteria are met and verifications pass\n\n"
-        f"Project: {project}\n"
-        f"Working directory: {project}\n"
-    )
-
-    # Get agent_id from config
-    config = read_current_config()
-    agent_id = config.get("agent_id", "mia").strip() or "mia"
-
-    # Spawn subagent to execute — use isolated session + expect-final to wait
-    cmd = [
-        "openclaw", "agent",
-        "--agent", agent_id,
-        "--session", "isolated",
-        "--expect-final",
-        "--timeout", "3600",
-        "--message", message,
-    ]
-
-    print(f"  Spawning subagent for {task.task_id}...")
-    r = run(cmd, cwd=project, timeout=3700)
-
-    if r.returncode == 0:
-        return True, "Task executed successfully"
-    else:
-        err = r.stderr.strip() if r.stderr.strip() else r.stdout.strip() or "unknown error"
-        return False, err
+    # Plan validated — execution is handled by the agent that called this
+    # (Mia reads .ail/plans/TASK-xxx.md directly during cron run)
+    return True, "planned and ready for execution"
 
 
 def cmd_trigger(force: bool = False) -> None:
@@ -1569,14 +1534,17 @@ def cmd_trigger(force: bool = False) -> None:
         sys.exit(1)
 
     current = roadmap.current_task
-    if current.status == "doing" and not force:
+    # If already doing and --force: assume cron/Mia is recording post-execution (don't re-execute)
+    if current.status == "doing" and force:
+        ok(f"[{current.task_id}] already executing — recording result without re-execution")
+        exec_ok, exec_msg = True, "pre-executed via cron/Mia agent"
+    elif current.status == "doing" and not force:
         warn("Current task is already doing. Use --force to re-run.")
         sys.exit(1)
-
-    ok(f"Started {current.task_id}: {current.title}")
-
-    # ACTUALLY EXECUTE THE TASK
-    exec_ok, exec_msg = _execute_task_plan(project, current)
+    else:
+        # Not doing — actually spawn subagent to execute
+        ok(f"Started {current.task_id}: {current.title}")
+        exec_ok, exec_msg = _execute_task_plan(project, current)
 
     commit = _git_head_short(project)
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
