@@ -1537,13 +1537,13 @@ def cmd_trigger(force: bool = False) -> None:
     # If already doing and --force: assume cron/Mia is recording post-execution (don't re-execute)
     if current.status == "doing" and force:
         ok(f"[{current.task_id}] already executing — recording result without re-execution")
-        exec_ok, exec_msg = True, "pre-executed via cron/Mia agent"
+        exec_ok, exec_msg = True, "result recorded from prior execution"
     elif current.status == "doing" and not force:
         warn("Current task is already doing. Use --force to re-run.")
         sys.exit(1)
     else:
-        # Not doing — actually spawn subagent to execute
-        ok(f"Started {current.task_id}: {current.title}")
+        # Plan validated — real execution is done by Mia in her session before calling a-trigger
+        ok(f"Recording result for {current.task_id}: {current.title}")
         exec_ok, exec_msg = _execute_task_plan(project, current)
 
     commit = _git_head_short(project)
@@ -1563,7 +1563,7 @@ def cmd_trigger(force: bool = False) -> None:
         fail(f"Task execution failed: {exec_msg}")
         sys.exit(1)
 
-    ok(f"Execution completed: {exec_msg}")
+    ok(f"Result recorded: {exec_msg}")
 
     next_task = None
     next_plan_path = ""
