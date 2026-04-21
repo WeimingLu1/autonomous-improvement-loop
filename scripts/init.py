@@ -973,18 +973,9 @@ def cmd_onboard(
     )
     ok("config.md written")
 
-    step("🧭 Generating PROJECT.md")
-    try:
-        from project_md import generate_project_md
-
-        generate_project_md(project, ail_project_md(project), language=language, repo=gh_remote or None)
-        ok("PROJECT.md generated")
-    except Exception as e:
-        warn(f"PROJECT.md generation failed: {e}")
-
-
     step("📋 Generating PROJECT.md")
     try:
+        from project_md import generate_project_md
         generate_project_md(project=project, output=ail_project_md(project), language=language)
         ok("PROJECT.md generated")
     except Exception as e:
