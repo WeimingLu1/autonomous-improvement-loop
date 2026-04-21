@@ -78,10 +78,46 @@ if str(Path(__file__).resolve().parent.parent) not in sys.path:
 
 HERE = Path(__file__).parent.resolve()
 SKILL_DIR = HERE.parent
-HEARTBEAT = SKILL_DIR / "HEARTBEAT.md"
-# Persistent config location — OUTSIDE the skill dir so clawhub update won't wipe it.
-# Main session and cron agent both share ~/.openclaw so this path is accessible to both.
+
+# Persistent config location — survives clawhub update.
+# This is SKILL-level config (agent_id, chat_id, cron settings).
+# Project-level config lives in .ail/config.md inside the托管项目.
 CONFIG_FILE = Path.home() / ".openclaw" / "skills-config" / "autonomous-improvement-loop" / "config.md"
+
+# ── AIL State Path Helpers ────────────────────────────────────────────────────
+# All skill-generated state files live in .ail/ inside the托管项目 (project_path).
+# This keeps the project directory clean and follows PM logic:
+# everything about a project lives inside the project.
+
+
+def ail_state_dir(project: Path) -> Path:
+    """Return the .ail/ state directory for a project."""
+    return project / ".ail"
+
+
+def ail_heartbeat(project: Path) -> Path:
+    """Path to HEARTBEAT.md for a project."""
+    return project / ".ail" / "HEARTBEAT.md"
+
+
+def ail_project_md(project: Path) -> Path:
+    """Path to PROJECT.md for a project."""
+    return project / ".ail" / "PROJECT.md"
+
+
+def ail_roadmap(project: Path) -> Path:
+    """Path to ROADMAP.md for a project."""
+    return project / ".ail" / "ROADMAP.md"
+
+
+def ail_plans_dir(project: Path) -> Path:
+    """Path to plans/ directory for a project."""
+    return project / ".ail" / "plans"
+
+
+def ail_config(project: Path) -> Path:
+    """Path to project-level config.md for a project."""
+    return project / ".ail" / "config.md"
 
 # ── Config path helpers ────────────────────────────────────────────────────────
 
@@ -603,9 +639,11 @@ def delete_cron(cron_id: str) -> None:
 
 def seed_queue(project: Path, mode: str, language: str) -> None:
     """Populate initial roadmap state after init so the user gets value immediately."""
-    roadmap_path = project / "ROADMAP.md"
+    roadmap_path = ail_roadmap(project)
     from scripts.roadmap import init_roadmap
     if not roadmap_path.exists():
+        # Ensure .ail/ directory exists
+        ail_state_dir(project).mkdir(parents=True, exist_ok=True)
         init_roadmap(roadmap_path)
     # Generate the first PM task using the same project configured by adopt/onboard.
     cmd_plan(force=True)
@@ -613,10 +651,10 @@ def seed_queue(project: Path, mode: str, language: str) -> None:
 
 # ── HEARTBEAT queue initialization ─────────────────────────────────────────────
 
-def init_queue_heartbeat(mode: str, language: str) -> None:
+def init_queue_heartbeat(project: Path, mode: str, language: str) -> None:
     """Initialize or update the Run Status + empty Queue section."""
-    if not HEARTBEAT.exists():
-        raise RuntimeError(f"HEARTBEAT.md not found at {HEARTBEAT}")
+    if not ail_heartbeat(project).exists():
+        raise RuntimeError(f"HEARTBEAT.md not found at {ail_heartbeat(project)}")
 
     created = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -637,7 +675,7 @@ def init_queue_heartbeat(mode: str, language: str) -> None:
 |---|------|-------|---------|--------|--------|---------|
 """
 
-    content = read_file(HEARTBEAT)
+    content = read_file(ail_heartbeat(project))
 
     # Replace Run Status section
     content = re.sub(
@@ -653,14 +691,14 @@ def init_queue_heartbeat(mode: str, language: str) -> None:
         content,
     )
 
-    write_file(HEARTBEAT, content)
+    write_file(ail_heartbeat(project), content)
 
 
-def pending_queue_rows() -> list[dict[str, str]]:
-    if not HEARTBEAT.exists():
+def pending_queue_rows(project: Path) -> list[dict[str, str]]:
+    if not ail_heartbeat(project).exists():
         return []
     rows: list[dict[str, str]] = []
-    for line in read_file(HEARTBEAT).splitlines():
+    for line in read_file(ail_heartbeat(project)).splitlines():
         stripped = line.strip()
         if not stripped.startswith("|") or stripped.startswith("|---"):
             continue
@@ -686,8 +724,8 @@ def pending_queue_rows() -> list[dict[str, str]]:
     return rows
 
 
-def write_pending_queue(rows: list[dict[str, str]]) -> None:
-    content = read_file(HEARTBEAT)
+def write_pending_queue(project: Path, rows: list[dict[str, str]]) -> None:
+    content = read_file(ail_heartbeat(project))
     table = [
         "| # | Type | Score | Content | Source | Status | Created |",
         "|---|------|-------|---------|--------|--------|---------|",
@@ -701,15 +739,15 @@ def write_pending_queue(rows: list[dict[str, str]]) -> None:
         "\\1" + "\n".join(table) + "\n\\2",
         content,
     )
-    write_file(HEARTBEAT, content)
+    write_file(ail_heartbeat(project), content)
 
 
-def update_run_status_mode(mode: str) -> None:
-    if not HEARTBEAT.exists():
+def update_run_status_mode(project: Path, mode: str) -> None:
+    if not ail_heartbeat(project).exists():
         return
-    content = read_file(HEARTBEAT)
+    content = read_file(ail_heartbeat(project))
     content = re.sub(r"(\| mode \| )([^|]+)( \|)", rf"\1{mode}\3", content)
-    write_file(HEARTBEAT, content)
+    write_file(ail_heartbeat(project), content)
 
 
 def dedupe_pending_rows(rows: list[dict[str, str]]) -> tuple[list[dict[str, str]], int]:
@@ -837,35 +875,35 @@ def cmd_adopt(
     try:
         from project_md import generate_project_md
 
-        generate_project_md(project, SKILL_DIR / "PROJECT.md", language=language, repo=repo)
+        generate_project_md(project, ail_project_md(project), language=language, repo=repo)
         ok("PROJECT.md generated")
     except Exception as e:
         warn(f"PROJECT.md generation failed: {e}")
 
     # Queue handling for old managed projects
     mode = "bootstrap" if new_items > 3 else "normal"
-    current_rows = pending_queue_rows()
+    current_rows = pending_queue_rows(project)
     if current_rows:
         step("📦 Existing queue detected")
         deduped_rows, removed = dedupe_pending_rows(current_rows)
         default_action = "c" if removed else "k"
         action = ask("  Queue handling (k=keep, c=dedupe and keep, r=clear and rebuild)", default_action).lower()
         if action == "r":
-            init_queue_heartbeat(mode=mode, language=language)
+            init_queue_heartbeat(project, mode=mode, language=language)
             ok(f"HEARTBEAT.md rebuilt (mode: {mode})")
         elif action == "c":
-            write_pending_queue(deduped_rows)
-            update_run_status_mode(mode)
+            write_pending_queue(project, deduped_rows)
+            update_run_status_mode(project, mode)
             ok(f"Queue deduplicated, removed {removed} duplicate item(s)")
         else:
-            update_run_status_mode(mode)
+            update_run_status_mode(project, mode)
             ok("Kept existing queue, updated run mode only")
     else:
         step("📋 Initializing HEARTBEAT.md")
-        init_queue_heartbeat(mode=mode, language=language)
+        init_queue_heartbeat(project, mode=mode, language=language)
         ok(f"HEARTBEAT.md initialized (mode: {mode})")
 
-    roadmap_path = project / "ROADMAP.md"
+    roadmap_path = ail_roadmap(project)
     if not roadmap_path.exists():
         step("🧠 Generating initial roadmap task")
         seed_queue(project=project, mode=mode, language=language)
@@ -886,7 +924,7 @@ def cmd_adopt(
     {'The first run will stay in bootstrap mode until the project is ready' if mode == 'bootstrap' else 'Cron runs automatically every 30 minutes'}
 
     View queue:
-      cat {HEARTBEAT}
+      cat {ail_heartbeat(project)}
 
     Trigger Cron manually:
       openclaw cron run {cron_job_id}
@@ -1021,19 +1059,43 @@ def cmd_onboard(
     try:
         from project_md import generate_project_md
 
-        generate_project_md(project, SKILL_DIR / "PROJECT.md", language=language, repo=gh_remote or None)
+        generate_project_md(project, ail_project_md(project), language=language, repo=gh_remote or None)
         ok("PROJECT.md generated")
     except Exception as e:
         warn(f"PROJECT.md generation failed: {e}")
 
-    # Step 7: init heartbeat
+    # Step 7: init heartbeat — create .ail/ dir and seed HEARTBEAT.md first
     step("📋 Initializing HEARTBEAT.md")
-    init_queue_heartbeat(mode="bootstrap", language=language)
+    ail_state_dir(project).mkdir(parents=True, exist_ok=True)
+    # Seed a blank/minimal HEARTBEAT.md so init_queue_heartbeat can update it
+    blank_heartbeat = f"""\
+## Run Status
+
+| Field | Value |
+|-------|-------|
+| last_run_time | — |
+| last_run_commit | — |
+| last_run_result | unknown |
+| last_run_task | — |
+| cron_lock | false |
+| mode | bootstrap |
+| rollback_on_fail | true |
+
+## Queue
+
+| # | Type | Score | Content | Source | Status | Created |
+|---|------|-------|---------|--------|--------|---------|
+
+---
+"""
+    hb_path = ail_heartbeat(project)
+    hb_path.write_text(blank_heartbeat, encoding="utf-8")
+    init_queue_heartbeat(project, mode="bootstrap", language=language)
     ok("HEARTBEAT.md initialized (mode: bootstrap)")
 
     step("📋 Generating PROJECT.md")
     try:
-        generate_project_md(project=project, output=SKILL_DIR / "PROJECT.md", language=language)
+        generate_project_md(project=project, output=ail_project_md(project), language=language)
         ok("PROJECT.md generated")
     except Exception as e:
         warn(f"PROJECT.md generation failed: {e}")
@@ -1049,7 +1111,7 @@ def cmd_onboard(
       python init.py adopt {project}  # take over the project and start Cron
 
     View queue:
-      cat {HEARTBEAT}
+      cat {ail_heartbeat(project)}
     """))
 
 
@@ -1066,6 +1128,7 @@ def cmd_start() -> None:
     chat_id = config.get("chat_id", "").strip()
     project_path = config.get("project_path", "").strip()
     project_language = config.get("project_language", DEFAULT_LANGUAGE).strip() or DEFAULT_LANGUAGE
+    project = Path(project_path).expanduser().resolve() if project_path else None
 
     # Clean up ANY existing "Autonomous Improvement Loop" cron jobs first.
     # This ensures a-start always results in exactly 1 cron — idempotent.
@@ -1082,13 +1145,16 @@ def cmd_start() -> None:
         fail("agent_id not configured in config.md")
         sys.exit(1)
 
+    _ail_roadmap = str(ail_roadmap(project)) if project else '<project>/.ail/ROADMAP.md'
+    _ail_project_md = str(ail_project_md(project)) if project else '<project>/.ail/PROJECT.md'
+    _ail_plans = f'{project}/.ail/plans/' if project else '<project>/.ail/plans/'
     cron_message = textwrap.dedent(
         f"""
         Autonomous Improvement Loop triggered for project: {project_path or '(unset)'}.
 
         Follow this workflow exactly:
-        1. Read {CONFIG_FILE} and {project_path or '.'}/ROADMAP.md. If {SKILL_DIR / 'PROJECT.md'} exists, read it too.
-        2. Open the current plan from `plans/TASK-xxx.md`.
+        1. Read {CONFIG_FILE} and {_ail_roadmap}. If {_ail_project_md} exists, read it too.
+        2. Open the current plan from `{_ail_plans}TASK-xxx.md`.
         3. Execute the current roadmap task.
         4. Record the result through `python3 {HERE / 'init.py'} a-trigger --force`.
         5. Send a concise final summary (commit, result, next task if any).
@@ -1205,7 +1271,7 @@ def cmd_add(content_text: str) -> None:
     from scripts.task_ids import next_task_id
     from scripts.plan_writer import write_plan_doc
 
-    plans_dir = project / "plans"
+    plans_dir = ail_plans_dir(project)
     plans_dir.mkdir(parents=True, exist_ok=True)
     if not roadmap_path.exists():
         init_roadmap(roadmap_path)
@@ -1273,7 +1339,7 @@ def cmd_add(content_text: str) -> None:
     set_current_task(
         roadmap_path,
         task,
-        plan_path=str(plan_path.relative_to(project)),
+        plan_path=str(plan_path.relative_to(project / ".ail")),
         next_default_type=roadmap.next_default_type,
         improves_since_last_idea=roadmap.improves_since_last_idea,
         reserved_user_task_id="",
@@ -1314,8 +1380,8 @@ def cmd_status(project: Path) -> None:
     print()
 
     # Queue status
-    if HEARTBEAT.exists():
-        content = read_file(HEARTBEAT)
+    if ail_heartbeat(project).exists():
+        content = read_file(ail_heartbeat(project))
         pending_rows: list[tuple[str, str, str, str]] = []
         for line in content.splitlines():
             stripped = line.strip()
@@ -1360,7 +1426,7 @@ def _get_roadmap_and_project():
         detected = detect_project_path()
         project_path_str = str(detected) if detected else str(Path.cwd())
     project = Path(project_path_str).expanduser().resolve()
-    roadmap_path = project / "ROADMAP.md"
+    roadmap_path = ail_roadmap(project)
     return project, roadmap_path
 
 
@@ -1372,7 +1438,7 @@ def cmd_plan(force: bool = False) -> None:
     from scripts.task_ids import next_task_id
     from scripts.plan_writer import write_plan_doc
 
-    plans_dir = project / "plans"
+    plans_dir = ail_plans_dir(project)
 
     # Ensure plans dir exists
     plans_dir.mkdir(parents=True, exist_ok=True)
@@ -1441,7 +1507,7 @@ def cmd_plan(force: bool = False) -> None:
 
     set_current_task(
         roadmap_path, task,
-        plan_path=str(plan_path.relative_to(project)),
+        plan_path=str(plan_path.relative_to(project / ".ail")),
         next_default_type=next_type,
         improves_since_last_idea=improves,
         reserved_user_task_id=roadmap.reserved_user_task_id,
@@ -1478,7 +1544,8 @@ def cmd_current() -> None:
         print(f"  Plan Path : {roadmap.current_plan_path}")
     print()
     if roadmap.current_plan_path:
-        plan_path = (project / roadmap.current_plan_path)
+        # Plan path is stored as relative to .ail/ e.g. "plans/TASK-001.md"
+        plan_path = project / ".ail" / roadmap.current_plan_path
         if plan_path.exists():
             _print_plan_doc(plan_path)
         else:
@@ -1508,11 +1575,11 @@ def _print_plan_doc(path: Path) -> None:
 
 def cmd_queue(all_items: bool = False) -> None:
     step("📋 Current Queue")
-    if not HEARTBEAT.exists():
-        fail(f"HEARTBEAT.md not found at {HEARTBEAT}")
+    if not ail_heartbeat(project).exists():
+        fail(f"HEARTBEAT.md not found at {ail_heartbeat(project)}")
         return
 
-    content = read_file(HEARTBEAT)
+    content = read_file(ail_heartbeat(project))
 
     # Parse ALL rows from ALL ## Queue sections (handles multi-section corruption)
     all_rows: list[dict[str, str]] = []
@@ -1643,7 +1710,7 @@ def cmd_trigger(force: bool = False) -> None:
     next_task = None
     next_plan_path = ""
     reserved = roadmap.reserved_user_task_id.strip()
-    plans_dir = project / "plans"
+    plans_dir = ail_plans_dir(project)
     if reserved:
         reserved_plan = plans_dir / f"{reserved}.md"
         title = reserved
@@ -1659,7 +1726,7 @@ def cmd_trigger(force: bool = False) -> None:
             status="pending",
             created=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         )
-        next_plan_path = str(Path("plans") / f"{reserved}.md")
+        next_plan_path = str(Path(".ail") / "plans" / f"{reserved}.md")
 
     if next_task:
         set_current_task(

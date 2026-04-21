@@ -25,11 +25,8 @@ env/
 # Local working files (not pushed to GitHub / ClawHub)
 .do_scan_cache/
 
-# Private runtime files (contain chat_id, agent_id, project-specific state)
-HEARTBEAT.md
-ROADMAP.md
-plans/
-config.md
+# Autonomous Improvement Loop — all skill-generated state lives in .ail/
+.ail/
 
 # Old backup scripts
 bugfix_work/
