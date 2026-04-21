@@ -5,10 +5,48 @@ import argparse
 import re
 from pathlib import Path
 
-from project_insights import _get_inspire_questions, detect_project_type
-
 
 SKIP_DIRS = {".git", "__pycache__", ".venv", "venv", "node_modules", ".pytest_cache", "dist", "build"}
+
+
+def detect_project_type(project: Path) -> str:
+    names = {p.name for p in project.iterdir()} if project.exists() else set()
+    if {"src", "tests"} & names or (project / "pyproject.toml").exists() or (project / "setup.py").exists():
+        return "software"
+    if {"chapters", "outline.md"} & names:
+        return "writing"
+    if {"scripts", "scenes", "storyboard"} & names:
+        return "video"
+    if {"papers", "references"} & names or list(project.glob("*.tex")):
+        return "research"
+    return "generic"
+
+
+def _get_inspire_questions(kind: str, language: str) -> list[str]:
+    zh = language.lower().startswith("zh")
+    mapping = {
+        "software": [
+            "What CLI or UX change would reduce friction the most?" if not zh else "什么 CLI 或 UX 改动最能降低使用摩擦？",
+            "What would make tests easier to write?" if not zh else "什么改动会让测试更容易编写？",
+        ],
+        "writing": [
+            "What pacing issue is most visible right now?" if not zh else "当前最明显的节奏问题是什么？",
+            "Which character or section needs more depth?" if not zh else "哪个角色或章节最需要补深度？",
+        ],
+        "video": [
+            "Which scene feels slow or unclear?" if not zh else "哪个场景最拖沓或不清晰？",
+            "Where can narrative continuity improve?" if not zh else "哪里可以提升叙事连续性？",
+        ],
+        "research": [
+            "Which methodology gap is most important?" if not zh else "当前最重要的方法论缺口是什么？",
+            "What counterargument or citation is missing?" if not zh else "缺少什么反驳观点或引用？",
+        ],
+        "generic": [
+            "What improvement would make this project easier to maintain?" if not zh else "什么改动会让这个项目更易维护？",
+            "What small improvement would create the most leverage?" if not zh else "什么小改动会带来最大的杠杆收益？",
+        ],
+    }
+    return mapping.get(kind, mapping["generic"])
 
 
 def _walk_files(project: Path):

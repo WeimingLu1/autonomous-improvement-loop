@@ -47,33 +47,11 @@ def _run(args: list[str]) -> subprocess.CompletedProcess:
 
 @pytest.fixture(scope="module", autouse=True)
 def preserve_heartbeat():
-    """
-    Backup HEARTBEAT.md before tests; restore the pre-test state afterwards.
-
-    Additionally, if the saved HEARTBEAT.md has an empty queue (e.g. restored
-    from a previous test run that used `git checkout HEAD`), the fixture
-    rebuilds a 6-item queue with `a-refresh` before the tests start so that
-    read-only tests like `test_queue_shows_table` always see a non-empty queue.
-    """
+    """Backup HEARTBEAT.md before tests and restore it afterwards."""
     hb_path = PROJECT / "HEARTBEAT.md"
     backup = tempfile.mktemp(suffix=".HEARTBEAT.md")
-    # ── before tests ──────────────────────────────────────────────────────────
     Path(backup).write_bytes(hb_path.read_bytes())
-
-    # Ensure a non-empty queue at start of test session by running a-refresh
-    # if the current HEARTBEAT.md has no pending rows.
-    has_rows = re.search(r"\| pending \|", hb_path.read_text(encoding="utf-8"))
-    if not has_rows:
-        result = subprocess.run(
-            [PY, str(INIT_PY), "a-refresh"],
-            cwd=PROJECT, capture_output=True, text=True,
-        )
-        # Best-effort; continue regardless
-
     yield
-
-    # ── after tests ───────────────────────────────────────────────────────────
-    # Restore the pre-test snapshot (ignoring any queue changes made by tests)
     hb_path.write_bytes(Path(backup).read_bytes())
     Path(backup).unlink(missing_ok=True)
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """File locking helpers using fcntl.flock for exclusive advisory locks.
 
-Prevents concurrent cron runs from corrupting HEARTBEAT.md by ensuring
+Prevents concurrent cron runs from corrupting state files by ensuring
 exclusive access during read/write operations.
 """
 
@@ -72,7 +72,7 @@ class FileLock:
 
 @contextmanager
 def lock_file(path: Path, timeout: float = 30.0):
-    """Context manager for exclusive file locking on a heartbeat file.
+    """Context manager for exclusive file locking on a state file.
 
     The lock file path is derived from the target path:
         path.parent / ".heartbeat.lock"
@@ -97,10 +97,10 @@ def lock_file(path: Path, timeout: float = 30.0):
 
 
 def heartbeat_lock(heartbeat_path: Path, timeout: float = 30.0):
-    """Context manager for locking HEARTBEAT.md.
+    """Backward-compatible helper for locking a state file path.
 
     Args:
-        heartbeat_path: Path to HEARTBEAT.md
+        heartbeat_path: Path to the file being locked
         timeout: Seconds to wait before giving up (default: 30)
 
     Yields:
