@@ -95,10 +95,6 @@ def ail_state_dir(project: Path) -> Path:
     return project / ".ail"
 
 
-def ail_heartbeat(project: Path) -> Path:
-    """Path to HEARTBEAT.md for a project."""
-    return project / ".ail" / "HEARTBEAT.md"
-
 
 def ail_project_md(project: Path) -> Path:
     """Path to PROJECT.md for a project."""
@@ -125,7 +121,7 @@ def _migrate_to_ail(project: Path) -> bool:
     """Migrate legacy project-root state files to .ail/ directory.
 
     Before the .ail/ convention, state was stored at:
-      project/ROADMAP.md, project/HEARTBEAT.md, project/PROJECT.md,
+      project/ROADMAP.md, project/PROJECT.md,
       project/plans/, project/config.md
 
     After the change, all files go into project/.ail/.
@@ -134,7 +130,7 @@ def _migrate_to_ail(project: Path) -> bool:
     """
     legacy_files = {
         project / "ROADMAP.md": ail_roadmap(project),
-        project / "HEARTBEAT.md": ail_heartbeat(project),
+
         project / "PROJECT.md": ail_project_md(project),
         project / "config.md": ail_config(project),
     }
@@ -703,122 +699,6 @@ def seed_queue(project: Path, mode: str, language: str) -> None:
     cmd_plan(force=True)
 
 
-# ── HEARTBEAT queue initialization ─────────────────────────────────────────────
-
-def init_queue_heartbeat(project: Path, mode: str, language: str) -> None:
-    """Initialize or update the Run Status + empty Queue section."""
-    _migrate_to_ail(project)
-    if not ail_heartbeat(project).exists():
-        raise RuntimeError(f"HEARTBEAT.md not found at {ail_heartbeat(project)}")
-
-    created = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-    run_status = f"""\
-| Field | Value |
-|-------|-------|
-| last_run_time | — |
-| last_run_commit | — |
-| last_run_result | unknown |
-| last_run_task | — |
-| cron_lock | false |
-| mode | {mode} |
-| rollback_on_fail | true |
-"""
-
-    empty_queue = f"""\
-| # | Type | Score | Content | Source | Status | Created |
-|---|------|-------|---------|--------|--------|---------|
-"""
-
-    content = read_file(ail_heartbeat(project))
-
-    # Replace Run Status section
-    content = re.sub(
-        r"(## Run Status\n\n)\|[\s\S]*?(\n---\n)",
-        f"\\1{run_status}\\2",
-        content,
-    )
-
-    # Replace Queue section (keep it empty/minimal for new adopt)
-    content = re.sub(
-        r"(\n## Queue\n\n)[\s\S]*?(\n---\n)",
-        f"\\1{empty_queue}\n---\n",
-        content,
-    )
-
-    write_file(ail_heartbeat(project), content)
-
-
-def pending_queue_rows(project: Path) -> list[dict[str, str]]:
-    if not ail_heartbeat(project).exists():
-        return []
-    rows: list[dict[str, str]] = []
-    for line in read_file(ail_heartbeat(project)).splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("|") or stripped.startswith("|---"):
-            continue
-        m = re.match(
-            r"^\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|",
-            stripped,
-        )
-        if not m:
-            continue
-        num, kind, score, desc, source, status, created = m.groups()
-        if status.strip().lower() == "pending":
-            rows.append(
-                {
-                    "num": num,
-                    "kind": kind.strip(),
-                    "score": score.strip(),
-                    "desc": desc.strip(),
-                    "source": source.strip(),
-                    "status": status.strip(),
-                    "created": created.strip(),
-                }
-            )
-    return rows
-
-
-def write_pending_queue(project: Path, rows: list[dict[str, str]]) -> None:
-    content = read_file(ail_heartbeat(project))
-    table = [
-        "| # | Type | Score | Content | Source | Status | Created |",
-        "|---|------|-------|---------|--------|--------|---------|",
-    ]
-    for i, row in enumerate(rows, 1):
-        table.append(
-            f"| {i} | {row['kind']} | {row['score']} | {row['desc']} | {row['source']} | pending | {row['created']} |"
-        )
-    content = re.sub(
-        r"(\n## Queue\n\n)[\s\S]*?(\n---\n)",
-        "\\1" + "\n".join(table) + "\n\\2",
-        content,
-    )
-    write_file(ail_heartbeat(project), content)
-
-
-def update_run_status_mode(project: Path, mode: str) -> None:
-    if not ail_heartbeat(project).exists():
-        return
-    content = read_file(ail_heartbeat(project))
-    content = re.sub(r"(\| mode \| )([^|]+)( \|)", rf"\1{mode}\3", content)
-    write_file(ail_heartbeat(project), content)
-
-
-def dedupe_pending_rows(rows: list[dict[str, str]]) -> tuple[list[dict[str, str]], int]:
-    seen: set[str] = set()
-    deduped: list[dict[str, str]] = []
-    removed = 0
-    for row in rows:
-        key = re.sub(r"\s+", " ", row["desc"]).strip().lower()
-        if key in seen:
-            removed += 1
-            continue
-        seen.add(key)
-        deduped.append(row)
-    return deduped, removed
-
-
 # ── Adopt: existing project takeover ──────────────────────────────────────────
 
 def cmd_adopt(
@@ -938,28 +818,7 @@ def cmd_adopt(
     except Exception as e:
         warn(f"PROJECT.md generation failed: {e}")
 
-    # Queue handling for old managed projects
     mode = "bootstrap" if new_items > 3 else "normal"
-    current_rows = pending_queue_rows(project)
-    if current_rows:
-        step("📦 Existing queue detected")
-        deduped_rows, removed = dedupe_pending_rows(current_rows)
-        default_action = "c" if removed else "k"
-        action = ask("  Queue handling (k=keep, c=dedupe and keep, r=clear and rebuild)", default_action).lower()
-        if action == "r":
-            init_queue_heartbeat(project, mode=mode, language=language)
-            ok(f"HEARTBEAT.md rebuilt (mode: {mode})")
-        elif action == "c":
-            write_pending_queue(project, deduped_rows)
-            update_run_status_mode(project, mode)
-            ok(f"Queue deduplicated, removed {removed} duplicate item(s)")
-        else:
-            update_run_status_mode(project, mode)
-            ok("Kept existing queue, updated run mode only")
-    else:
-        step("📋 Initializing HEARTBEAT.md")
-        init_queue_heartbeat(project, mode=mode, language=language)
-        ok(f"HEARTBEAT.md initialized (mode: {mode})")
 
     roadmap_path = ail_roadmap(project)
     if not roadmap_path.exists():
@@ -981,8 +840,6 @@ def cmd_adopt(
 
     {'The first run will stay in bootstrap mode until the project is ready' if mode == 'bootstrap' else 'Cron runs automatically every 30 minutes'}
 
-    View queue:
-      cat {ail_heartbeat(project)}
 
     Trigger Cron manually:
       openclaw cron run {cron_job_id}
@@ -1125,34 +982,6 @@ def cmd_onboard(
     except Exception as e:
         warn(f"PROJECT.md generation failed: {e}")
 
-    # Step 7: init heartbeat — create .ail/ dir and seed HEARTBEAT.md first
-    step("📋 Initializing HEARTBEAT.md")
-    ail_state_dir(project).mkdir(parents=True, exist_ok=True)
-    # Seed a blank/minimal HEARTBEAT.md so init_queue_heartbeat can update it
-    blank_heartbeat = f"""\
-## Run Status
-
-| Field | Value |
-|-------|-------|
-| last_run_time | — |
-| last_run_commit | — |
-| last_run_result | unknown |
-| last_run_task | — |
-| cron_lock | false |
-| mode | bootstrap |
-| rollback_on_fail | true |
-
-## Queue
-
-| # | Type | Score | Content | Source | Status | Created |
-|---|------|-------|---------|--------|--------|---------|
-
----
-"""
-    hb_path = ail_heartbeat(project)
-    hb_path.write_text(blank_heartbeat, encoding="utf-8")
-    init_queue_heartbeat(project, mode="bootstrap", language=language)
-    ok("HEARTBEAT.md initialized (mode: bootstrap)")
 
     step("📋 Generating PROJECT.md")
     try:
@@ -1171,8 +1000,6 @@ def cmd_onboard(
     Next step:
       python init.py adopt {project}  # take over the project and start Cron
 
-    View queue:
-      cat {ail_heartbeat(project)}
     """))
 
 
@@ -1224,7 +1051,7 @@ def cmd_start() -> None:
         4. Record the result through `python3 {HERE / 'init.py'} a-trigger --force`.
         5. Send a concise final summary (commit, result, next task if any).
 
-        IMPORTANT: ROADMAP.md is the source of truth. Do not rely on the old HEARTBEAT queue flow.
+        IMPORTANT: ROADMAP.md is the source of truth for task execution.
         """
     ).strip()
 
@@ -1450,30 +1277,6 @@ def cmd_status(project: Path) -> None:
             warn(f"{check} (missing)")
     print()
 
-    # Queue status
-    if ail_heartbeat(project).exists():
-        content = read_file(ail_heartbeat(project))
-        pending_rows: list[tuple[str, str, str, str]] = []
-        for line in content.splitlines():
-            stripped = line.strip()
-            if not stripped.startswith("|") or stripped.startswith("|---"):
-                continue
-            m = re.match(
-                r"^\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|",
-                stripped,
-            )
-            if not m:
-                continue
-            num, kind, score, desc, _source, status = m.groups()
-            if status.strip().lower() == "pending":
-                pending_rows.append((num, kind.strip(), score, desc.strip()))
-
-        print(f"  Pending queue tasks: {len(pending_rows)} item(s)")
-        for num, kind, score, desc in pending_rows[:10]:
-            print(f"    #{num} [{kind}/{score}] {desc}")
-        if len(pending_rows) > 10:
-            print(f"    ... {len(pending_rows) - 10} more item(s) omitted")
-
     # Cron status
     cron_id = config.get("cron_job_id") or detect_existing_cron()
     if cron_id:
@@ -1645,67 +1448,13 @@ def _print_plan_doc(path: Path) -> None:
 # ── Main entry point ────────────────────────────────────────────────────────────
 
 # ── a_queue: show current queue ───────────────────────────────────────────────
+# Deprecated: this command used the old HEARTBEAT queue flow.
+# Use a-current (ROADMAP.md-based) instead.
 
 def cmd_queue(all_items: bool = False) -> None:
     step("📋 Current Queue")
-    project, _ = _get_roadmap_and_project()
-    _migrate_to_ail(project)
-    if not ail_heartbeat(project).exists():
-        fail(f"HEARTBEAT.md not found at {ail_heartbeat(project)}")
-        return
-
-    content = read_file(ail_heartbeat(project))
-
-    # Parse ALL rows from ALL ## Queue sections (handles multi-section corruption)
-    all_rows: list[dict[str, str]] = []
-    for line in content.splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("|") or "---" in stripped or stripped.startswith("| #"):
-            continue
-        cells = [c.strip() for c in stripped.split("|")[1:-1]]
-        if not cells or not re.match(r"^\d+$", cells[0]):
-            continue
-        if len(cells) >= 8:
-            all_rows.append({
-                "num": cells[0], "type": cells[1], "score": cells[2],
-                "content": cells[3], "detail": cells[4],
-                "source": cells[5], "status": cells[6], "created": cells[7],
-            })
-        elif len(cells) >= 7:
-            all_rows.append({
-                "num": cells[0], "type": cells[1], "score": cells[2],
-                "content": cells[3], "detail": cells[3],
-                "source": cells[4], "status": cells[5], "created": cells[6],
-            })
-
-    if not all_rows:
-        ok("Queue is empty")
-        return
-
-    # Deduplicate by normalized content (same logic as project_insights.py)
-    seen: set[str] = set()
-    rows: list[dict[str, str]] = []
-    for row in all_rows:
-        norm = re.sub(r"\s+", " ", row["content"].strip()).lower()
-        if norm not in seen:
-            seen.add(norm)
-            rows.append(row)
-
-    if not rows:
-        ok("Queue is empty")
-        return
-
-    pending = sum(1 for r in rows if r["status"].lower() != "done")
-    print(f"  {len(rows)} total ({pending} pending)\n")
-    print(f"  {'#':<3} {'Sc':<4} {'Content':<46} {'Status'}")
-    print(f"  {'-'*3} {'-'*4} {'-'*46} {'-'*10}")
-    visible_rows = [row for row in rows if all_items or row["status"].lower() != "done"]
-    for display_num, row in enumerate(visible_rows, 1):
-        marker = c("✓", COLOR_GREEN) if row["status"].lower() == "done" else c("○", COLOR_YELLOW)
-        content_short = (row["content"][:43] + "…") if len(row["content"]) > 46 else row["content"]
-        print(f"  {c(str(display_num), COLOR_BOLD):<3} {row['score']:<4} {content_short:<46} {marker} {row['status']}")
-
-
+    warn("a-queue is deprecated — HEARTBEAT queue flow has been removed.")
+    ok("Use a-current to view the ROADMAP.md-based current task instead.")
 # ── a_log: show recent Done Log ───────────────────────────────────────────────
 
 def cmd_log(n: int = 10) -> None:
