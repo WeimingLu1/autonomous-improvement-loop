@@ -17,6 +17,7 @@ before any test runs and restoring it afterwards.
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -32,11 +33,13 @@ PY = sys.executable
 
 def _run(args: list[str]) -> subprocess.CompletedProcess:
     """Run `python init.py <args>` from the project directory."""
+    env = {**os.environ, "PYTHONPATH": str(PROJECT)}
     return subprocess.run(
         [PY, str(INIT_PY), *args],
         cwd=PROJECT,
         capture_output=True,
         text=True,
+        env=env,
     )
 
 
@@ -78,28 +81,27 @@ def preserve_heartbeat():
 # ── Read-only command tests ───────────────────────────────────────────────────
 
 def test_queue_shows_table():
-    """a-queue exits 0 and prints the queue table (or 'Queue is empty')."""
+    """a-queue alias exits 0 and points users to current-task output."""
     result = _run(["a-queue"])
     assert result.returncode == 0, f"stderr: {result.stderr}"
     combined = result.stdout + result.stderr
-    assert "Queue" in combined or "| # |" in combined
-    assert "pending" in combined or "done" in combined or "empty" in combined.lower()
+    assert "Current Task" in combined or "ROADMAP.md not found" in combined or "TASK-" in combined
 
 
 def test_queue_all_flag():
-    """a-queue --all shows all rows regardless of status."""
+    """a-queue --all remains backward-compatible and still resolves."""
     result = _run(["a-queue", "--all"])
     assert result.returncode == 0
     combined = result.stdout + result.stderr
-    assert "Queue" in combined or "| # |" in combined
+    assert "Current Task" in combined or "ROADMAP.md not found" in combined or "TASK-" in combined
 
 
 def test_log_shows_done_entries():
-    """a-log prints the Done Log section."""
+    """a-log prints the roadmap Done Log section or reports it's empty."""
     result = _run(["a-log", "-n", "5"])
     assert result.returncode == 0, f"stderr: {result.stderr}"
     combined = result.stdout + result.stderr
-    assert "Done Log" in combined or "commit" in combined.lower()
+    assert "Done Log" in combined or "empty" in combined.lower() or "ROADMAP.md not found" in combined
 
 
 def test_config_get_returns_value():
@@ -169,41 +171,62 @@ def test_refresh_rebuilds_queue():
 
 
 def test_refresh_min_flag_respects_target():
-    """a-refresh --min 3 generates at least 3 queue rows (verified via JSON output)."""
+    """a-refresh --min 3 stays accepted as a deprecated alias and generates a PM task."""
     result = _run(["a-refresh", "--min", "3"])
     assert result.returncode == 0, f"a-refresh --min failed: {result.stderr}"
-    json_match = re.search(
-        r'\{[^{}]*"generated"\s*:\s*\d+[^{}]*\}', result.stdout
-    )
-    assert json_match, f"No JSON found in stdout: {result.stdout[:200]}"
-    data = json.loads(json_match.group())
-    assert data.get("generated", 0) >= 3
+    combined = result.stdout + result.stderr
+    assert "TASK-" in combined
+    assert "Goal" in combined or "Acceptance Criteria" in combined
 
 
 def test_trigger_force_exits_zero():
-    """a-trigger --force bypasses the cron_lock and exits 0."""
-    result = _run(["a-trigger", "--force"])
-    assert result.returncode == 0, (
-        f"a-trigger --force failed\nstdout: {result.stdout}\nstderr: {result.stderr}"
-    )
-    assert len(result.stdout) + len(result.stderr) > 0
+    """a-trigger --force executes the current roadmap task and exits 0."""
+    roadmap_path = PROJECT / "ROADMAP.md"
+    original_roadmap = roadmap_path.read_bytes() if roadmap_path.exists() else None
+    try:
+        _run(["a-plan"])
+        result = _run(["a-trigger", "--force"])
+        assert result.returncode == 0, (
+            f"a-trigger --force failed\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        combined = result.stdout + result.stderr
+        assert "Started TASK-" in combined or "Execution recorded" in combined
+        updated = roadmap_path.read_text(encoding="utf-8")
+        assert "| pass |" in updated
+    finally:
+        if original_roadmap is None:
+            roadmap_path.unlink(missing_ok=True)
+        else:
+            roadmap_path.write_bytes(original_roadmap)
 
 
-def test_add_injects_user_row_with_score_100():
-    """a-add injects a user requirement as the highest-priority item."""
-    hb_path = PROJECT / "HEARTBEAT.md"
-    original = hb_path.read_text(encoding="utf-8")
+def test_add_creates_user_task_plan_and_sets_current_task():
+    """a-add creates a user-sourced TASK-xxx plan and sets it as current when nothing is doing."""
+    roadmap_path = PROJECT / "ROADMAP.md"
+    plans_dir = PROJECT / "plans"
+    original_roadmap = roadmap_path.read_bytes() if roadmap_path.exists() else None
+    existing_plans = {p.name: p.read_bytes() for p in plans_dir.glob('TASK-*.md')} if plans_dir.exists() else {}
     try:
         result = _run(["a-add", "测试任务：验证a-add命令"])
         assert result.returncode == 0, f"a-add failed: {result.stderr}"
+        combined = result.stdout + result.stderr
+        assert "TASK-" in combined
+        assert "测试任务：验证a-add命令" in combined
 
-        content = hb_path.read_text(encoding="utf-8")
-        # User rows have score 100 and source = user
+        content = roadmap_path.read_text(encoding="utf-8")
         assert "测试任务：验证a-add命令" in content
-        assert "user" in content.lower()
-        assert "| 100 |" in content
+        assert "| user |" in content or " user " in content.lower()
     finally:
-        hb_path.write_text(original, encoding="utf-8")
+        if original_roadmap is None:
+            roadmap_path.unlink(missing_ok=True)
+        else:
+            roadmap_path.write_bytes(original_roadmap)
+        if plans_dir.exists():
+            for p in plans_dir.glob('TASK-*.md'):
+                if p.name not in existing_plans:
+                    p.unlink(missing_ok=True)
+            for name, data in existing_plans.items():
+                (plans_dir / name).write_bytes(data)
 
 
 def test_scan_triggers_inspire_scanner():
@@ -241,3 +264,81 @@ def test_status_shows_project_info():
     # Should show some readiness info or timeout
     assert ("Project" in combined or "project" in combined or "Queue" in combined
             or "timeout" in combined.lower() or "TimeoutExpired" in combined)
+
+
+# ── PM Roadmap command tests ─────────────────────────────────────────────────
+
+def test_a_plan_generates_task_and_echoes_full_plan():
+    """a-plan generates TASK-xxx, writes plan doc, and echoes the full plan."""
+    roadmap_path = PROJECT / "ROADMAP.md"
+    original_roadmap = roadmap_path.read_bytes() if roadmap_path.exists() else None
+    try:
+        result = _run(["a-plan"])
+        combined = result.stdout + result.stderr
+        assert result.returncode == 0, f"a-plan failed: {result.stderr}"
+        # Must show TASK id
+        assert "TASK-" in combined, f"No TASK-xxx in output: {combined[:200]}"
+        # Must echo Goal section
+        assert "## Goal" in combined or "Goal" in combined, f"No Goal section: {combined[:200]}"
+        # Must echo Acceptance Criteria
+        assert "## Acceptance Criteria" in combined or "Acceptance Criteria" in combined
+    finally:
+        if original_roadmap is not None:
+            roadmap_path.write_bytes(original_roadmap)
+        else:
+            roadmap_path.unlink(missing_ok=True)
+
+
+def test_a_current_shows_current_task_and_full_plan():
+    """a-current shows current task + echoes the full plan doc."""
+    roadmap_path = PROJECT / "ROADMAP.md"
+    original_roadmap = roadmap_path.read_bytes() if roadmap_path.exists() else None
+    try:
+        # First generate a task
+        _run(["a-plan"])
+        result = _run(["a-current"])
+        combined = result.stdout + result.stderr
+        assert result.returncode == 0, f"a-current failed: {result.stderr}"
+        # Must show task id
+        assert "TASK-" in combined
+        # Must show plan doc body
+        assert ("## Goal" in combined or "Goal" in combined or "Execution Plan" in combined)
+    finally:
+        if original_roadmap is not None:
+            roadmap_path.write_bytes(original_roadmap)
+        else:
+            roadmap_path.unlink(missing_ok=True)
+
+
+def test_a_queue_alias_shows_current_task():
+    """a-queue (deprecated alias) points to a-current and shows task + plan."""
+    roadmap_path = PROJECT / "ROADMAP.md"
+    original_roadmap = roadmap_path.read_bytes() if roadmap_path.exists() else None
+    try:
+        _run(["a-plan"])
+        result = _run(["a-queue"])
+        combined = result.stdout + result.stderr
+        assert result.returncode == 0, f"a-queue alias failed: {result.stderr}"
+        assert "TASK-" in combined
+    finally:
+        if original_roadmap is not None:
+            roadmap_path.write_bytes(original_roadmap)
+        else:
+            roadmap_path.unlink(missing_ok=True)
+
+
+def test_a_refresh_alias_calls_a_plan():
+    """a-refresh (deprecated alias) calls a-plan and generates a task."""
+    roadmap_path = PROJECT / "ROADMAP.md"
+    original_roadmap = roadmap_path.read_bytes() if roadmap_path.exists() else None
+    try:
+        result = _run(["a-refresh"])
+        combined = result.stdout + result.stderr
+        # a-refresh -> a-plan --force should succeed
+        assert result.returncode == 0, f"a-refresh alias failed: {result.stderr}"
+        assert "TASK-" in combined
+    finally:
+        if original_roadmap is not None:
+            roadmap_path.write_bytes(original_roadmap)
+        else:
+            roadmap_path.unlink(missing_ok=True)

@@ -27,6 +27,8 @@ env/
 
 # Private runtime files (contain chat_id, agent_id, project-specific state)
 HEARTBEAT.md
+ROADMAP.md
+plans/
 config.md
 
 # Old backup scripts

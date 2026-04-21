@@ -1,14 +1,14 @@
 ---
 name: autonomous-improvement-loop
-description: Universal continuous improvement loop for any project. Rolling 6-item backlog queue (rebuilt every run) in alternating 2:1 improve/idea rhythm, cron scheduler, type-aware scanner, 13 commands (a-adopt/onboard/status/start/stop/add/scan/clear/queue/log/refresh/trigger/config), Detail field for full intent capture, inspire bucket for creative discovery. Works for software, writing, video, research, and generic projects. Install: clawhub install autonomous-improvement-loop
+description: Universal AI PM loop for any project. Maintains ROADMAP.md with one current task, full plans in plans/TASK-xxx.md, PM-generated next-task planning, user-priority task insertion, roadmap-driven execution, and 11 core commands plus aliases. Works for software, writing, video, research, and generic projects. Install: clawhub install autonomous-improvement-loop
 ---
 
 # Autonomous Improvement Loop — Skill Reference
 
 ## Overview
 
-This skill drives a **Universal Continuous Improvement Loop** for any long-running project:
-**Maintain task queue → Pick highest priority → Execute → Verify → Record → Repeat**
+This skill drives a **Universal AI PM Loop** for any long-running project:
+**Plan current task → Execute → Verify → Record → Pick next task → Repeat**
 
 Type-agnostic: works for software, writing, video, research, or generic projects.
 
@@ -32,66 +32,60 @@ The skill auto-detects your project type via `project_insights.py`. You can also
 
 ```
 ┌─────────────────────┐
-│  Cron fires (30 min) │
+│  Cron fires / manual │
 └─────────┬───────────┘
           ▼
 ┌─────────────────────┐
-│ Acquire cron_lock   │  ← prevent concurrent runs
+│ Read ROADMAP.md     │
+│ current task + plan │
 └─────────┬───────────┘
           ▼
 ┌─────────────────────┐
-│ inspire_scanner.py  │  ← rebuild rolling 6-item backlog in one shot
-│                     │     idea → improve → improve → idea → improve → improve
-│                     │     deduplicates against queue + Done Log + last generated
+│ Execute current task│
+│ from plans/TASK-xxx │
 └─────────┬───────────┘
           ▼
 ┌─────────────────────┐
-│ Pick top queue task  │  ← highest score, not done yet
+│ Record Done Log     │
+│ and promote next    │
 └─────────┬───────────┘
           ▼
 ┌─────────────────────┐
-│ Agent executes      │  ← git commit
-└─────────┬───────────┘
-          ▼
-┌─────────────────────┐
-│ verify_and_revert.py│  ← verify → pass / fail → revert
-└─────────┬───────────┘
-          ▼
-┌─────────────────────┐
-│ update_heartbeat.py  │  ← mark done + Done Log + rolling queue rebuild
+│ PM planner chooses  │
+│ next concrete task  │
 └─────────────────────┘
 ```
 
 ---
 
-## HEARTBEAT.md Structure
+## ROADMAP.md Structure
 
 ```
-## Run Status        ← runtime state
-## Queue            ← task queue (working area)
+## Current Task     ← exactly one current task
+## Rhythm State     ← next_default_type + counters + plan path
+## PM Notes         ← lightweight operator notes
 ## Done Log         ← completed tasks
----
 ```
 
-### Run Status Fields
+### Current Task Fields
 
 | Field | Description |
 |-------|-------------|
-| `last_run_time` | ISO timestamp of last run |
-| `last_run_commit` | Git hash of last commit |
-| `cron_lock` | `true` = someone is editing queue, skip this run |
-| `improves_since_last_idea` | Counter for alternating queue phase: 2 improves per idea, used while rebuilding the rolling queue |
+| `task_id` | `TASK-001` style stable id |
+| `type` | `idea` or `improve` |
+| `source` | `pm` or `user` |
+| `title` | human-readable task title |
+| `status` | `pending` \| `doing` \| `done` |
+| `created` | creation date |
 
-### Queue Fields
+### Rhythm State Fields
 
 | Field | Description |
 |-------|-------------|
-| `Type` | `idea` \| `improve` \| `feature` \| `fix` \| `wizard` \| `user` |
-| `Score` | 1–100 (higher = more urgent; user requests = 100; ideas default to 65, improves default to 45) |
-| `Source` | `inspire: <question>` \| `git: <module>` \| `scanner` \| `user` \| `agent` |
-| `Status` | `pending` \| `done` \| `skip` |
-| `Content` | ≤30-character summary; prefixed with `[[Idea]]` or `[[Improve]]` tag |
-| `Detail` | Full original intent / analysis rationale; user requests recorded verbatim, AI-generated tasks include complete reasoning |
+| `next_default_type` | next PM-generated task type |
+| `improves_since_last_idea` | 2:1 idea/improve rhythm counter |
+| `current_plan_path` | active `plans/TASK-xxx.md` path |
+| `reserved_user_task_id` | queued user task when a doing task must not be interrupted |
 
 ---
 
@@ -99,13 +93,15 @@ The skill auto-detects your project type via `project_insights.py`. You can also
 
 | Script | Role | Interface |
 |--------|------|----------|
-| `init.py` | Setup + all 13 commands | CLI |
+| `init.py` | Setup + roadmap / PM commands | CLI |
 | `project_insights.py` | Used internally by inspire_scanner for git-activity-based Improve candidates | `--project`, `--heartbeat`, `--language`, `--refresh`, `--min` |
 | `priority_scorer.py` | Score queue entries | stdin/stdout |
 | `project_md.py` | Generate PROJECT.md from current project tree | `--project`, `--output`, `--language`, `--repo` |
-| `inspire_scanner.py` | Rebuilds rolling 6-item backlog in one call via 2:1 alternating cycle; deduplicates against queue + Done Log + last_generated_content; git-informed Improve targeting | `--project`, `--heartbeat`, `--language`, `--target-size` |
-| `run_status.py` | Read/write Run Status | `--heartbeat`, `read`/`write` |
-| `update_heartbeat.py` | Post-task updater: mark done + append Done Log + rebuild rolling queue + rebuild PROJECT.md | `--heartbeat`, `--project`, `--commit`, `--result`, `--task`, `--language`, `--min-queue` |
+| `inspire_scanner.py` | Legacy scanner for older queue-based flow | `--project`, `--heartbeat`, `--language`, `--target-size` |
+| `roadmap.py` | ROADMAP.md data model + parsing/writing | module |
+| `task_ids.py` | Stable `TASK-xxx` id allocation | module |
+| `plan_writer.py` | Write full `plans/TASK-xxx.md` docs | module |
+| `task_planner.py` | PM planner for next default task | module |
 
 ---
 
@@ -122,7 +118,7 @@ Any shell command works. The skill is language-agnostic.
 
 ## User Request Insertion
 
-Users insert tasks via message → directly written to HEARTBEAT.md Queue with score=100 (forced to #1).
+Users insert tasks via `a-add` → written as full `plans/TASK-xxx.md` docs with `source=user`. User tasks take priority over PM-generated tasks, but do not interrupt a task already marked `doing`.
 
 ---
 
@@ -167,13 +163,15 @@ The skill is invoked via OpenClaw's skill router. Incoming message text is parse
 | `a-status [path]` | Check project readiness |
 | `a-start` | Start cron hosting (create the cron job) |
 | `a-stop` | Stop cron hosting (remove the cron job) |
-| `a-add <content>` | Add a user requirement to the queue |
-| `a-scan` | Rescan the project, refresh the queue (non-user tasks only) |
-| `a-clear` | Clear all non-user tasks from the queue |
-| `a-queue [--all]` | Show current queue (use `--all` to include done items) |
-| `a-log [-n N]` | Show recent Done Log entries (default: 10) |
-| `a-refresh [--min N]` | Rebuild rolling backlog to 6 items (or N) from latest project state; clears non-user rows then fills with fresh alternating items |
-| `a-trigger [--force]` | Run cron immediately (skip `cron_lock` check with `--force`) |
+| `a-add <content>` | Create a user-sourced `TASK-xxx` + full plan doc |
+| `a-scan` | Legacy scan command |
+| `a-clear` | Legacy queue cleanup command |
+| `a-current` | Show current task + full plan doc |
+| `a-queue [--all]` | Alias to `a-current` |
+| `a-log [-n N]` | Show recent roadmap Done Log entries |
+| `a-plan [--force]` | Generate the next PM task + full plan doc |
+| `a-refresh [--min N]` | Alias to `a-plan` |
+| `a-trigger [--force]` | Execute current roadmap task and record Done Log |
 | `a-config get <key>` | Read a config value |
 | `a-config set <key> <value>` | Write a config value |
 

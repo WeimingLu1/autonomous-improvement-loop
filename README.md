@@ -1,6 +1,6 @@
 # Autonomous Improvement Loop
 
-**One agent. One project. Cron-driven autonomous improvement queue.**
+**One agent. One project. Cron-driven AI PM loop.**
 
 [![ClawHub](https://img.shields.io/badge/Install-ClawHub-6B57FF?style=flat-square)](https://clawhub.ai/skills/autonomous-improvement-loop)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
@@ -24,10 +24,10 @@ A skill for [OpenClaw](https://github.com/openclaw/openclaw) agents that turns y
 Once installed and configured:
 
 - Your agent continuously improves your project on a schedule (cron-driven)
-- All improvement tasks go through an AI-prioritized queue (HEARTBEAT.md)
-- Every completed task → commit → optional verification → report
-- Queue stays full automatically — the scanner keeps finding new tasks
-- The agent never loses context — it remembers the queue across sessions
+- All work flows through `ROADMAP.md` plus full plans in `plans/TASK-xxx.md`
+- Every completed task is recorded in roadmap Done Log
+- PM planner keeps choosing the next concrete task
+- The agent never loses context across sessions
 
 ---
 
@@ -42,13 +42,15 @@ After installation, interact with the loop via these commands:
 | `a-status [path]` | Check project readiness |
 | `a-start` | Start cron hosting (create the cron job) |
 | `a-stop` | Stop cron hosting (remove the cron job) |
-| `a-add <content>` | Add a user requirement to the queue |
-| `a-scan` | **Legacy** — scan via `project_insights.py` (legacy); use `a-refresh` for the rolling 6-item rebuild |
-| `a-clear` | Clear all non-user tasks from the queue |
-| `a-queue [--all]` | Show current queue (use `--all` to include done items) |
-| `a-log [-n N]` | Show recent Done Log entries (default: 10) |
-| `a-refresh [--min N]` | Rebuild rolling backlog to 6 items (or N) from latest project state; clears non-user rows then fills with fresh alternating items |
-| `a-trigger [--force]` | Run cron immediately (skip `cron_lock` check with `--force`) |
+| `a-add <content>` | Create a user-sourced `TASK-xxx` plan |
+| `a-scan` | Legacy scan command |
+| `a-clear` | Legacy cleanup command |
+| `a-current` | Show current task and full plan doc |
+| `a-queue [--all]` | Alias to `a-current` |
+| `a-log [-n N]` | Show recent roadmap Done Log entries |
+| `a-plan [--force]` | Generate the next PM task and full plan doc |
+| `a-refresh [--min N]` | Alias to `a-plan` |
+| `a-trigger [--force]` | Execute current roadmap task and record Done Log |
 | `a-config get <key>` | Read a config value |
 | `a-config set <key> <value>` | Write a config value |
 

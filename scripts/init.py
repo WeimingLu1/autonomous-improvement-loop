@@ -12,9 +12,10 @@ Supports these flows:
   a-add     Add a user requirement to the queue
   a-scan    Trigger a queue scan via project_insights.py
   a-clear  Clear non-user tasks from the queue
-  a-queue   Show current queue
+  a-current Show current task + full plan doc
+  a-plan    Generate current task + full plan (PM mode)
   a-log     Show recent Done Log entries
-  a-refresh Clear + inspire scan (run alternating queue cycle once)
+  a-refresh [deprecated: use a-plan]
   a-trigger Run cron immediately
   a-config  Get or set config values
 
@@ -1230,48 +1231,98 @@ def cmd_stop() -> None:
         write_file(CONFIG_FILE, content)
 
 
-# ── Add: insert user requirement into queue ───────────────────────────────────
+# ── Add: create user-request task + full plan ─────────────────────────────────
 
 def cmd_add(content_text: str) -> None:
-    step("📝 Adding user requirement to queue")
-
-    if not HEARTBEAT.exists():
-        fail(f"HEARTBEAT.md not found at {HEARTBEAT}")
-        sys.exit(1)
+    step("📝 Adding user request as current task")
 
     if not content_text or not content_text.strip():
         fail("Empty content — nothing to add")
         sys.exit(1)
 
-    # Sanitize pipe characters (break markdown table parsing) and newlines
-    content_text = content_text.replace("|", "/").replace("\n", " ")
+    content_text = content_text.replace("|", "/").replace("\n", " ").strip()
+    project, roadmap_path = _get_roadmap_and_project()
 
-    config = read_current_config()
-    project_p = config.get("project_path", "").strip()
-    heartbeat_p = HEARTBEAT.resolve()
-    content_summary = content_text.strip()[:30] + ("…" if len(content_text.strip()) > 30 else "")
+    from scripts.roadmap import load_roadmap, set_current_task, init_roadmap, CurrentTask
+    from scripts.task_ids import next_task_id
+    from scripts.plan_writer import write_plan_doc
 
-    cmd = [
-        sys.executable,
-        str(HERE / "project_insights.py"),
-        "--project", project_p or ".",
-        "--heartbeat", str(heartbeat_p),
-        "--add", content_text.strip(),
-        "--detail", content_text.strip(),
-        "--score", "100",
-        "--source", "user",
-        "--top",
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode == 0:
-        ok(f"Added to queue: {content_summary}")
-    else:
-        fail(f"Failed to add to queue (exit {result.returncode})")
-        if result.stdout:
-            print(result.stdout, file=sys.stdout)
-        if result.stderr:
-            print(result.stderr, file=sys.stderr)
-        sys.exit(1)
+    plans_dir = project / "plans"
+    plans_dir.mkdir(parents=True, exist_ok=True)
+    if not roadmap_path.exists():
+        init_roadmap(roadmap_path)
+        ok(f"Initialized ROADMAP.md at {roadmap_path}")
+
+    roadmap = load_roadmap(roadmap_path)
+    if roadmap.current_task and roadmap.current_task.status == "doing":
+        warn(f"Current task {roadmap.current_task.task_id} is doing, not interrupting it")
+        task_id = next_task_id(plans_dir)
+        plan_path = write_plan_doc(
+            plans_dir=plans_dir,
+            task_id=task_id,
+            title=content_text,
+            task_type="improve",
+            source="user",
+            context="Direct user request captured via a-add.",
+            why_now="User explicitly requested this work and user tasks take priority once the current doing task finishes.",
+            scope=[content_text],
+            non_goals=["Do not interrupt the currently doing task"],
+            relevant_files=["TBD during execution"],
+            execution_plan=["Wait for current doing task to finish", "Execute user-requested task next"],
+            acceptance_criteria=["Requested change is implemented", "Verification is recorded in the plan execution output"],
+            verification=["Run relevant tests or checks for the requested change"],
+            risks=["Details may need refinement during implementation"],
+        )
+        set_current_task(
+            roadmap_path,
+            roadmap.current_task,
+            plan_path=roadmap.current_plan_path,
+            next_default_type=roadmap.next_default_type,
+            improves_since_last_idea=roadmap.improves_since_last_idea,
+            reserved_user_task_id=task_id,
+        )
+        ok(f"Reserved user task {task_id} for after current doing task")
+        print()
+        _print_plan_doc(plan_path)
+        return
+
+    task_id = next_task_id(plans_dir)
+    plan_path = write_plan_doc(
+        plans_dir=plans_dir,
+        task_id=task_id,
+        title=content_text,
+        task_type="improve",
+        source="user",
+        context="Direct user request captured via a-add.",
+        why_now="User explicitly requested this work and user tasks take priority over PM-generated tasks.",
+        scope=[content_text],
+        non_goals=["Do not expand scope beyond the user request unless required to complete it"],
+        relevant_files=["TBD during implementation"],
+        execution_plan=["Understand requested change", "Implement the change", "Verify behavior and summarize result"],
+        acceptance_criteria=["Requested change is implemented", "The resulting task plan is visible via a-current"],
+        verification=["Run relevant tests or checks for the requested change"],
+        risks=["User request may need clarification if ambiguous"],
+    )
+    created = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    task = CurrentTask(
+        task_id=task_id,
+        task_type="improve",
+        source="user",
+        title=content_text,
+        status="pending",
+        created=created,
+    )
+    set_current_task(
+        roadmap_path,
+        task,
+        plan_path=str(plan_path.relative_to(project)),
+        next_default_type=roadmap.next_default_type,
+        improves_since_last_idea=roadmap.improves_since_last_idea,
+        reserved_user_task_id="",
+    )
+    ok(f"User request saved as {task_id}")
+    print()
+    _print_plan_doc(plan_path)
 
 
 # ── Scan: trigger queue scan ──────────────────────────────────────────────────
@@ -1420,6 +1471,157 @@ def cmd_status(project: Path) -> None:
     print()
 
 
+# ── a_plan: generate PM task + plan ──────────────────────────────────────────
+
+def _get_roadmap_and_project():
+    config = read_current_config()
+    project_path_str = config.get("project_path", "").strip()
+    if not project_path_str or project_path_str in (".", "YOUR_PROJECT_PATH"):
+        detected = detect_project_path()
+        project_path_str = str(detected) if detected else str(Path.cwd())
+    project = Path(project_path_str).expanduser().resolve()
+    roadmap_path = project / "ROADMAP.md"
+    return project, roadmap_path
+
+
+def cmd_plan(force: bool = False) -> None:
+    step("🗺️  Generating current task + plan")
+    project, roadmap_path = _get_roadmap_and_project()
+    from scripts.roadmap import load_roadmap, set_current_task, init_roadmap, CurrentTask
+    from scripts.task_planner import choose_next_task
+    from scripts.task_ids import next_task_id
+    from scripts.plan_writer import write_plan_doc
+
+    plans_dir = project / "plans"
+
+    # Ensure plans dir exists
+    plans_dir.mkdir(parents=True, exist_ok=True)
+
+    # Init roadmap if missing
+    if not roadmap_path.exists():
+        init_roadmap(roadmap_path)
+        ok(f"Initialized ROADMAP.md at {roadmap_path}")
+
+    roadmap = load_roadmap(roadmap_path)
+
+    # Check for reserved user task
+    if roadmap.reserved_user_task_id and not force:
+        warn(f"User task {roadmap.reserved_user_task_id} is reserved — use --force to regenerate anyway")
+        cmd_current()
+        return
+
+    if roadmap.current_task and roadmap.current_task.status in ("pending", "doing") and not force:
+        ok("Current task already exists. Use --force to regenerate.")
+        cmd_current()
+        return
+
+    # Build done_titles for dedup
+    done_titles: set[str] = set()
+    for line in roadmap_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip().startswith("|") or "---" in line:
+            continue
+        cells = [c.strip() for c in line.split("|")[1:-1]]
+        if len(cells) >= 5 and cells[0].startswith("TASK-"):
+            done_titles.add(cells[4])
+
+    language = read_current_config().get("project_language", DEFAULT_LANGUAGE).strip() or "zh"
+    planned = choose_next_task(project, roadmap, done_titles, language)
+
+    task_id = next_task_id(plans_dir)
+    plan_path = write_plan_doc(
+        plans_dir=plans_dir,
+        task_id=task_id,
+        title=planned.title,
+        task_type=planned.task_type,
+        source=planned.source,
+        context=planned.context,
+        why_now=planned.why_now,
+        scope=planned.scope,
+        non_goals=planned.non_goals,
+        relevant_files=planned.relevant_files,
+        execution_plan=planned.execution_plan,
+        acceptance_criteria=planned.acceptance_criteria,
+        verification=planned.verification,
+        risks=planned.risks,
+    )
+
+    from datetime import datetime, timezone
+    created = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    task = CurrentTask(
+        task_id=task_id,
+        task_type=planned.task_type,
+        source=planned.source,
+        title=planned.title,
+        status="pending",
+        created=created,
+    )
+
+    next_type = "improve" if roadmap.next_default_type == "idea" else "idea"
+    improves = roadmap.improves_since_last_idea + (1 if planned.task_type == "improve" else 0)
+
+    set_current_task(
+        roadmap_path, task,
+        plan_path=str(plan_path.relative_to(project)),
+        next_default_type=next_type,
+        improves_since_last_idea=improves,
+        reserved_user_task_id=roadmap.reserved_user_task_id,
+    )
+    ok(f"Task {task_id} generated and set as current")
+    print()
+    _print_plan_doc(plan_path)
+
+
+# ── a_current: show current task + full plan ──────────────────────────────────
+
+def cmd_current() -> None:
+    step("📌 Current Task")
+    project, roadmap_path = _get_roadmap_and_project()
+    if not roadmap_path.exists():
+        ok("ROADMAP.md not found. Run a-plan to generate the first task.")
+        return
+
+    from scripts.roadmap import load_roadmap
+    roadmap = load_roadmap(roadmap_path)
+
+    if not roadmap.current_task:
+        ok("No current task. Run a-plan to generate one.")
+        return
+
+    task = roadmap.current_task
+    print(f"  Task ID   : {task.task_id}")
+    print(f"  Type      : {task.task_type}")
+    print(f"  Source    : {task.source}")
+    print(f"  Title     : {task.title}")
+    print(f"  Status    : {task.status}")
+    print(f"  Created   : {task.created}")
+    if task.status == "doing":
+        print(f"  Plan Path : {roadmap.current_plan_path}")
+    print()
+    if roadmap.current_plan_path:
+        plan_path = (project / roadmap.current_plan_path)
+        if plan_path.exists():
+            _print_plan_doc(plan_path)
+        else:
+            warn(f"Plan file not found: {plan_path}")
+    elif roadmap.reserved_user_task_id:
+        ok(f"Reserved user task: {roadmap.reserved_user_task_id}")
+
+
+def _print_plan_doc(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    # Print key sections
+    for section in ["## Goal", "## Context", "## Why now", "## Scope",
+                    "## Non-goals", "## Relevant Files", "## Execution Plan",
+                    "## Acceptance Criteria", "## Verification", "## Risks / Notes"]:
+        if section in text:
+            lines = text.split(section, 1)
+            if len(lines) > 1:
+                content = lines[1].split("\n## ", 1)[0].strip()
+                print(f"{c(section, COLOR_BOLD)}")
+                print(f"  {content[:300]}")
+                print()
+
+
 # ── Main entry point ────────────────────────────────────────────────────────────
 
 # ── a_queue: show current queue ───────────────────────────────────────────────
@@ -1486,12 +1688,13 @@ def cmd_queue(all_items: bool = False) -> None:
 
 def cmd_log(n: int = 10) -> None:
     step("📜 Recent Done Log")
-    if not HEARTBEAT.exists():
-        fail(f"HEARTBEAT.md not found at {HEARTBEAT}")
+    project, roadmap_path = _get_roadmap_and_project()
+    if not roadmap_path.exists():
+        ok("ROADMAP.md not found")
         return
 
-    content = read_file(HEARTBEAT)
-    log_match = re.search(r"(## Done Log\n\n)(\| Time[\s\S]*?\n)(\|[\s\S]*?)(?=\n## |\Z)", content)
+    content = read_file(roadmap_path)
+    log_match = re.search(r"(## Done Log\n\n)(\| time[\s\S]*?\n)(\|[\s\S]*?)(?=\n## |\Z)", content, re.IGNORECASE)
     if not log_match:
         ok("Done Log section not found")
         return
@@ -1499,7 +1702,7 @@ def cmd_log(n: int = 10) -> None:
     data_lines: list[str] = []
     for line in log_match.group(3).splitlines():
         stripped = line.strip()
-        if not stripped.startswith("|") or "---" in stripped or stripped.startswith("| Time"):
+        if not stripped.startswith("|") or "---" in stripped or stripped.lower().startswith("| time"):
             continue
         data_lines.append(stripped)
 
@@ -1510,15 +1713,12 @@ def cmd_log(n: int = 10) -> None:
     print(f"  Last {min(n, len(data_lines))} of {len(data_lines)} entries\n")
     for line in data_lines[:n]:
         cells = [c.strip() for c in line.split("|")[1:-1]]
-        if len(cells) < 4:
+        if len(cells) < 7:
             continue
-        time_val = cells[0]
-        commit = cells[1] if len(cells) > 1 else ""
-        task = cells[2] if len(cells) > 2 else ""
-        result = cells[3] if len(cells) > 3 else ""
+        time_val, task_id, task_type, source, title, result, commit = cells[:7]
         result_mark = c("✓", COLOR_GREEN) if result.lower() == "pass" else c("✗", COLOR_RED)
-        task_short = (task[:50] + "…") if len(task) > 50 else task
-        print(f"  {time_val[:16]}  {result_mark}  {commit:<10}  {task_short}")
+        task_short = (title[:50] + "…") if len(title) > 50 else title
+        print(f"  {time_val[:16]}  {result_mark}  {task_id:<9}  {task_short}  ({commit})")
 
 
 # ── a_refresh: clear + scan ─────────────────────────────────────────────────
@@ -1563,31 +1763,109 @@ def cmd_refresh(min_items: int | None = None) -> None:
 
 # ── a_trigger: run cron immediately ──────────────────────────────────────────
 
+def _git_head_short(project: Path) -> str:
+    r = run(["git", "rev-parse", "--short", "HEAD"], cwd=project)
+    return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else "manual"
+
+
 def cmd_trigger(force: bool = False) -> None:
-    step("⚡ Triggering cron execution")
-    config = read_current_config()
-    cron_job_id = config.get("cron_job_id", "").strip()
-    if not cron_job_id or cron_job_id in ("", "YOUR_AGENT_ID"):
-        detected = detect_existing_cron()
-        if detected:
-            cron_job_id = detected
-            ok(f"Detected cron job: {cron_job_id}")
-        else:
-            fail("No cron job ID found in config.md and none detected")
-            sys.exit(1)
+    step("⚡ Triggering plan execution")
+    project, roadmap_path = _get_roadmap_and_project()
+    if not roadmap_path.exists():
+        fail("ROADMAP.md not found. Run a-plan first.")
+        sys.exit(1)
 
-    if not force:
-        lock_match = re.search(r"cron_lock\s*\|\s*(true|false)", read_file(HEARTBEAT))
-        if lock_match and lock_match.group(1) == "true":
-            warn("cron_lock=true — another run may be in progress. Use --force to override.")
-            sys.exit(1)
+    from scripts.roadmap import load_roadmap, append_done_log, set_current_task, CurrentTask
+    roadmap = load_roadmap(roadmap_path)
+    if not roadmap.current_task:
+        fail("No current task found. Run a-plan first.")
+        sys.exit(1)
 
-    ok(f"Running: openclaw cron run {cron_job_id}")
-    r = run(["openclaw", "cron", "run", cron_job_id], timeout=3600)
-    if r.returncode == 0:
-        ok("Cron run triggered successfully")
+    current = roadmap.current_task
+    if current.status == "doing" and not force:
+        warn("Current task is already doing. Use --force to re-run.")
+        sys.exit(1)
+
+    doing_task = CurrentTask(
+        task_id=current.task_id,
+        task_type=current.task_type,
+        source=current.source,
+        title=current.title,
+        status="doing",
+        created=current.created,
+    )
+    set_current_task(
+        roadmap_path,
+        doing_task,
+        plan_path=roadmap.current_plan_path,
+        next_default_type=roadmap.next_default_type,
+        improves_since_last_idea=roadmap.improves_since_last_idea,
+        reserved_user_task_id=roadmap.reserved_user_task_id,
+    )
+    ok(f"Started {current.task_id}: {current.title}")
+
+    commit = _git_head_short(project)
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    append_done_log(
+        roadmap_path,
+        timestamp=timestamp,
+        task_id=current.task_id,
+        task_type=current.task_type,
+        source=current.source,
+        title=current.title,
+        result="pass",
+        commit=commit,
+    )
+
+    next_task = None
+    next_plan_path = ""
+    reserved = roadmap.reserved_user_task_id.strip()
+    plans_dir = project / "plans"
+    if reserved:
+        reserved_plan = plans_dir / f"{reserved}.md"
+        title = reserved
+        if reserved_plan.exists():
+            first_line = reserved_plan.read_text(encoding="utf-8").splitlines()[0].strip()
+            m = re.match(r"#\s+TASK-\d+\s+·\s+(.+)$", first_line)
+            title = m.group(1).strip() if m else title
+        next_task = CurrentTask(
+            task_id=reserved,
+            task_type="improve",
+            source="user",
+            title=title,
+            status="pending",
+            created=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        )
+        next_plan_path = str(Path("plans") / f"{reserved}.md")
+
+    if next_task:
+        set_current_task(
+            roadmap_path,
+            next_task,
+            plan_path=next_plan_path,
+            next_default_type=roadmap.next_default_type,
+            improves_since_last_idea=roadmap.improves_since_last_idea,
+            reserved_user_task_id="",
+        )
+        ok(f"Execution recorded, next user task is now current: {next_task.task_id}")
     else:
-        fail(f"Failed: {r.stderr[:200] if r.stderr else r.stdout[:200]}")
+        completed_placeholder = CurrentTask(
+            task_id=current.task_id,
+            task_type=current.task_type,
+            source=current.source,
+            title=current.title,
+            status="done",
+            created=current.created,
+        )
+        set_current_task(
+            roadmap_path,
+            completed_placeholder,
+            plan_path=roadmap.current_plan_path,
+            next_default_type=roadmap.next_default_type,
+            improves_since_last_idea=roadmap.improves_since_last_idea,
+            reserved_user_task_id="",
+        )
+        ok("Execution recorded in Done Log")
 
 
 # ── a_config: get/set config values ─────────────────────────────────────────
@@ -1744,10 +2022,19 @@ def main() -> int:
     clear_p = sub.add_parser("a-clear", help="Clear non-user tasks from queue")
     clear_p.set_defaults(func=lambda _a: cmd_clear())
 
-    # ── a_queue ────────────────────────────────────────────────────────────────
-    queue_p = sub.add_parser("a-queue", help="Show current queue")
+    # ── a_plan ────────────────────────────────────────────────────────────────
+    plan_p = sub.add_parser("a-plan", help="Generate current task and full plan (PM mode)")
+    plan_p.add_argument("--force", action="store_true", help="Regenerate even if current task exists")
+    plan_p.set_defaults(func=lambda a: cmd_plan(force=a.force))
+
+    # ── a_current ──────────────────────────────────────────────────────────────
+    current_p = sub.add_parser("a-current", help="Show current task + full plan doc")
+    current_p.set_defaults(func=lambda _a: cmd_current())
+
+    # ── a_queue (deprecated alias) ──────────────────────────────────────────────
+    queue_p = sub.add_parser("a-queue", help="[deprecated: use a-current]")
     queue_p.add_argument("--all", action="store_true", help="Include done items")
-    queue_p.set_defaults(func=lambda a: cmd_queue(all_items=a.all))
+    queue_p.set_defaults(func=lambda _a: cmd_current())
 
     # ── a_log ──────────────────────────────────────────────────────────────────
     log_p = sub.add_parser("a-log", help="Show recent Done Log entries")
@@ -1756,10 +2043,10 @@ def main() -> int:
     log_p.set_defaults(func=lambda a: cmd_log(n=a.count))
 
     # ── a_refresh ──────────────────────────────────────────────────────────────
-    refresh_p = sub.add_parser("a-refresh", help="Clear non-user tasks and refresh the queue")
+    refresh_p = sub.add_parser("a-refresh", help="[deprecated: use a-plan]")
     refresh_p.add_argument("--min", type=int, default=None,
                           help="Minimum queue items (default: from config.md or 5)")
-    refresh_p.set_defaults(func=lambda a: cmd_refresh(min_items=a.min))
+    refresh_p.set_defaults(func=lambda _a: cmd_plan(force=True))
 
     # ── a_trigger ──────────────────────────────────────────────────────────────
     trigger_p = sub.add_parser("a-trigger", help="Trigger cron execution immediately")
@@ -1835,12 +2122,16 @@ def main() -> int:
             cmd_scan()
         elif args.command == "a-clear":
             cmd_clear()
+        elif args.command == "a-plan":
+            cmd_plan(force=args.force)
+        elif args.command == "a-current":
+            cmd_current()
         elif args.command == "a-queue":
-            cmd_queue(all_items=args.all)
+            cmd_current()
         elif args.command == "a-log":
             cmd_log(n=args.count)
         elif args.command == "a-refresh":
-            cmd_refresh(min_items=args.min)
+            cmd_plan(force=True)
         elif args.command == "a-trigger":
             cmd_trigger(force=args.force)
         elif args.command == "a-config":
