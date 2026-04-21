@@ -33,3 +33,6 @@ config.md
 
 # Old backup scripts
 bugfix_work/
+
+# Worktrees for isolated development
+.worktrees/
