@@ -278,7 +278,7 @@ def main() -> int:
         elif args.command == "a-refresh":
             cmd_plan(force=True)
         elif args.command == "a-trigger":
-            cmd_trigger(force=args.force)
+            cmd_trigger(force=args.force, no_spawn=args.no_spawn)
         elif args.command == "a-config":
             cmd_config(action=args.action, key=args.key, value=args.value)
     except KeyboardInterrupt:

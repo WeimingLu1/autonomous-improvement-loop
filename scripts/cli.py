@@ -858,6 +858,30 @@ def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
         warn(f"Current task {current.task_id} is already doing. Use --force to re-record.")
         sys.exit(1)
 
+    # Auto-transition pending → doing when force is used (cron session scenario)
+    if current.status == "pending":
+        step(f"Advancing {current.task_id} from pending → doing")
+        from scripts.roadmap import CurrentTask
+        new_task = CurrentTask(
+            task_id=current.task_id,
+            task_type=current.task_type,
+            source=current.source,
+            title=current.title,
+            status="doing",
+            created=current.created,
+        )
+        set_current_task(
+            roadmap_path,
+            task=new_task,
+            plan_path=roadmap.current_plan_path,
+            next_default_type=roadmap.next_default_type,
+            improves_since_last_idea=roadmap.improves_since_last_idea,
+            reserved_user_task_id=roadmap.reserved_user_task_id,
+        )
+        # Reload roadmap after status update
+        roadmap = load_roadmap(roadmap_path)
+        current = roadmap.current_task
+
     roadmap_text = roadmap_path.read_text(encoding="utf-8")
     done_log_match = re.search(r"## Done Log\n\n([\s\S]*?)(?=\n## |\Z)", roadmap_text, re.IGNORECASE)
     if done_log_match:
