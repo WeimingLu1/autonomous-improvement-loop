@@ -1764,6 +1764,9 @@ def _generate_next_task(project: Path, roadmap_path: Path, roadmap) -> None:
 
 def cmd_config(action: str, key: str, value: str | None = None) -> None:
     conf = CONFIG_FILE if CONFIG_FILE.exists() else _config_template()
+    defaults = {
+        "project_language": DEFAULT_LANGUAGE,
+    }
     if action == "get":
         step(f"⚙  Config: {key}")
         config = read_current_config()
@@ -1777,8 +1780,10 @@ def cmd_config(action: str, key: str, value: str | None = None) -> None:
                 m = re.search(rf"^(\s*{re.escape(key)}:\s*)(.*)$", raw, re.MULTILINE)
                 if m:
                     print(f"  {key} = {m.group(2).strip()}")
-                else:
-                    warn(f"Key '{key}' not found in config.md")
+                    return
+            default_val = defaults.get(key, "")
+            if default_val:
+                print(f"  {key} = {default_val}")
             else:
                 warn(f"Key '{key}' not found in config.md")
     elif action == "set":
@@ -1788,21 +1793,21 @@ def cmd_config(action: str, key: str, value: str | None = None) -> None:
         step(f"⚙  Config: {key} = {value}")
         # Read from template if persistent doesn't exist yet
         raw = read_file(conf) if conf.exists() else ""
-        if not re.search(rf"^{re.escape(key)}:", raw, re.MULTILINE):
-            fail(f"Key '{key}' not found in config.md — cannot set unregistered key")
-            sys.exit(1)
         current_match = re.search(rf"^\s*{re.escape(key)}:\s*(.+)$", raw, re.MULTILINE)
         if current_match and re.sub(r"\s+#.*$", "", current_match.group(1)).strip() == value:
             ok(f"Set {key} = {value} (unchanged)")
             return
-        new_raw = re.sub(
-            rf"(^\s*{re.escape(key)}:\s*).+$",
-            rf"\g<1>{value}",
-            raw, flags=re.MULTILINE
-        )
-        if new_raw == raw:
-            fail(f"Pattern did not match for key '{key}'")
-            sys.exit(1)
+        if re.search(rf"^{re.escape(key)}:", raw, re.MULTILINE):
+            new_raw = re.sub(
+                rf"(^\s*{re.escape(key)}:\s*).+$",
+                rf"\g<1>{value}",
+                raw,
+                flags=re.MULTILINE,
+            )
+        else:
+            if raw and not raw.endswith("\n"):
+                raw += "\n"
+            new_raw = raw + f"{key}: {value}\n"
         write_file(CONFIG_FILE, new_raw)
         ok(f"Set {key} = {value}")
 

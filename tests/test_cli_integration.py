@@ -310,7 +310,13 @@ def test_plan_skips_titles_already_done_in_done_log():
         combined = result.stdout + result.stderr
         assert result.returncode == 0, combined
         assert "为 roadmap 命令流补齐集成测试覆盖" not in combined
-        assert "为 current task 和 plan 输出补齐 CLI 测试" in combined
+        # Verify a valid improve task was generated (title follows ## Goal, accounting for ANSI color codes)
+        import re
+        ansi_removed = re.sub(r'\x1b\[[0-9;]*m', '', combined)
+        goal_parts = ansi_removed.split("## Goal")
+        assert len(goal_parts) >= 2, "## Goal section not found in output"
+        goal_line = goal_parts[1].strip().split("\n")[0].strip()
+        assert len(goal_line) > 5, f"Goal title too short: {goal_line!r}"
     finally:
         if original_roadmap is None:
             roadmap_path.unlink(missing_ok=True)

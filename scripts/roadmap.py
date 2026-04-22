@@ -50,7 +50,9 @@ def init_roadmap(path: Path) -> None:
 
 
 def _extract_current_task(text: str) -> CurrentTask | None:
-    rows = re.findall(r"^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|$", text, re.MULTILINE)
+    section_match = re.search(r"## Current Task\n\n([\s\S]*?)\n## ", text)
+    section = section_match.group(1) if section_match else text
+    rows = re.findall(r"^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|$", section, re.MULTILINE)
     for row in rows:
         if row[0] in {"task_id", "--------", "field", "------", "time"}:
             continue
