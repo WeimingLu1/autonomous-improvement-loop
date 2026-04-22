@@ -1033,22 +1033,28 @@ def cmd_start() -> None:
     _ail_plans = f'{project}/.ail/plans/' if project else '<project>/.ail/plans/'
     cron_message = textwrap.dedent(
         f"""
-        Autonomous Improvement Loop — execute task and record result.
+        Autonomous Improvement Loop — execute task, record result, then report back.
 
         Project: {project_path or '(unset)'}
 
-        Your job — use the sessions_spawn tool to delegate task execution:
+        Your workflow:
         1. Read ROADMAP: {CONFIG_FILE} and {_ail_roadmap}
         2. Read current task plan: `.ail/plans/TASK-xxx.md`
-        3. Use sessions_spawn to spawn a coding subagent (mode=run) with this task message:
-           "Execute the following task from the Autonomous Improvement Loop:\n\n"
-           "Read the plan at .ail/plans/TASK-xxx.md and implement it fully.\n"
-           "Run tests, verify acceptance criteria, commit your changes.\n"
-           "Project path: {project_path}"
-        4. Wait for the subagent to complete
-        5. If subagent succeeded: output this command as the LAST LINE of your response:
-           `python3 {HERE / 'init.py'} a-trigger --force`
-        6. If subagent failed: output `python3 {HERE / 'init.py'} a-trigger --force` anyway with failure context
+        3. Use sessions_spawn to spawn a coding subagent (mode=run) to execute the task in `{project_path}`
+        4. Wait for the subagent to finish
+        5. Then ACTUALLY RUN this command with the exec tool to record the result, do NOT merely print it:
+           python3 {HERE / 'init.py'} a-trigger --force
+        6. After recording, send a concise Telegram summary covering:
+           - what was done
+           - commit SHA
+           - verification/test result
+           - current status
+           - next task details (task id, title, scope / why-now)
+
+        IMPORTANT:
+        - Do not just echo the a-trigger command as text
+        - Use exec to run it inside this cron session
+        - Always send the final summary after the record step
         """
     ).strip()
 
