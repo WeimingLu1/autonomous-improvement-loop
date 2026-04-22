@@ -799,7 +799,7 @@ def _execute_task_plan(project: Path, task) -> tuple[bool, str]:
         return False, f"Verification failed (exit {result.returncode}): {result.stderr.strip() or result.stdout.strip()}"
 
 
-def cmd_trigger(force: bool = False) -> None:
+def cmd_trigger(force: bool = False, no_spawn: bool = False) -> None:
     step("⚡ Triggering plan execution")
     project, roadmap_path = _get_roadmap_and_project()
     _migrate_to_ail(project)
@@ -807,7 +807,7 @@ def cmd_trigger(force: bool = False) -> None:
         fail("ROADMAP.md not found. Run a-plan first.")
         sys.exit(1)
 
-    if os.environ.get("OPENCLAW_CRON_SESSION") == "1":
+    if os.environ.get("OPENCLAW_CRON_SESSION") == "1" or no_spawn:
         _record_result_only(project, roadmap_path, force)
         _maybe_update_project_md(project)
         return
@@ -833,7 +833,7 @@ def cmd_trigger(force: bool = False) -> None:
     if r.returncode != 0:
         fail(f"Cron session failed: {(r.stderr or '').strip() or (r.stdout or '').strip() or 'unknown error'}")
         sys.exit(1)
-    ok("Cron session completed")
+    ok(f"Cron session completed — execution recorded")
 
 
 def _maybe_update_project_md(project: Path) -> None:

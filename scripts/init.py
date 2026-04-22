@@ -200,7 +200,9 @@ def main() -> int:
     trigger_p = sub.add_parser("a-trigger", help="Execute current roadmap task immediately")
     trigger_p.add_argument("--force", action="store_true",
                           help="Re-run even if current task is already marked doing")
-    trigger_p.set_defaults(func=lambda a: cmd_trigger(force=a.force))
+    trigger_p.add_argument("--no-spawn", action="store_true",
+                          help="Skip spawning a new cron session — record result directly")
+    trigger_p.set_defaults(func=lambda a: cmd_trigger(force=a.force, no_spawn=a.no_spawn))
 
     config_sp = sub.add_parser("a-config", help="Get or set config values")
     config_sp.add_argument("action", choices=["get", "set"],

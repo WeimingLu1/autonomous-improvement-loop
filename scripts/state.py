@@ -207,7 +207,7 @@ def create_cron(agent_id: str, model: str, chat_id: str | None) -> str:
         f"2. exec: read the current task plan `.ail/plans/TASK-xxx.md`\n"
         f"3. DO the work — implement, run tests, verify acceptance criteria\n"
         f"4. exec: commit changes with git\n"
-        f"5. exec ONLY AFTER all work is verified done: run `python3 {SKILL_DIR / 'scripts' / 'init.py'} a-trigger --force`\n"
+        f"5. exec ONLY AFTER all work is verified done: run `python3 {SKILL_DIR / 'scripts' / 'init.py'} a-trigger --force --no-spawn`\n"
         f"   - This updates the Done Log in ROADMAP.md — do NOT send summary before this completes\n"
         f"6. exec ONLY AFTER step 5 completes: read the updated ROADMAP to get next task info\n"
         f"7. Send Telegram summary (via message tool) ONLY AFTER step 6.\n\n"
