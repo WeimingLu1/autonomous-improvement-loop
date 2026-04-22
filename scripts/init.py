@@ -1042,19 +1042,22 @@ def cmd_start() -> None:
         2. exec: read the current task plan `.ail/plans/TASK-xxx.md`
         3. DO the work — implement, run tests, verify acceptance criteria
         4. exec: commit changes with git
-        5. exec: run `python3 {HERE / 'init.py'} a-trigger --force`
-        6. exec: read updated ROADMAP to get next task info
-        7. Send Telegram summary (via message tool) covering:
+        5. exec ONLY AFTER all work is verified done: run `python3 {HERE / 'init.py'} a-trigger --force`
+           - This updates the Done Log in ROADMAP.md — do NOT send summary before this completes
+        6. exec ONLY AFTER step 5 completes: read the updated ROADMAP to get next task info
+           - Read {_ail_roadmap} to find current_task status and next task details
+        7. Send Telegram summary (via message tool) ONLY AFTER step 6 — covering:
            - what was done (one sentence)
            - commit SHA
            - test/verification result
-           - current status (next task id + title)
-           - next task details (scope, why-now)
+           - current status (next task id + title from updated ROADMAP)
+           - next task details (scope, why-now from updated ROADMAP)
 
         IMPORTANT:
         - Use exec tool for EVERY step — do NOT just describe what to do
-        - Run a-trigger --force via exec to record the Done Log
-        - Always send the Telegram summary as your final reply
+        - Steps 5 → 6 → 7 must execute in order. Never send Telegram summary before step 5 completes.
+        - The a-trigger --force command writes the Done Log — summary must read the updated ROADMAP.
+        - Always send the Telegram summary as your final reply.
         """
     ).strip()
 
@@ -1339,14 +1342,33 @@ def cmd_plan(force: bool = False) -> None:
         cmd_current()
         return
 
-    # Build done_titles for dedup
+    # Build done_titles for dedup (Fix 3: more reliable source)
     done_titles: set[str] = set()
-    for line in roadmap_path.read_text(encoding="utf-8").splitlines():
-        if not line.strip().startswith("|") or "---" in line:
-            continue
-        cells = [c.strip() for c in line.split("|")[1:-1]]
-        if len(cells) >= 5 and cells[0].startswith("TASK-"):
-            done_titles.add(cells[4])
+
+    # Source 1: Done Log in ROADMAP.md
+    roadmap_text = roadmap_path.read_text(encoding="utf-8")
+    done_log_match = re.search(r"## Done Log\n\n([\s\S]*?)(?=\n## |\Z)", roadmap_text, re.IGNORECASE)
+    if done_log_match:
+        for line in done_log_match.group(1).splitlines():
+            if not line.strip().startswith("|") or "---" in line:
+                continue
+            cells = [c.strip() for c in line.split("|")[1:-1]]
+            if len(cells) >= 5 and cells[0].startswith("TASK-"):
+                done_titles.add(cells[4])
+
+    # Source 2: git log for completed task commits (more reliable for dedup)
+    git_result = subprocess.run(
+        ["git", "log", "--oneline", "--grep=TASK-", "--since=90 days ago"],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if git_result.returncode == 0:
+        for line in git_result.stdout.splitlines():
+            m = re.search(r"TASK-\d+", line)
+            if m:
+                done_titles.add(m.group(0))
 
     language = read_current_config().get("project_language", DEFAULT_LANGUAGE).strip() or "zh"
     planned = choose_next_task(project, roadmap, done_titles, language)
@@ -1579,6 +1601,24 @@ def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
         warn(f"Current task {current.task_id} is already doing. Use --force to re-record.")
         sys.exit(1)
 
+    # ── Fix 2: Skip already-completed tasks ─────────────────────────────────
+    # Read Done Log to check if this task title already passed
+    roadmap_text = roadmap_path.read_text(encoding="utf-8")
+    done_log_match = re.search(r"## Done Log\n\n([\s\S]*?)(?=\n## |\Z)", roadmap_text, re.IGNORECASE)
+    if done_log_match:
+        done_block = done_log_match.group(1)
+        # Check if this title appears with result=pass
+        escaped_title = re.escape(current.title)
+        pass_pattern = re.compile(
+            rf"\|\s*[^|]+\s*\|\s*[^|]+\s*\|\s*[^|]+\s*\|\s*[^|]+\s*\|\s*{escaped_title}\s*\|\s*pass\s*\|",
+            re.IGNORECASE
+        )
+        if pass_pattern.search(done_block):
+            ok(f"Task '{current.title}' already passed — skipping Done Log record.")
+            # Still generate the next task to keep the pipeline moving
+            _generate_next_task(project, roadmap_path, roadmap)
+            return
+
     ok(f"Recording result for {current.task_id}: {current.title}")
     exec_ok, exec_msg = _execute_task_plan(project, current)
 
@@ -1601,11 +1641,28 @@ def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
 
     ok(f"Result recorded: {exec_msg}")
 
-    next_task = None
-    next_plan_path = ""
-    reserved = roadmap.reserved_user_task_id.strip()
+    # ── Fix 1: Don't wipe current_task — generate next task immediately ───────
+    _generate_next_task(project, roadmap_path, roadmap)
+
+
+def _generate_next_task(project: Path, roadmap_path: Path, roadmap) -> None:
+    """Generate the next PM task if no reserved user task is pending.
+
+    This keeps current_task always populated so the system never goes idle
+    after recording a result. Fixes the空转刷号 bug where set_current_task(None)
+    caused a-plan to generate a brand-new task with no real work done.
+    """
+    from scripts.roadmap import set_current_task, CurrentTask
+    from scripts.plan_writer import write_plan_doc
+    from scripts.task_ids import next_task_id
+    from scripts.task_planner import choose_next_task
+
     plans_dir = ail_plans_dir(project)
+    plans_dir.mkdir(parents=True, exist_ok=True)
+
+    reserved = roadmap.reserved_user_task_id.strip()
     if reserved:
+        # Reserved user task takes priority — activate it
         reserved_plan = plans_dir / f"{reserved}.md"
         title = reserved
         if reserved_plan.exists():
@@ -1620,28 +1677,103 @@ def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
             status="pending",
             created=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         )
-        next_plan_path = str(Path(".ail") / "plans" / f"{reserved}.md")
-
-    if next_task:
         set_current_task(
             roadmap_path,
             next_task,
-            plan_path=next_plan_path,
+            plan_path=str(Path(".ail") / "plans" / f"{reserved}.md"),
             next_default_type=roadmap.next_default_type,
             improves_since_last_idea=roadmap.improves_since_last_idea,
             reserved_user_task_id="",
         )
-        ok(f"Execution recorded, next user task is now current: {next_task.task_id}")
-    else:
-        set_current_task(
-            roadmap_path,
-            None,
-            plan_path="",
-            next_default_type=roadmap.next_default_type,
-            improves_since_last_idea=roadmap.improves_since_last_idea,
-            reserved_user_task_id="",
-        )
-        ok("Execution recorded in Done Log")
+        ok(f"Next user task is now current: {next_task.task_id}")
+        return
+
+    # No reserved user task — generate next PM task immediately
+    # This is the fix for空转刷号: we ALWAYS keep a current_task populated
+    # Build comprehensive done_titles from Done Log AND plans/ directory
+    # (Fix 3: more reliable dedup source)
+    done_titles: set[str] = set()
+
+    # Source 1: Done Log in ROADMAP.md
+    roadmap_text = roadmap_path.read_text(encoding="utf-8")
+    done_log_match = re.search(r"## Done Log\n\n([\s\S]*?)(?=\n## |\Z)", roadmap_text, re.IGNORECASE)
+    if done_log_match:
+        for line in done_log_match.group(1).splitlines():
+            if not line.strip().startswith("|") or "---" in line:
+                continue
+            cells = [c.strip() for c in line.split("|")[1:-1]]
+            if len(cells) >= 5 and cells[0].startswith("TASK-"):
+                done_titles.add(cells[4])  # title is column index 4
+
+    # Source 2: scan plans/ directory for all TASK-*.md and check their titles
+    if plans_dir.exists():
+        for plan_file in plans_dir.glob("TASK-*.md"):
+            try:
+                content = plan_file.read_text(encoding="utf-8")
+                first_line = content.splitlines()[0].strip() if content else ""
+                m = re.match(r"#\s+TASK-\d+\s+·\s+(.+)$", first_line)
+                if m:
+                    plan_title = m.group(1).strip()
+                    # Only add to done_titles if this task appears in Done Log
+                    # (we can't tell pass/fail from filename alone)
+                    pass
+            except Exception:
+                pass
+
+    # Source 3: git log for completed task commits (more reliable)
+    git_result = subprocess.run(
+        ["git", "log", "--oneline", "--grep=TASK-", "--since=90 days ago"],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if git_result.returncode == 0:
+        for line in git_result.stdout.splitlines():
+            m = re.search(r"TASK-\d+", line)
+            if m:
+                done_titles.add(m.group(0))  # Include task ID to avoid duplicate titles
+
+    language = read_current_config().get("project_language", DEFAULT_LANGUAGE).strip() or "zh"
+    planned = choose_next_task(project, roadmap, done_titles, language)
+    task_id = next_task_id(plans_dir)
+    plan_path = write_plan_doc(
+        plans_dir=plans_dir,
+        task_id=task_id,
+        title=planned.title,
+        task_type=planned.task_type,
+        source=planned.source,
+        context=planned.context,
+        why_now=planned.why_now,
+        scope=planned.scope,
+        non_goals=planned.non_goals,
+        relevant_files=planned.relevant_files,
+        execution_plan=planned.execution_plan,
+        acceptance_criteria=planned.acceptance_criteria,
+        verification=planned.verification,
+        risks=planned.risks,
+    )
+    from datetime import datetime as dt
+    created = dt.now(timezone.utc).strftime("%Y-%m-%d")
+    task = CurrentTask(
+        task_id=task_id,
+        task_type=planned.task_type,
+        source=planned.source,
+        title=planned.title,
+        status="pending",
+        created=created,
+    )
+    next_type = "improve" if roadmap.next_default_type == "idea" else "idea"
+    improves = roadmap.improves_since_last_idea + (1 if planned.task_type == "improve" else 0)
+    set_current_task(
+        roadmap_path,
+        task,
+        plan_path=str(plan_path.relative_to(project / ".ail")),
+        next_default_type=next_type,
+        improves_since_last_idea=improves,
+        reserved_user_task_id="",
+    )
+    ok(f"Next task generated and set as current: {task_id}")
 
 
 # ── a_config: get/set config values ─────────────────────────────────────────
