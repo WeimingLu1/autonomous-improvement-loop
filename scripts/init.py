@@ -1475,18 +1475,25 @@ def cmd_current() -> None:
 
 
 def _print_plan_doc(path: Path) -> None:
+    """Print full plan document without truncation, dynamically detecting sections."""
     text = path.read_text(encoding="utf-8")
-    # Print key sections
-    for section in ["## Goal", "## Context", "## Why now", "## Scope",
-                    "## Non-goals", "## Relevant Files", "## Execution Plan",
-                    "## Acceptance Criteria", "## Verification", "## Risks / Notes"]:
-        if section in text:
-            lines = text.split(section, 1)
-            if len(lines) > 1:
-                content = lines[1].split("\n## ", 1)[0].strip()
-                print(f"{c(section, COLOR_BOLD)}")
-                print(f"  {content[:300]}")
-                print()
+    lines = text.splitlines()
+    in_section = False
+    current_section = None
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            # New section started — print previous section's closing newline
+            if current_section is not None:
+                print()  # blank line between sections
+            current_section = stripped
+            print(c(current_section, COLOR_BOLD))
+            in_section = True
+        elif in_section and current_section:
+            # Content line — print with one-space indent for readability
+            print(f"  {stripped}")
+        # Skip blank lines (no-op in loop)
+    print()  # final newline
 
 
 # ── Main entry point ────────────────────────────────────────────────────────────
