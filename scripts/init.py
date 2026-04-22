@@ -1037,17 +1037,18 @@ def cmd_start() -> None:
 
         Project: {project_path or '(unset)'}
 
-        Your job:
+        Your job — use the sessions_spawn tool to delegate task execution:
         1. Read ROADMAP: {CONFIG_FILE} and {_ail_roadmap}
         2. Read current task plan: `.ail/plans/TASK-xxx.md`
-        3. EXECUTE the task — implement it, run tests, verify acceptance criteria
-        4. Mark it done and commit your changes
-        5. At the END of your response, output this line on its own line to record the result:
+        3. Use sessions_spawn to spawn a coding subagent (mode=run) with this task message:
+           "Execute the following task from the Autonomous Improvement Loop:\n\n"
+           "Read the plan at .ail/plans/TASK-xxx.md and implement it fully.\n"
+           "Run tests, verify acceptance criteria, commit your changes.\n"
+           "Project path: {project_path}"
+        4. Wait for the subagent to complete
+        5. If subagent succeeded: output this command as the LAST LINE of your response:
            `python3 {HERE / 'init.py'} a-trigger --force`
-
-        Example response:
-          Done. Implemented feature X, ran tests, all pass. Commit abc123.
-          python3 {HERE / 'init.py'} a-trigger --force
+        6. If subagent failed: output `python3 {HERE / 'init.py'} a-trigger --force` anyway with failure context
         """
     ).strip()
 
@@ -1529,17 +1530,8 @@ def cmd_trigger(force: bool = False) -> None:
         fail("ROADMAP.md not found. Run a-plan first.")
         sys.exit(1)
 
-    # Detect re-entry: if a trigger is already running (cron session or manual),
-    # just record the result without spawning another cron.
-    import fcntl
-    lock_path = project / ".ail" / ".trigger.lock"
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    lock_fd = open(lock_path, "w")
-    try:
-        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except (IOError, OSError):
-        # Already locked — either Mia is executing or a-trigger is recording
-        lock_fd.close()
+    # Check if we're already running inside a cron session (no recursion)
+    if os.environ.get("OPENCLAW_CRON_SESSION") == "1":
         _record_result_only(project, roadmap_path, force)
         return
 
@@ -1548,8 +1540,6 @@ def cmd_trigger(force: bool = False) -> None:
     cron_job_id = config.get("cron_job_id", "").strip()
     if not cron_job_id:
         fail("No cron job configured. Run a-start first.")
-        fcntl.flock(lock_fd, fcntl.LOCK_UN)
-        lock_fd.close()
         sys.exit(1)
 
     cron_timeout = config.get("cron_timeout", str(DEFAULT_TIMEOUT_S)).strip()
@@ -1562,11 +1552,8 @@ def cmd_trigger(force: bool = False) -> None:
     r = run(
         ["openclaw", "cron", "run", cron_job_id, "--expect-final", "--timeout", timeout_ms],
         timeout=int(cron_timeout) + 10,
+        env={**os.environ, "OPENCLAW_CRON_SESSION": "1"},
     )
-    fcntl.flock(lock_fd, fcntl.LOCK_UN)
-    lock_fd.close()
-    lock_path.unlink(missing_ok=True)
-
     if r.returncode != 0:
         fail(f"Cron session failed: {r.stderr.strip() or r.stdout.strip() or 'unknown error'}")
         sys.exit(1)
