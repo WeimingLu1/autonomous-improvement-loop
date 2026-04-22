@@ -1033,28 +1033,29 @@ def cmd_start() -> None:
     _ail_plans = f'{project}/.ail/plans/' if project else '<project>/.ail/plans/'
     cron_message = textwrap.dedent(
         f"""
-        Autonomous Improvement Loop — execute task, record result, then report back.
+        Autonomous Improvement Loop — execute task, record result, report back.
 
         Project: {project_path or '(unset)'}
 
-        Your workflow:
+        Your workflow (execute in order):
         1. Read ROADMAP: {CONFIG_FILE} and {_ail_roadmap}
         2. Read current task plan: `.ail/plans/TASK-xxx.md`
-        3. Use sessions_spawn to spawn a coding subagent (mode=run) to execute the task in `{project_path}`
-        4. Wait for the subagent to finish
-        5. Then ACTUALLY RUN this command with the exec tool to record the result, do NOT merely print it:
+        3. DO the work described in the plan — implement it, run tests, verify acceptance criteria
+        4. Commit your changes
+        5. Use exec tool to run this command to record the result:
            python3 {HERE / 'init.py'} a-trigger --force
-        6. After recording, send a concise Telegram summary covering:
-           - what was done
+        6. Send a Telegram summary to Sam (chat_id: 5535183090) covering:
+           - what was done (one sentence)
            - commit SHA
-           - verification/test result
-           - current status
-           - next task details (task id, title, scope / why-now)
+           - test/verification result
+           - current ROADMAP status
+           - next task (task id, title, scope one-liner, why-now one-liner)
 
         IMPORTANT:
-        - Do not just echo the a-trigger command as text
-        - Use exec to run it inside this cron session
-        - Always send the final summary after the record step
+        - Do NOT spawn a subagent — you do the work yourself
+        - Use exec tool (not print/echo) to run a-trigger --force
+        - After exec completes, read the updated ROADMAP to get next task details
+        - Send the Telegram summary as your final reply in this cron session
         """
     ).strip()
 
