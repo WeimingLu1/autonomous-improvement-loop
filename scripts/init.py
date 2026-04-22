@@ -1188,6 +1188,7 @@ def cmd_add(content_text: str) -> None:
             title=content_text,
             task_type="user",
             source="user",
+            effort="medium",
             context="Direct user request captured via a-add.",
             why_now="User explicitly requested this work and user tasks take priority once the current doing task finishes.",
             scope=[content_text],
@@ -1197,6 +1198,8 @@ def cmd_add(content_text: str) -> None:
             acceptance_criteria=["Requested change is implemented", "Verification is recorded in the plan execution output"],
             verification=["Run relevant tests or checks for the requested change"],
             risks=["Details may need refinement during implementation"],
+            background="",
+            rollback="",
         )
         set_current_task(
             roadmap_path,
@@ -1218,6 +1221,7 @@ def cmd_add(content_text: str) -> None:
         title=content_text,
         task_type="user",
         source="user",
+        effort="medium",
         context="Direct user request captured via a-add.",
         why_now="User explicitly requested this work and user tasks take priority over PM-generated tasks.",
         scope=[content_text],
@@ -1227,6 +1231,8 @@ def cmd_add(content_text: str) -> None:
         acceptance_criteria=["Requested change is implemented", "The resulting task plan is visible via a-current"],
         verification=["Run relevant tests or checks for the requested change"],
         risks=["User request may need clarification if ambiguous"],
+        background="",
+        rollback="",
     )
     created = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     task = CurrentTask(
@@ -1399,6 +1405,7 @@ def cmd_plan(force: bool = False) -> None:
         title=planned.title,
         task_type=planned.task_type,
         source=planned.source,
+        effort=planned.effort,
         context=planned.context,
         why_now=planned.why_now,
         scope=planned.scope,
@@ -1408,6 +1415,8 @@ def cmd_plan(force: bool = False) -> None:
         acceptance_criteria=planned.acceptance_criteria,
         verification=planned.verification,
         risks=planned.risks,
+        background=planned.background,
+        rollback=planned.rollback,
     )
 
     from datetime import datetime, timezone
@@ -1727,6 +1736,7 @@ def _generate_next_task(project: Path, roadmap_path: Path, roadmap) -> None:
         title=planned.title,
         task_type=planned.task_type,
         source=planned.source,
+        effort=planned.effort,
         context=planned.context,
         why_now=planned.why_now,
         scope=planned.scope,
@@ -1736,6 +1746,8 @@ def _generate_next_task(project: Path, roadmap_path: Path, roadmap) -> None:
         acceptance_criteria=planned.acceptance_criteria,
         verification=planned.verification,
         risks=planned.risks,
+        background=planned.background,
+        rollback=planned.rollback,
     )
     from datetime import datetime as dt
     created = dt.now(timezone.utc).strftime("%Y-%m-%d")

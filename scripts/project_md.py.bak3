@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import re
-import subprocess
 from pathlib import Path
 
 
@@ -97,113 +96,35 @@ def detect_version(project: Path) -> str:
     return "—"
 
 
-
-def _parse_imports_from_file(p: Path) -> tuple[set[str], set[str]]:
-    """
-    Parse actual import statements from a Python file.
-    Returns (direct_imports, from_imports) where each is a set of module names.
-    Only looks at real import lines, not strings or comments.
-    """
-    direct_imports: set[str] = set()
-    from_imports: set[str] = set()
-
-    try:
-        text = p.read_text(encoding="utf-8", errors="ignore")
-    except Exception:
-        return direct_imports, from_imports
-
-    # Use regex to find real import lines (not inside strings or comments)
-    # Pattern matches:
-    #   import X
-    #   import X as Y
-    #   import X.Y.Z
-    #   from X import Y
-    #   from X import Y as Z
-    #   from X.Y import Z
-
-    import_pattern = re.compile(
-        r'''
-        ^                           # start of line
-        \s*                         # leading whitespace
-        (?:import|from)\s+          # 'import' or 'from'
-        ([a-zA-Z_][a-zA-Z0-9_]*)    # root module name (first identifier)
-        ''',
-        re.MULTILINE | re.VERBOSE
-    )
-
-    # Find all import lines
-    for m in import_pattern.finditer(text):
-        root_module = m.group(1)
-        # Determine which kind of import
-        line_start = m.start()
-        line_end = text.find('\n', line_start)
-        if line_end == -1:
-            line_end = len(text)
-        line = text[line_start:line_end]
-
-        # Check if it's a 'from' import or direct 'import'
-        if re.match(r'^\s*from', line):
-            from_imports.add(root_module)
-        else:
-            direct_imports.add(root_module)
-
-    return direct_imports, from_imports
-
-
-def _file_uses_git(p: Path) -> bool:
-    """Check if a file contains subprocess.run(['git', ...]) pattern."""
-    try:
-        text = p.read_text(encoding="utf-8", errors="ignore")
-    except Exception:
-        return False
-    # Look for subprocess.run(["git", ...) or subprocess.run(['git', ...)
-    return bool(re.search(r'subprocess\.run\s*\(\s*\[\s*["\']git["\']', text))
-
-
 def detect_tech_stack(project: Path, kind: str) -> str:
-    """Detect tech stack from real import statements, not string matching."""
+    # Walk once and collect all relevant data
     all_files = list(_walk_files(project))
+    files = {p.name for p in all_files}
+    dirs = {p.name for p in project.iterdir() if p.is_dir()} if project.exists() else set()
+
+    # Pre-filter files by suffix to avoid repeated walking
     py_files = [p for p in all_files if p.suffix == ".py"]
+    config_files = [p for p in all_files if p.suffix in {".py", ".toml", ".yaml", ".yml"}]
 
-    # Collect all imports across all Python files
-    all_direct: set[str] = set()
-    all_from: set[str] = set()
-    git_users: set[Path] = set()
-
-    for p in py_files:
-        direct, from_mods = _parse_imports_from_file(p)
-        all_direct.update(direct)
-        all_from.update(from_mods)
-        if _file_uses_git(p):
-            git_users.add(p)
+    # Cache file contents to avoid repeated reads
+    content_cache: dict[Path, str] = {}
+    def get_content(p: Path) -> str:
+        if p not in content_cache:
+            content_cache[p] = p.read_text(encoding="utf-8", errors="ignore").lower()
+        return content_cache[p]
 
     stack: list[str] = []
     if kind == "software":
-        if any(p.suffix == ".py" for p in all_files):
+        if "pyproject.toml" in files or any(p.suffix == ".py" for p in all_files):
             stack.append("Python")
-
-        # Detect based on actual imports
-        if "typer" in all_from or "typer" in all_direct:
+        if any("typer" in get_content(p) for p in py_files):
             stack.append("Typer")
-        if "click" in all_from or "click" in all_direct:
-            stack.append("Click")
-        if "subprocess" in all_from or "subprocess" in all_direct:
-            stack.append("Subprocess")
-        if "pytest" in all_from or "pytest" in all_direct:
-            stack.append("Pytest")
-        if "sqlalchemy" in all_from or "sqlalchemy" in all_direct:
+        if any("sqlalchemy" in get_content(p) for p in py_files):
             stack.append("SQLAlchemy")
-        if "sqlite3" in all_from or "sqlite3" in all_direct:
+        if any("sqlite" in get_content(p) for p in config_files):
             stack.append("SQLite")
-
-        # Detect git usage
-        if git_users:
-            stack.append("Git")
-
-        # Check for Node.js
-        if any(p.name == "package.json" for p in all_files):
+        if "package.json" in files:
             stack.append("Node.js")
-
         if not stack:
             stack.append("Software project")
     elif kind == "writing":
@@ -231,12 +152,10 @@ def count_source_files(project: Path) -> int:
 
 
 def count_cli_commands(project: Path) -> int:
-    """Count CLI commands using @app.command (Typer) or @click.command (Click)."""
     count = 0
     for p in _walk_files(project):
         if p.suffix == ".py":
             text = p.read_text(encoding="utf-8", errors="ignore")
-            # Match @app.command( and @click.command(
             count += len(re.findall(r"@\w+\.command\(", text))
     return count
 
@@ -320,102 +239,6 @@ def architecture_block(project: Path, kind: str, lang: str) -> str:
     return "```\nproject root\n└── content organized by project type\n```"
 
 
-def _get_module_inventory(project: Path, lang: str) -> str:
-    """Build a module inventory table for software projects."""
-    scripts_dir = project / "scripts"
-    if not scripts_dir.exists():
-        return ""
-
-    module_descriptions: list[tuple[str, str]] = []
-
-    for py_file in sorted(scripts_dir.glob("*.py")):
-        if py_file.name.startswith("__"):
-            continue
-        try:
-            text = py_file.read_text(encoding="utf-8", errors="ignore")
-        except Exception:
-            continue
-
-        # Get docstring from the file
-        docstring = ""
-        m = re.search(r'"""(.*?)"""', text, re.DOTALL)
-        if not m:
-            m = re.search(r"'''(.*?)'''", text, re.DOTALL)
-        if m:
-            docstring = m.group(1).strip().split("\n")[0][:60]
-
-        # If no docstring, try to infer from function names
-        if not docstring:
-            func_names = re.findall(r"^\s*(?:async\s+)?def\s+(\w+)", text, re.MULTILINE)
-            if func_names:
-                docstring = f"Functions: {', '.join(func_names[:3])}"
-
-        if not docstring:
-            docstring = "—"
-
-        module_descriptions.append((f"`scripts/{py_file.name}`", docstring))
-
-    if not module_descriptions:
-        return ""
-
-    if lang == "zh":
-        header = "## 核心模块\n\n| 模块 | 说明 |\n|------|------|\n"
-    else:
-        header = "## Core Modules\n\n| Module | Description |\n|--------|-------------|\n"
-
-    rows = "\n".join(f"| {name} | {desc} |" for name, desc in module_descriptions)
-    return header + rows + "\n"
-
-
-def _get_change_stats(project: Path, lang: str) -> str:
-    """Get commit and file change statistics for last 30 days."""
-    try:
-        # Get commit count in last 30 days
-        result = subprocess.run(
-            ["git", "log", "--since=30 days ago", "--oneline"],
-            cwd=project,
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        commit_count = len(result.stdout.strip().split("\n")) if result.stdout.strip() else 0
-    except Exception:
-        commit_count = 0
-
-    try:
-        # Get files changed in last 30 days
-        result = subprocess.run(
-            ["git", "diff", "--stat", "--since=30 days ago"],
-            cwd=project,
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        # Last line has the summary like "10 files changed, 123 insertions(+)"
-        lines = result.stdout.strip().split("\n")
-        files_changed = 0
-        if lines:
-            last_line = lines[-1]
-            m = re.search(r"(\d+)\s+file", last_line)
-            if m:
-                files_changed = int(m.group(1))
-    except Exception:
-        files_changed = 0
-
-    if lang == "zh":
-        return (
-            "## 最近动态\n\n"
-            f"- 最近 30 天提交：{commit_count} 次\n"
-            f"- 最近 30 天文件变更：{files_changed} 个\n"
-        )
-    else:
-        return (
-            "## Recent Activity\n\n"
-            f"- Commits in last 30 days: {commit_count}\n"
-            f"- Files changed in last 30 days: {files_changed}\n"
-        )
-
-
 def render_project_md(project: Path, repo: str | None = None, language: str = "zh", project_type: str | None = None) -> str:
     kind = project_type if project_type is not None else detect_project_type(project)
     repo = repo or detect_repo(project)
@@ -425,10 +248,6 @@ def render_project_md(project: Path, repo: str | None = None, language: str = "z
     snapshot = summarize_snapshot(project, kind, language)
     caps = core_capabilities(project, kind, language)
     name = project.name
-
-    # Build module inventory and change stats for software projects
-    module_inventory = _get_module_inventory(project, language) if kind == "software" else ""
-    change_stats = _get_change_stats(project, language) if kind == "software" else ""
 
     if language == "zh":
         lines = [
@@ -484,19 +303,6 @@ def render_project_md(project: Path, repo: str | None = None, language: str = "z
             "",
             "---",
             "",
-        ]
-
-        # Add module inventory and change stats
-        if module_inventory:
-            lines.append(module_inventory)
-            lines.append("---")
-            lines.append("")
-        if change_stats:
-            lines.append(change_stats)
-            lines.append("---")
-            lines.append("")
-
-        lines += [
             f"## 开放方向（{kind} 类 inspire 问题）",
             "",
             "以下问题用于帮助 agent 在长期改进中保持创造性视角：",
@@ -560,19 +366,6 @@ def render_project_md(project: Path, repo: str | None = None, language: str = "z
         "",
         "---",
         "",
-    ]
-
-    # Add module inventory and change stats
-    if module_inventory:
-        lines.append(module_inventory)
-        lines.append("---")
-        lines.append("")
-    if change_stats:
-        lines.append(change_stats)
-        lines.append("---")
-        lines.append("")
-
-    lines += [
         f"## Open Directions ({kind} inspire prompts)",
         "",
         "These questions help the agent keep a creative, project-level perspective during long-running improvement cycles:",
