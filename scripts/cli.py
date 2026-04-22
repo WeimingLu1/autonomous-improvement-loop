@@ -32,6 +32,10 @@ from .state import (
     DEFAULT_LANGUAGE,
     read_file,
     write_file,
+    COLOR_YELLOW,
+    COLOR_BOLD,
+    COLOR_RED,
+    COLOR_GREEN,
     c,
     ok,
     warn,
@@ -822,12 +826,12 @@ def cmd_trigger(force: bool = False) -> None:
 
     step(f"Starting cron session: {cron_job_id}")
     r = run(
-        ["openclaw", "cron", "run", cron_job_id, "--expect-final", "--timeout", timeout_ms],
+        ["openclaw", "cron", "run", cron_job_id, "--timeout", timeout_ms],
         timeout=int(cron_timeout) + 10,
         env={**os.environ, "OPENCLAW_CRON_SESSION": "1"},
     )
     if r.returncode != 0:
-        fail(f"Cron session failed: {r.stderr.strip() or r.stdout.strip() or 'unknown error'}")
+        fail(f"Cron session failed: {(r.stderr or '').strip() or (r.stdout or '').strip() or 'unknown error'}")
         sys.exit(1)
     ok("Cron session completed")
 

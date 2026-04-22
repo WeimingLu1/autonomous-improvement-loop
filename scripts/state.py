@@ -193,33 +193,53 @@ def resolve_language(project: Path | None = None, explicit: str | None = None) -
 
 def create_cron(agent_id: str, model: str, chat_id: str | None) -> str:
     """Create an OpenClaw cron job and return its ID."""
-    skill_path = SKILL_DIR / "scripts" / "init.py"
+    config = read_current_config()
+    project_path = config.get("project_path", "").strip()
+    cron_schedule = config.get("cron_schedule", "*/30 * * * *").strip() or "*/30 * * * *"
+    cron_timeout = config.get("cron_timeout", str(DEFAULT_TIMEOUT_S)).strip() or str(DEFAULT_TIMEOUT_S)
+    roadmap_path = str(ail_roadmap(Path(project_path))) if project_path else ".ail/ROADMAP.md"
+
+    cron_message = (
+        f"Autonomous Improvement Loop — execute task, record result, report back.\n\n"
+        f"Project: {project_path or '(unset)'}\n\n"
+        f"Your workflow (use exec tool for all shell commands):\n"
+        f"1. exec: read {CONFIG_FILE} and {roadmap_path}\n"
+        f"2. exec: read the current task plan `.ail/plans/TASK-xxx.md`\n"
+        f"3. DO the work — implement, run tests, verify acceptance criteria\n"
+        f"4. exec: commit changes with git\n"
+        f"5. exec ONLY AFTER all work is verified done: run `python3 {SKILL_DIR / 'scripts' / 'init.py'} a-trigger --force`\n"
+        f"   - This updates the Done Log in ROADMAP.md — do NOT send summary before this completes\n"
+        f"6. exec ONLY AFTER step 5 completes: read the updated ROADMAP to get next task info\n"
+        f"7. Send Telegram summary (via message tool) ONLY AFTER step 6.\n\n"
+        f"IMPORTANT:\n"
+        f"- Use exec tool for EVERY step — do NOT just describe what to do\n"
+        f"- Never send Telegram summary before step 5 completes\n"
+        f"- Always send the Telegram summary as your final reply."
+    )
+
     cron_cmd = [
         "openclaw", "cron", "add",
-        "--skill", "autonomous-improvement-loop",
-        "--path", str(SKILL_DIR),
-        "--chat-id", chat_id or "",
-        "--label", f"autonomous-improvement-loop:{agent_id}",
-        "--period-ms", str(DEFAULT_SCHEDULE_MS),
-        "--timeout-s", str(DEFAULT_TIMEOUT_S),
+        "--name", "Autonomous Improvement Loop",
+        "--cron", cron_schedule,
+        "--timeout-seconds", cron_timeout,
+        "--agent", agent_id,
+        "--session", "isolated",
+        "--message", cron_message,
     ]
     if model:
         cron_cmd.extend(["--model", model])
+    if chat_id:
+        cron_cmd.extend(["--announce", "--channel", "telegram", "--to", chat_id])
 
-    result = subprocess.run(cron_cmd, capture_output=True, text=True, timeout=15)
+    result = subprocess.run(cron_cmd, capture_output=True, text=True, timeout=20)
     if result.returncode != 0:
         raise RuntimeError(f"cron add failed: {result.stderr.strip() or result.stdout.strip()}")
 
+    combined = (result.stdout or "") + "\n" + (result.stderr or "")
+    m = re.search(r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", combined)
+    if m:
+        return m.group(0)
     output = result.stdout.strip()
-    # Extract cron job ID from output (format: "Created cron job: CRON-xxx")
-    m = re.search(r"(CRON-\d+)", output)
-    if m:
-        return m.group(1)
-    # Fallback: look for ID in stderr or stdout
-    m = re.search(r"(CRON-\d+)", result.stderr or "")
-    if m:
-        return m.group(1)
-    # Last resort: return the raw output
     return output.split("\n")[0] if output else "unknown"
 
 
