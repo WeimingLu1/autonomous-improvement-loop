@@ -278,6 +278,52 @@ def test_plan_idempotent_without_force_when_task_pending():
                     p.unlink(missing_ok=True)
 
 
+def test_plan_skips_titles_already_done_in_done_log():
+    roadmap_path = PROJECT / ".ail" / "ROADMAP.md"
+    plans_dir = PROJECT / ".ail" / "plans"
+    original_roadmap = roadmap_path.read_bytes() if roadmap_path.exists() else None
+    existing_plans = {p.name: p.read_bytes() for p in plans_dir.glob('TASK-*.md')} if plans_dir.exists() else {}
+    try:
+        plans_dir.mkdir(parents=True, exist_ok=True)
+        roadmap_path.parent.mkdir(parents=True, exist_ok=True)
+        roadmap_path.write_text(
+            "# Roadmap\n\n"
+            "## Current Task\n\n"
+            "| task_id | type | source | title | status | created |\n"
+            "|--------|------|--------|-------|--------|---------|\n"
+            "\n"
+            "## Rhythm State\n\n"
+            "| field | value |\n"
+            "|------|-------|\n"
+            "| next_default_type | improve |\n"
+            "| improves_since_last_idea | 0 |\n"
+            "| current_plan_path |  |\n"
+            "| reserved_user_task_id |  |\n\n"
+            "## PM Notes\n\n- Roadmap initialized.\n\n"
+            "## Done Log\n\n"
+            "| time | task_id | type | source | title | result | commit |\n"
+            "|------|---------|------|--------|-------|--------|--------|\n"
+            "| 2026-04-22T11:30:00Z | TASK-041 | improve | pm | 为 roadmap 命令流补齐集成测试覆盖 | pass | abc1234 |\n",
+            encoding="utf-8",
+        )
+        result = _run(["a-plan"])
+        combined = result.stdout + result.stderr
+        assert result.returncode == 0, combined
+        assert "为 roadmap 命令流补齐集成测试覆盖" not in combined
+        assert "为 current task 和 plan 输出补齐 CLI 测试" in combined
+    finally:
+        if original_roadmap is None:
+            roadmap_path.unlink(missing_ok=True)
+        else:
+            roadmap_path.write_bytes(original_roadmap)
+        if plans_dir.exists():
+            current_names = {p.name for p in plans_dir.glob('TASK-*.md')}
+            for name in current_names - set(existing_plans):
+                (plans_dir / name).unlink(missing_ok=True)
+            for name, data in existing_plans.items():
+                (plans_dir / name).write_bytes(data)
+
+
 def test_a_queue_alias_shows_current_task():
     """a-queue (deprecated alias) points to a-current and shows task + plan."""
     roadmap_path = PROJECT / "ROADMAP.md"

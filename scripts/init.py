@@ -1310,6 +1310,51 @@ def _get_roadmap_and_project():
     return project, roadmap_path
 
 
+def _collect_completed_titles(project: Path, roadmap_path: Path, plans_dir: Path) -> set[str]:
+    """Collect completed task titles from Done Log and git history.
+
+    Done Log rows store the title directly, while git history only stores TASK ids.
+    For git-derived TASK ids, we resolve the plan title from `.ail/plans/TASK-xxx.md`.
+    """
+    done_titles: set[str] = set()
+
+    if roadmap_path.exists():
+        roadmap_text = roadmap_path.read_text(encoding="utf-8")
+        done_log_match = re.search(r"## Done Log\n\n([\s\S]*?)(?=\n## |\Z)", roadmap_text, re.IGNORECASE)
+        if done_log_match:
+            for line in done_log_match.group(1).splitlines():
+                if not line.strip().startswith("|") or "---" in line:
+                    continue
+                cells = [c.strip() for c in line.split("|")[1:-1]]
+                if len(cells) >= 7 and cells[1].startswith("TASK-"):
+                    done_titles.add(cells[4])
+
+    git_result = subprocess.run(
+        ["git", "log", "--oneline", "--grep=TASK-", "--since=90 days ago"],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if git_result.returncode == 0:
+        for line in git_result.stdout.splitlines():
+            m = re.search(r"(TASK-\d+)", line)
+            if not m:
+                continue
+            plan_path = plans_dir / f"{m.group(1)}.md"
+            if not plan_path.exists():
+                continue
+            try:
+                first_line = plan_path.read_text(encoding="utf-8").splitlines()[0].strip()
+            except Exception:
+                continue
+            title_match = re.match(r"#\s+TASK-\d+\s+·\s+(.+)$", first_line)
+            if title_match:
+                done_titles.add(title_match.group(1).strip())
+
+    return done_titles
+
+
 def cmd_plan(force: bool = False) -> None:
     step("🗺️  Generating current task + plan")
     project, roadmap_path = _get_roadmap_and_project()
@@ -1342,33 +1387,7 @@ def cmd_plan(force: bool = False) -> None:
         cmd_current()
         return
 
-    # Build done_titles for dedup (Fix 3: more reliable source)
-    done_titles: set[str] = set()
-
-    # Source 1: Done Log in ROADMAP.md
-    roadmap_text = roadmap_path.read_text(encoding="utf-8")
-    done_log_match = re.search(r"## Done Log\n\n([\s\S]*?)(?=\n## |\Z)", roadmap_text, re.IGNORECASE)
-    if done_log_match:
-        for line in done_log_match.group(1).splitlines():
-            if not line.strip().startswith("|") or "---" in line:
-                continue
-            cells = [c.strip() for c in line.split("|")[1:-1]]
-            if len(cells) >= 5 and cells[0].startswith("TASK-"):
-                done_titles.add(cells[4])
-
-    # Source 2: git log for completed task commits (more reliable for dedup)
-    git_result = subprocess.run(
-        ["git", "log", "--oneline", "--grep=TASK-", "--since=90 days ago"],
-        cwd=project,
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    if git_result.returncode == 0:
-        for line in git_result.stdout.splitlines():
-            m = re.search(r"TASK-\d+", line)
-            if m:
-                done_titles.add(m.group(0))
+    done_titles = _collect_completed_titles(project, roadmap_path, plans_dir)
 
     language = read_current_config().get("project_language", DEFAULT_LANGUAGE).strip() or "zh"
     planned = choose_next_task(project, roadmap, done_titles, language)
@@ -1688,51 +1707,9 @@ def _generate_next_task(project: Path, roadmap_path: Path, roadmap) -> None:
         ok(f"Next user task is now current: {next_task.task_id}")
         return
 
-    # No reserved user task — generate next PM task immediately
-    # This is the fix for空转刷号: we ALWAYS keep a current_task populated
-    # Build comprehensive done_titles from Done Log AND plans/ directory
-    # (Fix 3: more reliable dedup source)
-    done_titles: set[str] = set()
-
-    # Source 1: Done Log in ROADMAP.md
-    roadmap_text = roadmap_path.read_text(encoding="utf-8")
-    done_log_match = re.search(r"## Done Log\n\n([\s\S]*?)(?=\n## |\Z)", roadmap_text, re.IGNORECASE)
-    if done_log_match:
-        for line in done_log_match.group(1).splitlines():
-            if not line.strip().startswith("|") or "---" in line:
-                continue
-            cells = [c.strip() for c in line.split("|")[1:-1]]
-            if len(cells) >= 5 and cells[0].startswith("TASK-"):
-                done_titles.add(cells[4])  # title is column index 4
-
-    # Source 2: scan plans/ directory for all TASK-*.md and check their titles
-    if plans_dir.exists():
-        for plan_file in plans_dir.glob("TASK-*.md"):
-            try:
-                content = plan_file.read_text(encoding="utf-8")
-                first_line = content.splitlines()[0].strip() if content else ""
-                m = re.match(r"#\s+TASK-\d+\s+·\s+(.+)$", first_line)
-                if m:
-                    plan_title = m.group(1).strip()
-                    # Only add to done_titles if this task appears in Done Log
-                    # (we can't tell pass/fail from filename alone)
-                    pass
-            except Exception:
-                pass
-
-    # Source 3: git log for completed task commits (more reliable)
-    git_result = subprocess.run(
-        ["git", "log", "--oneline", "--grep=TASK-", "--since=90 days ago"],
-        cwd=project,
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    if git_result.returncode == 0:
-        for line in git_result.stdout.splitlines():
-            m = re.search(r"TASK-\d+", line)
-            if m:
-                done_titles.add(m.group(0))  # Include task ID to avoid duplicate titles
+    # No reserved user task — generate next PM task immediately.
+    # This keeps current_task populated while deduping against actual completed titles.
+    done_titles = _collect_completed_titles(project, roadmap_path, plans_dir)
 
     language = read_current_config().get("project_language", DEFAULT_LANGUAGE).strip() or "zh"
     planned = choose_next_task(project, roadmap, done_titles, language)
