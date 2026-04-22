@@ -1037,25 +1037,24 @@ def cmd_start() -> None:
 
         Project: {project_path or '(unset)'}
 
-        Your workflow (execute in order):
-        1. Read ROADMAP: {CONFIG_FILE} and {_ail_roadmap}
-        2. Read current task plan: `.ail/plans/TASK-xxx.md`
-        3. DO the work described in the plan — implement it, run tests, verify acceptance criteria
-        4. Commit your changes
-        5. Use exec tool to run this command to record the result:
-           python3 {HERE / 'init.py'} a-trigger --force
-        6. Send a Telegram summary to Sam (chat_id: 5535183090) covering:
+        Your workflow (use exec tool for all shell commands):
+        1. exec: read {CONFIG_FILE} and {_ail_roadmap}
+        2. exec: read the current task plan `.ail/plans/TASK-xxx.md`
+        3. DO the work — implement, run tests, verify acceptance criteria
+        4. exec: commit changes with git
+        5. exec: run `python3 {HERE / 'init.py'} a-trigger --force`
+        6. exec: read updated ROADMAP to get next task info
+        7. Send Telegram summary (via message tool) covering:
            - what was done (one sentence)
            - commit SHA
            - test/verification result
-           - current ROADMAP status
-           - next task (task id, title, scope one-liner, why-now one-liner)
+           - current status (next task id + title)
+           - next task details (scope, why-now)
 
         IMPORTANT:
-        - Do NOT spawn a subagent — you do the work yourself
-        - Use exec tool (not print/echo) to run a-trigger --force
-        - After exec completes, read the updated ROADMAP to get next task details
-        - Send the Telegram summary as your final reply in this cron session
+        - Use exec tool for EVERY step — do NOT just describe what to do
+        - Run a-trigger --force via exec to record the Done Log
+        - Always send the Telegram summary as your final reply
         """
     ).strip()
 
