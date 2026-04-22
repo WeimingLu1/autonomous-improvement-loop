@@ -33,3 +33,4 @@ bugfix_work/
 
 # Worktrees for isolated development
 .worktrees/
+benchmarks/results.jsonl

@@ -82,10 +82,12 @@ def benchmark_command(name: str, cmd: list[str], iterations: int = 3) -> dict:
 def run_all_benchmarks(iterations: int = 3) -> list[dict]:
     """Run benchmarks for all tracked commands."""
     benchmarks = [
+        # Commands that take project path as positional arg
         ("a-status", [sys.executable, str(INIT_PY), "a-status", str(PROJECT_ROOT)]),
-        ("a-current", [sys.executable, str(INIT_PY), "a-current", str(PROJECT_ROOT)]),
-        ("a-plan", [sys.executable, str(INIT_PY), "a-plan", str(PROJECT_ROOT)]),
-        ("a-log", [sys.executable, str(INIT_PY), "a-log", "-n", "5", str(PROJECT_ROOT)]),
+        # Commands that detect project path from cwd
+        ("a-current", [sys.executable, str(INIT_PY), "a-current"]),
+        ("a-plan", [sys.executable, str(INIT_PY), "a-plan"]),
+        ("a-log", [sys.executable, str(INIT_PY), "a-log", "-n", "5"]),
     ]
     results = []
     for name, cmd in benchmarks:
