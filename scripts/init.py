@@ -1596,6 +1596,7 @@ def cmd_trigger(force: bool = False) -> None:
     # Check if we're already running inside a cron session (no recursion)
     if os.environ.get("OPENCLAW_CRON_SESSION") == "1":
         _record_result_only(project, roadmap_path, force)
+        _maybe_update_project_md(project)
         return
 
     # Spawn cron session to execute — blocks until cron session finishes
@@ -1621,6 +1622,19 @@ def cmd_trigger(force: bool = False) -> None:
         fail(f"Cron session failed: {r.stderr.strip() or r.stdout.strip() or 'unknown error'}")
         sys.exit(1)
     ok("Cron session completed")
+
+
+def _maybe_update_project_md(project: Path) -> None:
+    """Update .ail/PROJECT.md if it doesn't exist or is stale.
+
+    Called after result recording during cron cycles to keep the project
+    snapshot accurate. Only generates if PROJECT.md is missing.
+    """
+    from scripts.project_md import generate_project_md
+    project_md_path = ail_project_md(project)
+    if not project_md_path.exists():
+        generate_project_md(project, project_md_path, language=resolve_language(project))
+        ok("Generated initial PROJECT.md")
 
 
 def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
