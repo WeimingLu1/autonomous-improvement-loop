@@ -200,30 +200,9 @@ def create_cron(agent_id: str, model: str, chat_id: str | None) -> str:
     roadmap_path = str(ail_roadmap(Path(project_path))) if project_path else ".ail/ROADMAP.md"
 
     cron_message = (
-        f"Autonomous Improvement Loop — execute task, record result, report back.\n\n"
+        f"Autonomous Improvement Loop — execute current task, record result, report back.\n\n"
         f"Project: {project_path or '(unset)'}\n\n"
-        f"Your workflow (use exec tool for all shell commands):\n"
-        f"1. exec: read {CONFIG_FILE} and {roadmap_path}\n"
-        f"2. exec: read the current task plan `.ail/plans/TASK-xxx.md`\n"
-        f"3. DO the work — implement, run tests, verify acceptance criteria\n"
-        f"4. exec: commit changes with git\n"
-        f"5. exec: run `python3 scripts/project_md.py --project . --output .ail/PROJECT.md --language zh` to update quantitative PROJECT.md sections\n"
-        f"6. exec: read .ail/PROJECT.md, then update it like a senior PM:\n"
-        f"   - Review what changed this round (new files, refactors, test coverage)\n"
-        f"   - Update ## 项目定位 with current direction if it changed\n"
-        f"   - Update ## 核心能力 if new capabilities were added\n"
-        f"   - Update ## 开放方向 if new challenges emerged\n"
-        f"   - Keep all existing sections that are still accurate\n"
-        f"   - Write in Chinese (project_language=zh)\n"
-        f"7. exec ONLY AFTER all work is verified done: run `python3 {SKILL_DIR / 'scripts' / 'init.py'} a-trigger --force --no-spawn`\n"
-        f"   - This updates the Done Log in ROADMAP.md — do NOT send summary before this completes\n"
-        f"8. exec ONLY AFTER step 7 completes: read the updated ROADMAP to get next task info\n"
-        f"9. Send Telegram summary (via message tool) ONLY AFTER step 8.\n\n"
-        f"IMPORTANT:\n"
-        f"- Use exec tool for EVERY step — do NOT just describe what to do\n"
-        f"- Never send Telegram summary before step 7 completes\n"
-        f"- Always send the Telegram summary as your final reply.\n"
-        f"- PROJECT.md is a living document: update it thoughtfully each round, not just the script output."
+        f"All workflow logic is embedded in the scripts. Use exec for every shell command."
     )
 
     cron_cmd = [

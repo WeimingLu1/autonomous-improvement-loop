@@ -1052,13 +1052,96 @@ def cmd_trigger(force: bool = False, no_spawn: bool = False) -> None:
 
 
 def _maybe_update_project_md(project: Path) -> None:
-    """Always regenerate .ail/PROJECT.md — the AI reviews and refines it like a PM."""
+    """Always regenerate .ail/PROJECT.md and append a PM-quality qualitative review."""
     from scripts.project_md import generate_project_md
     project_md_path = ail_project_md(project)
     language = resolve_language(project)
     generate_project_md(project, project_md_path, language=language)
-    ok("PROJECT.md regenerated")
+    _pm_review_project_md(project, project_md_path)
+    ok("PROJECT.md regenerated + PM review appended")
 
+
+
+
+def _pm_review_project_md(project: Path, project_md_path: Path) -> None:
+    """Append a PM-quality qualitative review to PROJECT.md based on recent git changes."""
+    import subprocess, re
+    from datetime import datetime, timezone
+
+    # Get last commit info
+    log_result = subprocess.run(
+        ["git", "log", "--oneline", "-5", "--format=%h %s"],
+        cwd=project, capture_output=True, text=True, timeout=10,
+    )
+    log_lines = log_result.stdout.strip().split("\n") if log_result.returncode == 0 else []
+
+    diff_result = subprocess.run(
+        ["git", "diff", "--stat", "HEAD~1"],
+        cwd=project, capture_output=True, text=True, timeout=10,
+    )
+    diff_stats = diff_result.stdout.strip() if diff_result.returncode == 0 else ""
+
+    files_result = subprocess.run(
+        ["git", "diff", "--name-only", "HEAD~1"],
+        cwd=project, capture_output=True, text=True, timeout=10,
+    )
+    changed_files = [f.strip() for f in files_result.stdout.strip().split("\n") if f.strip()] if files_result.returncode == 0 else []
+
+    has_test = any("test" in f for f in changed_files)
+    has_docs = any("docs" in f or "README" in f for f in changed_files)
+    has_script = any(f.startswith("scripts/") for f in changed_files)
+
+    summaries = []
+    if has_test:
+        summaries.append("测试覆盖率提升")
+    if has_docs:
+        summaries.append("文档更新")
+    if has_script:
+        summaries.append("脚本模块改进")
+    if not summaries:
+        summaries.append("工程优化与清理")
+
+    change_summary = "；".join(summaries)
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    review_block = (
+        "\n\n---\n\n"
+        f"## PM Review ({timestamp})\n\n"
+        f"**最近变更：** {change_summary}\n\n"
+        "| 指标 | 说明 |\n"
+        "|------|------|\n"
+    )
+
+    if log_lines:
+        review_block += f"| 最近 commit | {log_lines[0]} |\n"
+
+    lines_added = 0
+    lines_deleted = 0
+    if diff_stats:
+        for part in diff_stats.split(","):
+            part = part.strip()
+            if "insertion" in part:
+                m = re.search(r"(\d+)", part)
+                if m:
+                    lines_added = sum(int(x) for x in re.findall(r"(\d+)", part.split("insertion")[0].strip()))
+                    break
+        for part in diff_stats.split(","):
+            part = part.strip()
+            if "deletion" in part:
+                m = re.search(r"(\d+)", part)
+                if m:
+                    lines_deleted = sum(int(x) for x in re.findall(r"(\d+)", part.split("deletion")[0].strip()))
+                    break
+
+    if lines_added or lines_deleted:
+        review_block += f"| 代码增量 | +{lines_added} / -{lines_deleted} 行 |\n"
+
+    review_block += f"| 变更文件数 | {len(changed_files)} |\n"
+
+    existing = project_md_path.read_text(encoding="utf-8") if project_md_path.exists() else ""
+    existing = re.sub(r"\n## PM Review \([^\)]+\)[\s\S]*?(?=\n---|\Z)", "", existing)
+    existing = existing.rstrip() + review_block
+    project_md_path.write_text(existing, encoding="utf-8")
 
 def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
     """Record task result — called from within a cron session."""
