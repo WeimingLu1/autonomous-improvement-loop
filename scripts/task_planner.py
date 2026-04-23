@@ -692,10 +692,12 @@ _IDEA_CANDIDATES: list[dict] = [
 # Maintenance pool — activated after a PM idea/feature task completes
 # ---------------------------------------------------------------------------
 
-_MAINTENANCE_CANDIDATES: list[dict] = [
-    {
-        "title": "回归验证 + 修复发现的 bug",
-        "background": "上一个 feature 刚完成，需要验证没有引入回归。",
+def _build_maintenance_candidates(anchor_title: str, remaining: int) -> list[dict]:
+    """Build maintenance tasks dynamically so title-based dedupe does not disable them forever."""
+    anchor = anchor_title.strip() or "最近完成的 feature"
+    regression = {
+        "title": f"回归验证并修复：{anchor}",
+        "background": f"刚完成 feature：{anchor}，需要立即验证没有引入回归。",
         "why_now": "feature task 完成后必须确认代码仍然健康，这是交付标准的一部分。",
         "scope": ["scripts/", "tests/"],
         "non_goals": ["不进行大规模重构", "不扩展功能范围"],
@@ -707,15 +709,15 @@ _MAINTENANCE_CANDIDATES: list[dict] = [
             "Step 4: 如有 bug 修复，另起 commit 记录",
         ],
         "acceptance_criteria": [
-            "全量测试 52/52 通过",
-            "如有失败，当前 task 内修复并验证通过",
+            "全量测试通过",
+            f"围绕『{anchor}』未引入新的回归",
         ],
         "verification": ["cd /Users/weiminglu/Projects/autonomous-improvement-loop && python3 -m pytest tests/ -q 2>&1 | tail -3"],
         "risks": ["如测试本身就有 bug，修复优先级最高"],
-    },
-    {
-        "title": "补测试 + 补文档",
-        "background": "上一个 feature 刚完成，需要补上相应的测试和文档。",
+    }
+    docs = {
+        "title": f"补测试与文档：{anchor}",
+        "background": f"刚完成 feature：{anchor}，需要补上相应的测试和文档。",
         "why_now": "没有测试覆盖的 feature 等同于不存在；文档缺失会拖累后续维护。",
         "scope": ["tests/", "docs/", "README.md"],
         "non_goals": ["不重写已有测试", "不做大范围文档重构"],
@@ -727,13 +729,13 @@ _MAINTENANCE_CANDIDATES: list[dict] = [
             "Step 4: 如有新增测试，运行确认通过",
         ],
         "acceptance_criteria": [
-            "新文件有对应测试覆盖",
+            f"围绕『{anchor}』新增了可持续的测试/文档资产",
             "全量测试仍然通过",
         ],
         "verification": ["cd /Users/weiminglu/Projects/autonomous-improvement-loop && python3 -m pytest tests/ -q 2>&1 | tail -3"],
         "risks": ["测试桩不好写时优先写集成测试而非单元测试"],
-    },
-]
+    }
+    return [regression] if remaining >= 2 else [docs]
 
 
 # ---------------------------------------------------------------------------
@@ -805,10 +807,11 @@ def choose_next_task(project: Path, roadmap, done_titles: set[str], language: st
     next_type = getattr(roadmap, "next_default_type", "idea")
     improves_since = getattr(roadmap, "improves_since_last_idea", 0)
     maintenance_remaining = getattr(roadmap, "post_feature_maintenance_remaining", 0)
+    maintenance_anchor_title = getattr(roadmap, "maintenance_anchor_title", "")
 
     if maintenance_remaining > 0:
-        # Force maintenance pool
-        primary_pool = [_make_task("improve", c, ctx) for c in _MAINTENANCE_CANDIDATES]
+        # Force maintenance pool using titles anchored to the triggering feature.
+        primary_pool = [_make_task("improve", c, ctx) for c in _build_maintenance_candidates(maintenance_anchor_title, maintenance_remaining)]
         fallback_pool = improve_pool
     elif next_type == "idea" or improves_since >= 3:
         primary_pool = idea_pool

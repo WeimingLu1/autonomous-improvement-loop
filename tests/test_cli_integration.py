@@ -85,6 +85,8 @@ def ensure_ail_roadmap():
         f"|-------|-------|\n"
         f"| next_default_type | idea |\n"
         f"| improves_since_last_idea | 0 |\n"
+        f"| post_feature_maintenance_remaining | 0 |\n"
+        f"| maintenance_anchor_title |  |\n"
         f"| current_plan_path | .ail/plans/TASK-001.md |\n"
         f"| reserved_user_task_id |  |\n\n"
         f"## PM Notes\n\n"
@@ -256,9 +258,10 @@ def test_a_plan_generates_task_and_echoes_full_plan():
     roadmap_path = PROJECT / "ROADMAP.md"
     original_roadmap = roadmap_path.read_bytes() if roadmap_path.exists() else None
     try:
-        result = _run(["a-plan"])
+        # Use --force to bypass "current task already exists" check
+        result = _run(["a-plan", "--force"])
         combined = result.stdout + result.stderr
-        assert result.returncode == 0, f"a-plan failed: {result.stderr}"
+        assert result.returncode == 0, f"a-plan --force failed: {result.stderr}"
         # Must show TASK id
         assert "TASK-" in combined, f"No TASK-xxx in output: {combined[:200]}"
         # Must echo Goal section
@@ -273,7 +276,7 @@ def test_a_plan_generates_task_and_echoes_full_plan():
 
 
 def test_a_current_shows_current_task_and_full_plan():
-    """a-current shows current task + echoes the full plan doc."""
+    """a-current shows current task + plan summary; with --verbose shows full plan doc."""
     roadmap_path = PROJECT / "ROADMAP.md"
     original_roadmap = roadmap_path.read_bytes() if roadmap_path.exists() else None
     try:
@@ -284,8 +287,13 @@ def test_a_current_shows_current_task_and_full_plan():
         assert result.returncode == 0, f"a-current failed: {result.stderr}"
         # Must show task id
         assert "TASK-" in combined
-        # Must show plan doc body
-        assert ("## Goal" in combined or "Goal" in combined or "Execution Plan" in combined)
+        # Default: shows task metadata + plan path hint (not full doc)
+        assert "Plan:" in combined or "📄 Plan" in combined
+        # With --verbose: shows full plan doc
+        result_v = _run(["a-current", "--verbose"])
+        combined_v = result_v.stdout + result_v.stderr
+        assert ("## Goal" in combined_v or "Goal" in combined_v or "Execution Plan" in combined_v), \
+            f"--verbose should show full plan doc, got: {combined_v[:300]}"
     finally:
         if original_roadmap is not None:
             roadmap_path.write_bytes(original_roadmap)

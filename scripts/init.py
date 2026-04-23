@@ -187,7 +187,8 @@ def main() -> int:
     plan_p.set_defaults(func=lambda a: cmd_plan(force=a.force, count=a.count))
 
     current_p = sub.add_parser("a-current", help="Show current task + full plan doc")
-    current_p.set_defaults(func=lambda _a: cmd_current())
+    current_p.add_argument("--verbose", "-v", action="store_true", help="Show full plan doc")
+    current_p.set_defaults(func=lambda a: cmd_current(verbose=a.verbose))
 
     queue_p = sub.add_parser("a-queue", help="[deprecated: use a-current]")
     queue_p.add_argument("--all", action="store_true", help="Include done items")
@@ -274,9 +275,9 @@ def main() -> int:
         elif args.command == "a-plan":
             cmd_plan(force=args.force, count=args.count)
         elif args.command == "a-current":
-            cmd_current()
+            cmd_current(verbose=args.verbose)
         elif args.command == "a-queue":
-            cmd_current()
+            cmd_current(verbose=False)
         elif args.command == "a-log":
             cmd_log(n=args.count)
         elif args.command == "a-refresh":
