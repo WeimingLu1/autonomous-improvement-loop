@@ -1036,7 +1036,9 @@ TRIGGER_TIMEOUT_S = 300  # 5 minutes default timeout for a-trigger execution
 
 
 class _TimeoutError(Exception):
-    pass
+    def __init__(self, timeout_s: int):
+        self.timeout_s = timeout_s
+        super().__init__(f"Trigger timed out after {timeout_s} seconds")
 
 
 def _timeout_call(func, timeout_s: int, *args, **kwargs) -> None:
@@ -1054,10 +1056,20 @@ def _timeout_call(func, timeout_s: int, *args, **kwargs) -> None:
     t.start()
     t.join(timeout=timeout_s)
     if t.is_alive():
-        raise _TimeoutError(f"Execution timed out after {timeout_s} seconds")
+        raise _TimeoutError(timeout_s)
     if exception[0]:
         raise exception[0]
     return result[0]
+
+
+def _cleanup_stale_locks(project: Path) -> None:
+    """Force-release any stale trigger.lock files."""
+    lock_path = ail_state_dir(project) / "trigger.lock"
+    try:
+        if lock_path.exists():
+            lock_path.unlink()
+    except Exception:
+        pass
 
 
 def cmd_trigger(force: bool = False, no_spawn: bool = False) -> None:
@@ -1080,7 +1092,8 @@ def cmd_trigger(force: bool = False, no_spawn: bool = False) -> None:
                 _timeout_call(_record_result_only, TRIGGER_TIMEOUT_S, project, roadmap_path, force)
                 _timeout_call(_maybe_update_project_md, TRIGGER_TIMEOUT_S, project)
             except _TimeoutError as e:
-                fail(f"Execution timed out")
+                fail(f"Trigger timed out after {e.timeout_s} seconds")
+                _cleanup_stale_locks(project)
                 sys.exit(1)
             return
 
