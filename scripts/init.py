@@ -163,12 +163,23 @@ def main() -> int:
                           help="LLM model for cron sessions (empty = use OpenClaw default)")
     onboard_p.set_defaults(func=cmd_onboard)
 
-    status_p = sub.add_parser("a-status", help="Check project readiness")
+    status_p = sub.add_parser(
+        "a-status",
+        description="检查项目就绪状态：AIL 配置、cron 状态、ROADMAP 队列情况",
+        help="Check project readiness",
+    )
     status_p.add_argument("project", nargs="?", type=Path,
-                          default=detect_project_path())
+                          default=detect_project_path(),
+                          help="Project path (auto-detected if omitted)")
     status_p.add_argument("--language", "--lang", "-l", default=None,
                           choices=["en", "zh"],
                           help="Output language (default: Chinese)")
+    status_p.epilog = textwrap.dedent("""\
+        Examples:
+          python init.py a-status                  # Auto-detect project
+          python init.py a-status ~/Projects/myapp # Specify project
+          python init.py a-status --language en    # English output
+        """)
     status_p.set_defaults(func=cmd_status)
 
     start_p = sub.add_parser("a-start", help="Start cron托管 (create cron job)")
@@ -181,13 +192,32 @@ def main() -> int:
     add_p.add_argument("content", nargs="+", help="Requirement content text")
     add_p.set_defaults(func=lambda a: cmd_add(" ".join(a.content)))
 
-    plan_p = sub.add_parser("a-plan", help="Generate current task and full plan (PM mode)")
+    plan_p = sub.add_parser(
+        "a-plan",
+        description="生成当前 PM 任务并输出完整 Plan 文档（ROADMAP.md + plans/TASK-*.md）",
+        help="Generate current task and full plan (PM mode)",
+    )
     plan_p.add_argument("--force", action="store_true", help="Regenerate even if current task exists")
     plan_p.add_argument("--count", "-n", type=int, default=1, help="Number of tasks to generate (default: 1)")
+    plan_p.epilog = textwrap.dedent("""\
+        Examples:
+          python init.py a-plan            # Generate next task
+          python init.py a-plan --force    # Force regeneration
+          python init.py a-plan -n 3       # Generate 3 tasks at once
+        """)
     plan_p.set_defaults(func=lambda a: cmd_plan(force=a.force, count=a.count))
 
-    current_p = sub.add_parser("a-current", help="Show current task + full plan doc")
+    current_p = sub.add_parser(
+        "a-current",
+        description="显示当前执行中的任务及其完整 Plan 文档内容",
+        help="Show current task + full plan doc",
+    )
     current_p.add_argument("--verbose", "-v", action="store_true", help="Show full plan doc")
+    current_p.epilog = textwrap.dedent("""\
+        Examples:
+          python init.py a-current           # Show current task summary
+          python init.py a-current --verbose # Show full plan doc
+        """)
     current_p.set_defaults(func=lambda a: cmd_current(verbose=a.verbose))
 
     queue_p = sub.add_parser("a-queue", help="[deprecated: use a-current]")
@@ -202,11 +232,21 @@ def main() -> int:
     refresh_p = sub.add_parser("a-refresh", help="[deprecated alias: use a-plan]")
     refresh_p.set_defaults(func=lambda _a: cmd_plan(force=True))
 
-    trigger_p = sub.add_parser("a-trigger", help="Execute current roadmap task immediately")
+    trigger_p = sub.add_parser(
+        "a-trigger",
+        description="立即执行当前 ROADMAP 任务，触发 autonomous-improvement-loop 工作流",
+        help="Execute current roadmap task immediately",
+    )
     trigger_p.add_argument("--force", action="store_true",
                           help="Re-run even if current task is already marked doing")
     trigger_p.add_argument("--no-spawn", action="store_true",
                           help="Skip spawning a new cron session — record result directly")
+    trigger_p.epilog = textwrap.dedent("""\
+        Examples:
+          python init.py a-trigger            # Execute current task
+          python init.py a-trigger --force    # Re-run even if already doing
+          python init.py a-trigger --no-spawn # Record result without cron
+        """)
     trigger_p.set_defaults(func=lambda a: cmd_trigger(force=a.force, no_spawn=a.no_spawn))
 
     config_sp = sub.add_parser("a-config", help="Get or set config values")
