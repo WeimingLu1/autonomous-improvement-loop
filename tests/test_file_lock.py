@@ -45,3 +45,22 @@ def test_file_lock_context_manager_raises_on_timeout(tmp_path: Path):
                 pass
     finally:
         first.release()
+
+
+def test_file_lock_recovers_from_stale_lock(tmp_path: Path):
+    """Stale lock (from crashed process) is detected and removed via mtime."""
+    lock_path = tmp_path / ".test.lock"
+    # Simulate a stale lock: create file and backdate its mtime
+    lock_path.write_text("stale", encoding="utf-8")
+    import os, time
+    stale_time = time.time() - 2  # 2 seconds ago
+    os.utime(lock_path, (stale_time, stale_time))
+    # Second process should acquire despite stale lock if timeout > 1s
+    second = FileLock(lock_path, timeout=2.0)
+    assert second.acquire() is True
+    second.release()
+    # Cleanup
+    try:
+        first.release()
+    except Exception:
+        pass
