@@ -17,6 +17,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 # Re-export state helpers so existing imports from init.py still work
+from .file_lock import FileLock
 from .state import (
     ail_state_dir,
     ail_project_md,
@@ -1012,33 +1013,42 @@ def cmd_trigger(force: bool = False, no_spawn: bool = False) -> None:
         fail("ROADMAP.md not found. Run a-plan first.")
         sys.exit(1)
 
-    if os.environ.get("OPENCLAW_CRON_SESSION") == "1" or no_spawn:
-        _record_result_only(project, roadmap_path, force)
-        _maybe_update_project_md(project)
-        return
-
-    config = read_current_config()
-    cron_job_id = config.get("cron_job_id", "").strip()
-    if not cron_job_id:
-        fail("No cron job configured. Run a-start first.")
+    lock_path = ail_state_dir(project) / "trigger.lock"
+    lock = FileLock(lock_path, timeout=5.0)
+    if not lock.acquire():
+        fail(f"Another trigger is already running. Lock held at {lock_path}")
         sys.exit(1)
 
-    cron_timeout = config.get("cron_timeout", str(DEFAULT_TIMEOUT_S)).strip()
     try:
-        timeout_ms = str(int(int(cron_timeout) * 1000))
-    except ValueError:
-        timeout_ms = str(DEFAULT_TIMEOUT_S * 1000)
+        if os.environ.get("OPENCLAW_CRON_SESSION") == "1" or no_spawn:
+            _record_result_only(project, roadmap_path, force)
+            _maybe_update_project_md(project)
+            return
 
-    step(f"Starting cron session: {cron_job_id}")
-    r = run(
-        ["openclaw", "cron", "run", cron_job_id, "--timeout", timeout_ms],
-        timeout=int(cron_timeout) + 10,
-        env={**os.environ, "OPENCLAW_CRON_SESSION": "1"},
-    )
-    if r.returncode != 0:
-        fail(f"Cron session failed: {(r.stderr or '').strip() or (r.stdout or '').strip() or 'unknown error'}")
-        sys.exit(1)
-    ok(f"Cron session completed — execution recorded")
+        config = read_current_config()
+        cron_job_id = config.get("cron_job_id", "").strip()
+        if not cron_job_id:
+            fail("No cron job configured. Run a-start first.")
+            sys.exit(1)
+
+        cron_timeout = config.get("cron_timeout", str(DEFAULT_TIMEOUT_S)).strip()
+        try:
+            timeout_ms = str(int(int(cron_timeout) * 1000))
+        except ValueError:
+            timeout_ms = str(DEFAULT_TIMEOUT_S * 1000)
+
+        step(f"Starting cron session: {cron_job_id}")
+        r = run(
+            ["openclaw", "cron", "run", cron_job_id, "--timeout", timeout_ms],
+            timeout=int(cron_timeout) + 10,
+            env={**os.environ, "OPENCLAW_CRON_SESSION": "1"},
+        )
+        if r.returncode != 0:
+            fail(f"Cron session failed: {(r.stderr or '').strip() or (r.stdout or '').strip() or 'unknown error'}")
+            sys.exit(1)
+        ok(f"Cron session completed — execution recorded")
+    finally:
+        lock.release()
 
 
 def _maybe_update_project_md(project: Path) -> None:
