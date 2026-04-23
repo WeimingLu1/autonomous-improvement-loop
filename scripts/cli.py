@@ -1276,8 +1276,25 @@ def _generate_next_task(project: Path, roadmap_path: Path, roadmap) -> None:
 
     done_titles = _collect_completed_titles(project, roadmap_path, plans_dir)
 
+    completed_task = roadmap.current_task
+    if roadmap.post_feature_maintenance_remaining > 0:
+        selection_roadmap = roadmap
+    elif completed_task and completed_task.source == "pm" and completed_task.task_type == "idea":
+        from scripts.roadmap import RoadmapState
+        selection_roadmap = RoadmapState(
+            current_task=roadmap.current_task,
+            next_default_type=roadmap.next_default_type,
+            improves_since_last_idea=roadmap.improves_since_last_idea,
+            post_feature_maintenance_remaining=2,
+            maintenance_anchor_title=completed_task.title,
+            current_plan_path=roadmap.current_plan_path,
+            reserved_user_task_id=roadmap.reserved_user_task_id,
+        )
+    else:
+        selection_roadmap = roadmap
+
     language = read_current_config().get("project_language", DEFAULT_LANGUAGE).strip() or "zh"
-    planned, _ = choose_next_task(project, roadmap, done_titles, language)
+    planned, consumed = choose_next_task(project, selection_roadmap, done_titles, language)
     task_id = next_task_id(plans_dir)
     plan_path = write_plan_doc(
         plans_dir=plans_dir,
@@ -1309,17 +1326,15 @@ def _generate_next_task(project: Path, roadmap_path: Path, roadmap) -> None:
     )
     next_type = "improve" if roadmap.next_default_type == "idea" else "idea"
     improves = roadmap.improves_since_last_idea + (1 if planned.task_type == "improve" else 0)
-    prev_remaining = roadmap.post_feature_maintenance_remaining
-    prev_anchor = roadmap.maintenance_anchor_title
-    if roadmap.post_feature_maintenance_remaining > 0:
-        maintenance_remaining = roadmap.post_feature_maintenance_remaining - 1
-        maintenance_anchor = prev_anchor
-    elif planned.task_type == "idea":
-        maintenance_remaining = 2
-        maintenance_anchor = planned.title
+    selection_remaining = selection_roadmap.post_feature_maintenance_remaining
+    selection_anchor = selection_roadmap.maintenance_anchor_title
+
+    if consumed and selection_remaining > 0:
+        maintenance_remaining = selection_remaining - 1
+        maintenance_anchor = selection_anchor if maintenance_remaining > 0 else ""
     else:
         maintenance_remaining = 0
-        maintenance_anchor = prev_anchor
+        maintenance_anchor = ""
     set_current_task(
         roadmap_path,
         task,

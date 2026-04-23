@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from scripts.roadmap import RoadmapState
+from scripts.cli import _generate_next_task
+from scripts.roadmap import CurrentTask, RoadmapState, init_roadmap, load_roadmap, set_current_task
 from scripts.task_planner import choose_next_task
 
 
@@ -116,3 +117,76 @@ def test_background_and_rollback_populated(tmp_path: Path):
     task, _ = choose_next_task(tmp_path, roadmap, set(), "zh")
     assert task.background, "background should be non-empty"
     assert task.rollback, "rollback should be non-empty"
+
+
+def test_generate_next_task_enters_maintenance_immediately_after_pm_idea(tmp_path: Path):
+    (tmp_path / "PROJECT.md").write_text("# TestProject\n\nTest", encoding="utf-8")
+    roadmap_path = tmp_path / ".ail" / "ROADMAP.md"
+    roadmap_path.parent.mkdir(parents=True, exist_ok=True)
+    init_roadmap(roadmap_path)
+    set_current_task(
+        roadmap_path,
+        CurrentTask(
+            task_id="TASK-001",
+            task_type="idea",
+            source="pm",
+            title="为 CLI 增加更强的 feature",
+            status="doing",
+            created="2026-04-23",
+        ),
+        plan_path="plans/TASK-001.md",
+        next_default_type="improve",
+        improves_since_last_idea=0,
+        post_feature_maintenance_remaining=0,
+        maintenance_anchor_title="",
+        reserved_user_task_id="",
+    )
+
+    _generate_next_task(tmp_path, roadmap_path, load_roadmap(roadmap_path))
+    updated = load_roadmap(roadmap_path)
+
+    assert updated.current_task is not None
+    assert updated.current_task.title == "回归验证并修复：为 CLI 增加更强的 feature"
+    assert updated.post_feature_maintenance_remaining == 1
+    assert updated.maintenance_anchor_title == "为 CLI 增加更强的 feature"
+
+
+def test_generate_next_task_consumes_second_maintenance_then_returns_to_normal_rhythm(tmp_path: Path):
+    (tmp_path / "PROJECT.md").write_text("# TestProject\n\nTest", encoding="utf-8")
+    roadmap_path = tmp_path / ".ail" / "ROADMAP.md"
+    roadmap_path.parent.mkdir(parents=True, exist_ok=True)
+    init_roadmap(roadmap_path)
+    anchor = "为 CLI 增加更强的 feature"
+
+    set_current_task(
+        roadmap_path,
+        CurrentTask(
+            task_id="TASK-002",
+            task_type="improve",
+            source="pm",
+            title=f"回归验证并修复：{anchor}",
+            status="doing",
+            created="2026-04-23",
+        ),
+        plan_path="plans/TASK-002.md",
+        next_default_type="improve",
+        improves_since_last_idea=1,
+        post_feature_maintenance_remaining=1,
+        maintenance_anchor_title=anchor,
+        reserved_user_task_id="",
+    )
+
+    _generate_next_task(tmp_path, roadmap_path, load_roadmap(roadmap_path))
+    second = load_roadmap(roadmap_path)
+    assert second.current_task is not None
+    assert second.current_task.title == f"补测试与文档：{anchor}"
+    assert second.post_feature_maintenance_remaining == 0
+    assert second.maintenance_anchor_title == ""
+
+    _generate_next_task(tmp_path, roadmap_path, second)
+    normal = load_roadmap(roadmap_path)
+    assert normal.current_task is not None
+    assert not normal.current_task.title.startswith("回归验证并修复：")
+    assert not normal.current_task.title.startswith("补测试与文档：")
+    assert normal.post_feature_maintenance_remaining == 0
+    assert normal.maintenance_anchor_title == ""
