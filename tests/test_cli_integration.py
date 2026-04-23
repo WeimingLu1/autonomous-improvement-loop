@@ -22,6 +22,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -56,6 +57,44 @@ def preserve_heartbeat():
     if Path(backup).exists():
         hb_path.write_bytes(Path(backup).read_bytes())
     Path(backup).unlink(missing_ok=True)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def ensure_ail_roadmap():
+    """Ensure the skill's own .ail/ROADMAP.md exists before tests run.
+
+    Self-hosting mode: the skill manages its own state in .ail/ next to itself.
+    Without this, commands like a-queue / a-log fail with 'ROADMAP.md not found'
+    because .ail/ is empty after a fresh clawhub install.
+    """
+    ail_dir = PROJECT / ".ail"
+    roadmap_path = ail_dir / "ROADMAP.md"
+    if roadmap_path.exists():
+        yield  # already initialized — leave it alone
+        return
+    ail_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    roadmap_path.write_text(
+        f"# Roadmap\n\n"
+        f"## Current Task\n\n"
+        f"| task_id | type | source | title | status | created |\n"
+        f"|--------|------|--------|-------|--------|---------|\n"
+        f"| TASK-001 | idea | pm | Initial self-hosting setup | pending | {ts[:10]} |\n\n"
+        f"## Rhythm State\n\n"
+        f"| field | value |\n"
+        f"|-------|-------|\n"
+        f"| next_default_type | idea |\n"
+        f"| improves_since_last_idea | 0 |\n"
+        f"| current_plan_path | .ail/plans/TASK-001.md |\n"
+        f"| reserved_user_task_id |  |\n\n"
+        f"## PM Notes\n\n"
+        f"- Skill self-hosting state.\n\n"
+        f"## Done Log\n\n"
+        f"| time | task_id | type | source | title | result | commit |\n"
+        f"|------|---------|------|--------|-------|--------|--------|\n",
+        encoding="utf-8",
+    )
+    yield
 
 
 # ── Read-only command tests ───────────────────────────────────────────────────

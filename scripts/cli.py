@@ -523,9 +523,21 @@ COLOR_BOLD = "\033[1m"
 def _get_roadmap_and_project():
     config = read_current_config()
     project_path_str = config.get("project_path", "").strip()
-    if not project_path_str or project_path_str in (".", "YOUR_PROJECT_PATH"):
+
+    # Self-hosting detection: when running from inside the skill's own tree,
+    # prefer the skill's local .ail/ over the configured external project_path.
+    # This makes 'ail' commands work correctly during skill self-testing.
+    cwd = Path.cwd()
+    if (cwd / ".ail").exists():
+        # cwd is the project root (has its own .ail/ state)
+        project_path_str = str(cwd)
+    elif (cwd / "scripts").exists() and (cwd.parent / ".ail").exists():
+        # cwd is inside the skill tree — use skill's local .ail/
+        project_path_str = str(cwd.parent)
+    elif not project_path_str or project_path_str in (".", "YOUR_PROJECT_PATH"):
         detected = detect_project_path()
-        project_path_str = str(detected) if detected else str(Path.cwd())
+        project_path_str = str(detected) if detected else str(cwd)
+
     project = Path(project_path_str).expanduser().resolve()
     roadmap_path = ail_roadmap(project)
     return project, roadmap_path
