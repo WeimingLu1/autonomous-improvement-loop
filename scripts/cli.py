@@ -651,6 +651,11 @@ def _collect_completed_titles(project: Path, roadmap_path: Path, plans_dir: Path
                 file_ref = file_m.group(0).strip()
                 if not file_ref:
                     continue
+                # Skip scripts/ scope files — scripts/ is modified in nearly every
+                # commit so it cannot reliably identify task completion. Benchmarks
+                # and tests scope files are specific enough to be useful signals.
+                if file_ref.startswith("scripts/"):
+                    continue
                 # check if this file was modified in any recent commit
                 # (limit to last 20 commits to keep it fast)
                 file_result = subprocess.run(
