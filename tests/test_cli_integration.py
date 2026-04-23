@@ -413,9 +413,9 @@ def test_add_preserves_doing_task_and_reserves_user_task_id():
         roadmap_path.write_text(
             "# Roadmap\n\n"
             "## Current Task\n\n"
-            "| task_id | type | source | title | status | created |\n"
-            "|--------|------|--------|-------|--------|---------|\n"
-            "| TASK-001 | idea | pm | Existing task | doing | 2026-04-21 |\n\n"
+            "| task_id | type | source | title | priority | status | created |\n"
+            "|--------|------|--------|-------|----------|--------|---------|\n"
+            "| TASK-001 | idea | pm | Existing task | P1 | doing | 2026-04-21 |\n\n"
             "## Rhythm State\n\n"
             "| field | value |\n"
             "|------|-------|\n"
@@ -432,7 +432,7 @@ def test_add_preserves_doing_task_and_reserves_user_task_id():
         result = _run(["a-add", "紧急用户请求"])
         assert result.returncode == 0, result.stderr
         text = roadmap_path.read_text(encoding="utf-8")
-        assert "| TASK-001 | idea | pm | Existing task | doing | 2026-04-21 |" in text
+        assert "| TASK-001 | idea | pm | Existing task | P1 | doing | 2026-04-21 |" in text
         assert "reserved_user_task_id | TASK-" in text
     finally:
         if original_roadmap is not None:

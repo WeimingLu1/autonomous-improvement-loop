@@ -229,7 +229,10 @@ def create_cron(agent_id: str, model: str, chat_id: str | None) -> str:
     if model:
         cron_cmd.extend(["--model", model])
     if chat_id:
-        cron_cmd.extend(["--announce", "--channel", "telegram", "--to", chat_id])
+        # Don't use --announce: Mia sends the Telegram summary herself (step 7).
+        # Using --announce duplicates delivery and marks the run as 'error' when
+        # Mia's response contains error annotations (e.g. "⚠️ Edit failed").
+        cron_cmd.extend(["--channel", "telegram", "--to", chat_id])
 
     result = subprocess.run(cron_cmd, capture_output=True, text=True, timeout=20)
     if result.returncode != 0:
