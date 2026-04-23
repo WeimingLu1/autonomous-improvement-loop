@@ -8,6 +8,7 @@ exclusive access during read/write operations.
 from __future__ import annotations
 
 import fcntl
+import os
 import sys
 import time
 from contextlib import contextmanager
@@ -30,14 +31,27 @@ class FileLock:
         """Acquire the exclusive lock with timeout.
 
         Returns True if lock was acquired, False on timeout.
-        Does not block - uses LOCK_NB flag.
+        Uses timestamp-based stale lock detection: if the lock file's mtime
+        exceeds self.timeout, it is treated as a leftover from a crashed
+        process and forcibly removed before retry.
         """
         self.lock_path.parent.mkdir(parents=True, exist_ok=True)
         self._fd = open(self.lock_path, "w")
         start = time.monotonic()
         while True:
+            # Check for stale lock: if lock file exists and is older than timeout,
+            # it is a leftover from a crashed process -> forcibly remove it.
+            if self.lock_path.exists():
+                mtime = self.lock_path.stat().st_mtime
+                if time.monotonic() - mtime >= self.timeout:
+                    try:
+                        self.lock_path.unlink()
+                    except FileNotFoundError:
+                        pass
             try:
                 fcntl.flock(self._fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                # Update mtime so this lock is protected from self-deletion
+                os.utime(self._fd.fileno(), None)
                 return True
             except (IOError, OSError):
                 if time.monotonic() - start >= self.timeout:
