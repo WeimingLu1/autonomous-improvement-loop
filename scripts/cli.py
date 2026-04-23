@@ -1167,7 +1167,7 @@ def _generate_next_task(project: Path, roadmap_path: Path, roadmap) -> None:
     done_titles = _collect_completed_titles(project, roadmap_path, plans_dir)
 
     language = read_current_config().get("project_language", DEFAULT_LANGUAGE).strip() or "zh"
-    planned = choose_next_task(project, roadmap, done_titles, language)
+    planned, _ = choose_next_task(project, roadmap, done_titles, language)
     task_id = next_task_id(plans_dir)
     plan_path = write_plan_doc(
         plans_dir=plans_dir,
