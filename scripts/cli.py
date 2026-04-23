@@ -33,6 +33,7 @@ from .state import (
     DEFAULT_SCHEDULE_MS,
     DEFAULT_TIMEOUT_S,
     DEFAULT_LANGUAGE,
+    load_config,
     read_file,
     write_file,
     COLOR_YELLOW,
@@ -531,6 +532,21 @@ def cmd_status(project: Path, language: str | None = None, all_projects: bool = 
 
     print()
 
+    # Show config source
+    from .config import load_config
+    yaml_cfg = load_config(project)
+    config_yaml_path = project / ".ail" / "config.yaml"
+    if config_yaml_path.exists():
+        info(f"config: {config_yaml_path} (YAML overrides active)")
+        print(f"  schedule_ms={yaml_cfg['schedule_ms']}  "
+              f"git_since_days={yaml_cfg['git_since_days']}  "
+              f"sticky_threshold={yaml_cfg['sticky_threshold']}  "
+              f"trigger_timeout_s={yaml_cfg['trigger_timeout_s']}")
+    else:
+        info(f"config: using hardcoded defaults (no .ail/config.yaml)")
+
+    print()
+
 
 # ── Planning commands ──────────────────────────────────────────────────────────
 
@@ -580,12 +596,13 @@ def _collect_completed_titles(project: Path, roadmap_path: Path, plans_dir: Path
     #         commits that don't mention TASK- in the message, e.g. "feat(benchmarks)")
     found_task_ids: set[str] = set()
 
+    cfg = load_config()
     git_msg_result = subprocess.run(
-        ["git", "log", "--format=%H %s", "--since=90 days ago"],
+        ["git", "log", "--format=%H %s", f"--since={cfg['git_since_days']} days ago"],
         cwd=project,
         capture_output=True,
         text=True,
-        timeout=10,
+        timeout=cfg['git_log_timeout'],
     )
     if git_msg_result.returncode == 0:
         for line in git_msg_result.stdout.splitlines():
@@ -597,11 +614,11 @@ def _collect_completed_titles(project: Path, roadmap_path: Path, plans_dir: Path
                 found_task_ids.add(m.group(1))
 
     git_diff_result = subprocess.run(
-        ["git", "log", "--name-only", "--format=%H", "--since=90 days ago"],
+        ["git", "log", "--name-only", "--format=%H", f"--since={cfg['git_since_days']} days ago"],
         cwd=project,
         capture_output=True,
         text=True,
-        timeout=15,
+        timeout=cfg['git_log_name_only_timeout'],
     )
     if git_diff_result.returncode == 0:
         current_commit = None
@@ -626,7 +643,7 @@ def _collect_completed_titles(project: Path, roadmap_path: Path, plans_dir: Path
     try:
         sf_result = subprocess.run(
             ["git", "ls-files", "scripts/", "benchmarks/"],
-            cwd=project, capture_output=True, text=True, timeout=5,
+            cwd=project, capture_output=True, text=True, timeout=cfg['detect_timeout'],
         )
         if sf_result.returncode == 0:
             for f in sf_result.stdout.splitlines():
@@ -665,7 +682,7 @@ def _collect_completed_titles(project: Path, roadmap_path: Path, plans_dir: Path
                 # (limit to last 20 commits to keep it fast)
                 file_result = subprocess.run(
                     ["git", "log", "--format=%H", "-20", f"--{file_ref}"],
-                    cwd=project, capture_output=True, text=True, timeout=10,
+                    cwd=project, capture_output=True, text=True, timeout=cfg['detect_timeout'],
                 )
                 if file_result.returncode == 0 and file_result.stdout.strip():
                     done_titles.add(title)
@@ -991,7 +1008,7 @@ def _git_head_short(project: Path) -> str:
         cwd=project,
         capture_output=True,
         text=True,
-        timeout=5,
+        timeout=cfg['detect_timeout'],
     )
     return r.stdout.strip() if r.returncode == 0 else "unknown"
 
@@ -1023,7 +1040,7 @@ def _execute_task_plan(project: Path, task) -> tuple[bool, str]:
         cwd=project,
         capture_output=True,
         text=True,
-        timeout=300,
+        timeout=cfg['trigger_timeout_s'],
     )
 
     if result.returncode == 0:
@@ -1143,19 +1160,19 @@ def _pm_review_project_md(project: Path, project_md_path: Path) -> None:
     # Get last commit info
     log_result = subprocess.run(
         ["git", "log", "--oneline", "-5", "--format=%h %s"],
-        cwd=project, capture_output=True, text=True, timeout=10,
+        cwd=project, capture_output=True, text=True, timeout=cfg['git_log_timeout'],
     )
     log_lines = log_result.stdout.strip().split("\n") if log_result.returncode == 0 else []
 
     diff_result = subprocess.run(
         ["git", "diff", "--stat", "HEAD~1"],
-        cwd=project, capture_output=True, text=True, timeout=10,
+        cwd=project, capture_output=True, text=True, timeout=cfg['git_log_timeout'],
     )
     diff_stats = diff_result.stdout.strip() if diff_result.returncode == 0 else ""
 
     files_result = subprocess.run(
         ["git", "diff", "--name-only", "HEAD~1"],
-        cwd=project, capture_output=True, text=True, timeout=10,
+        cwd=project, capture_output=True, text=True, timeout=cfg['git_log_timeout'],
     )
     changed_files = [f.strip() for f in files_result.stdout.strip().split("\n") if f.strip()] if files_result.returncode == 0 else []
 

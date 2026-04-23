@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import re
 
+from .state import load_config
+
 
 @dataclass
 class PlannedTask:
@@ -1026,7 +1028,7 @@ def choose_next_task(project: Path, roadmap, done_titles: set[str], language: st
     # This allows the system to cycle through tasks indefinitely rather than getting stuck.
     # Titles appearing >= STICKY_THRESHOLD times in Done Log are excluded from retry
     # to prevent a repeated task from being selected again.
-    STICKY_THRESHOLD = 3
+    STICKY_THRESHOLD = cfg['sticky_threshold']
     sticky_titles: set[str] = _sticky_done_titles(project, STICKY_THRESHOLD)
     primary_titles = {c.title for c in primary_pool}
     fallback_titles = {c.title for c in fallback_pool}

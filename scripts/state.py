@@ -13,6 +13,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from .config import load_config  # noqa: E402
+
 from .detect import (
     detect_openclaw_agent_id,
     detect_telegram_chat_id,
