@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import ast
 import argparse
 import re
 import subprocess
@@ -100,9 +101,9 @@ def detect_version(project: Path) -> str:
 
 def _parse_imports_from_file(p: Path) -> tuple[set[str], set[str]]:
     """
-    Parse actual import statements from a Python file.
+    Parse actual import statements from a Python file using AST.
     Returns (direct_imports, from_imports) where each is a set of module names.
-    Only looks at real import lines, not strings or comments.
+    Uses ast.parse to correctly skip strings, comments, and docstrings.
     """
     direct_imports: set[str] = set()
     from_imports: set[str] = set()
@@ -112,40 +113,22 @@ def _parse_imports_from_file(p: Path) -> tuple[set[str], set[str]]:
     except Exception:
         return direct_imports, from_imports
 
-    # Use regex to find real import lines (not inside strings or comments)
-    # Pattern matches:
-    #   import X
-    #   import X as Y
-    #   import X.Y.Z
-    #   from X import Y
-    #   from X import Y as Z
-    #   from X.Y import Z
+    try:
+        tree = ast.parse(text, filename=str(p))
+    except SyntaxError:
+        # Fall back to empty on syntax errors (e.g., partial files)
+        return direct_imports, from_imports
 
-    import_pattern = re.compile(
-        r'''
-        ^                           # start of line
-        \s*                         # leading whitespace
-        (?:import|from)\s+          # 'import' or 'from'
-        ([a-zA-Z_][a-zA-Z0-9_]*)    # root module name (first identifier)
-        ''',
-        re.MULTILINE | re.VERBOSE
-    )
-
-    # Find all import lines
-    for m in import_pattern.finditer(text):
-        root_module = m.group(1)
-        # Determine which kind of import
-        line_start = m.start()
-        line_end = text.find('\n', line_start)
-        if line_end == -1:
-            line_end = len(text)
-        line = text[line_start:line_end]
-
-        # Check if it's a 'from' import or direct 'import'
-        if re.match(r'^\s*from', line):
-            from_imports.add(root_module)
-        else:
-            direct_imports.add(root_module)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                # Get the root module (first component)
+                root = alias.name.split(".")[0]
+                direct_imports.add(root)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                root = node.module.split(".")[0]
+                from_imports.add(root)
 
     return direct_imports, from_imports
 
