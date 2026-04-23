@@ -544,7 +544,7 @@ def _get_roadmap_and_project():
 
 
 def _collect_completed_titles(project: Path, roadmap_path: Path, plans_dir: Path) -> set[str]:
-    """Collect completed task titles from Done Log and git history."""
+    """Collect completed task titles from Done Log, git history, and current project state."""
     done_titles: set[str] = set()
 
     if roadmap_path.exists():
@@ -558,28 +558,143 @@ def _collect_completed_titles(project: Path, roadmap_path: Path, plans_dir: Path
                 if len(cells) >= 7 and cells[1].startswith("TASK-"):
                     done_titles.add(cells[4])
 
-    git_result = subprocess.run(
-        ["git", "log", "--oneline", "--grep=TASK-", "--since=90 days ago"],
+    # Collect done titles from git history via two-pass strategy:
+    # Pass 1: find commits whose message mentions TASK-xxx anywhere
+    # Pass 2: find commits whose diff touches a plan file (covers task
+    #         commits that don't mention TASK- in the message, e.g. "feat(benchmarks)")
+    found_task_ids: set[str] = set()
+
+    git_msg_result = subprocess.run(
+        ["git", "log", "--format=%H %s", "--since=90 days ago"],
         cwd=project,
         capture_output=True,
         text=True,
         timeout=10,
     )
-    if git_result.returncode == 0:
-        for line in git_result.stdout.splitlines():
-            m = re.search(r"(TASK-\d+)", line)
-            if not m:
+    if git_msg_result.returncode == 0:
+        for line in git_msg_result.stdout.splitlines():
+            parts = line.split(" ", 1)
+            if len(parts) < 2:
                 continue
-            plan_path = plans_dir / f"{m.group(1)}.md"
-            if not plan_path.exists():
+            _commit_hash, message = parts[0], parts[1]
+            for m in re.finditer(r"(TASK-\d+)", message):
+                found_task_ids.add(m.group(1))
+
+    git_diff_result = subprocess.run(
+        ["git", "log", "--name-only", "--format=%H", "--since=90 days ago"],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    if git_diff_result.returncode == 0:
+        current_commit = None
+        for line in git_diff_result.stdout.splitlines():
+            stripped = line.strip()
+            if not stripped:
                 continue
-            try:
-                first_line = plan_path.read_text(encoding="utf-8").splitlines()[0].strip()
-            except Exception:
-                continue
-            title_match = re.match(r"#\s+TASK-\d+\s+·\s+(.+)$", first_line)
-            if title_match:
-                done_titles.add(title_match.group(1).strip())
+            if not stripped.startswith(" "):
+                # commit hash line
+                current_commit = stripped
+            elif current_commit and ".ail/plans/" in line and line.strip().endswith(".md"):
+                pm = re.search(r"\.ail/plans/(TASK-\d+)\.md", line)
+                if pm:
+                    found_task_ids.add(pm.group(1))
+
+    # Pass 3: for remaining plan files, search recent git commits for
+    # files that the plan itself mentions in its Scope or Relevant Files section.
+    # This catches commits that implement a task without TASK- in the message.
+    # Example: benchmarks task scope lists scripts/init.py; the benchmarks commit
+    # created benchmarks/run_benchmarks.py — we find it by scope file existence.
+    _SCRIPT_FILES: set[str] = set()
+    try:
+        sf_result = subprocess.run(
+            ["git", "ls-files", "scripts/", "benchmarks/"],
+            cwd=project, capture_output=True, text=True, timeout=5,
+        )
+        if sf_result.returncode == 0:
+            for f in sf_result.stdout.splitlines():
+                _SCRIPT_FILES.add(f.strip())
+    except Exception:
+        pass
+
+    for plan_file in sorted(plans_dir.glob("TASK-*.md")):
+        try:
+            plan_text = plan_file.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        first_line = plan_text.splitlines()[0].strip()
+        title_m = re.match(r"#\s+TASK-\d+\s+·\s+(.+)$", first_line)
+        if not title_m:
+            continue
+        title = title_m.group(1).strip()
+        if title in done_titles:
+            continue  # already added via Pass 1 or 2
+
+        # Look for scope file paths mentioned in the plan (## Scope, ## Relevant Files)
+        scope_m = re.search(r"(?i)(?:Scope|Relevant Files)[^\n]*\n([\s\S]+?)(?=\n##|\Z)", plan_text)
+        if scope_m:
+            scope_text = scope_m.group(1)
+            # find file paths (with or without directory prefix)
+            for file_m in re.finditer(r"(?:scripts|benchmarks|tests|[\w_-]+)\/[\w_\.-]+", scope_text):
+                file_ref = file_m.group(0).strip()
+                if not file_ref:
+                    continue
+                # check if this file was modified in any recent commit
+                # (limit to last 20 commits to keep it fast)
+                file_result = subprocess.run(
+                    ["git", "log", "--format=%H", "-20", f"--{file_ref}"],
+                    cwd=project, capture_output=True, text=True, timeout=10,
+                )
+                if file_result.returncode == 0 and file_result.stdout.strip():
+                    done_titles.add(title)
+                    break
+
+    for task_id in found_task_ids:
+        plan_path = plans_dir / f"{task_id}.md"
+        if not plan_path.exists():
+            continue
+        try:
+            first_line = plan_path.read_text(encoding="utf-8").splitlines()[0].strip()
+        except Exception:
+            continue
+        title_match = re.match(r"#\s+TASK-\d+\s+·\s+(.+)$", first_line)
+        if title_match:
+            done_titles.add(title_match.group(1).strip())
+
+    done_titles.update(_collect_completed_titles_from_project_state(project))
+    return done_titles
+
+
+def _collect_completed_titles_from_project_state(project: Path) -> set[str]:
+    """Infer obviously completed task titles from the current repository state.
+
+    This supplements Done Log / git-history based dedupe for work that landed via
+    normal commits but was not tagged with TASK-xxx in commit messages.
+    """
+    done_titles: set[str] = set()
+
+    # Benchmark suite already exists.
+    benchmark_runner = project / "benchmarks" / "run_benchmarks.py"
+    gitignore_path = project / ".gitignore"
+    if benchmark_runner.exists() and gitignore_path.exists():
+        try:
+            gitignore_text = gitignore_path.read_text(encoding="utf-8")
+        except Exception:
+            gitignore_text = ""
+        if "benchmarks/results.jsonl" in gitignore_text:
+            done_titles.add("为项目增加性能基准测试，跟踪 a-plan / a-current 等命令的响应时间")
+
+    # init.py split already landed.
+    split_targets = [project / "scripts" / name for name in ("cli.py", "cron.py", "detect.py", "state.py")]
+    init_py = project / "scripts" / "init.py"
+    if all(p.exists() for p in split_targets) and init_py.exists():
+        try:
+            init_lines = len(init_py.read_text(encoding="utf-8").splitlines())
+        except Exception:
+            init_lines = 10**9
+        if init_lines < 400:
+            done_titles.add("审视 scripts/ 目录结构，将 2024 行的 init.py 拆分为 cli/、state/、cron/ 三个模块")
 
     return done_titles
 
