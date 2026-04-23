@@ -201,13 +201,15 @@ def main() -> int:
     )
     plan_p.add_argument("--force", action="store_true", help="Regenerate even if current task exists")
     plan_p.add_argument("--count", "-n", type=int, default=1, help="Number of tasks to generate (default: 1)")
+    plan_p.add_argument("--dry-run", action="store_true", help="Show what would be generated without writing anything")
     plan_p.epilog = textwrap.dedent("""\
         Examples:
           python init.py a-plan            # Generate next task
           python init.py a-plan --force    # Force regeneration
           python init.py a-plan -n 3       # Generate 3 tasks at once
+          python init.py a-plan --dry-run  # Preview without writing
         """)
-    plan_p.set_defaults(func=lambda a: cmd_plan(force=a.force, count=a.count))
+    plan_p.set_defaults(func=lambda a: cmd_plan(force=a.force, count=a.count, dry_run=a.dry_run))
 
     current_p = sub.add_parser(
         "a-current",
@@ -243,13 +245,16 @@ def main() -> int:
                           help="Re-run even if current task is already marked doing")
     trigger_p.add_argument("--no-spawn", action="store_true",
                           help="Skip spawning a new cron session — record result directly")
+    trigger_p.add_argument("--dry-run", action="store_true",
+                          help="Show what would happen without writing or committing")
     trigger_p.epilog = textwrap.dedent("""\
         Examples:
           python init.py a-trigger            # Execute current task
           python init.py a-trigger --force    # Re-run even if already doing
           python init.py a-trigger --no-spawn # Record result without cron
+          python init.py a-trigger --dry-run  # Preview without writing
         """)
-    trigger_p.set_defaults(func=lambda a: cmd_trigger(force=a.force, no_spawn=a.no_spawn))
+    trigger_p.set_defaults(func=lambda a: cmd_trigger(force=a.force, no_spawn=a.no_spawn, dry_run=a.dry_run))
 
     config_sp = sub.add_parser("a-config", help="Get or set config values")
     config_sp.add_argument("action", choices=["get", "set"],
@@ -320,7 +325,7 @@ def main() -> int:
         elif args.command == "a-add":
             cmd_add(" ".join(args.content))
         elif args.command == "a-plan":
-            cmd_plan(force=args.force, count=args.count)
+            cmd_plan(force=args.force, count=args.count, dry_run=args.dry_run)
         elif args.command == "a-current":
             cmd_current(verbose=args.verbose)
         elif args.command == "a-queue":
@@ -330,7 +335,7 @@ def main() -> int:
         elif args.command == "a-refresh":
             cmd_plan(force=True)
         elif args.command == "a-trigger":
-            cmd_trigger(force=args.force, no_spawn=args.no_spawn)
+            cmd_trigger(force=args.force, no_spawn=args.no_spawn, dry_run=args.dry_run)
         elif args.command == "a-config":
             cmd_config(action=args.action, key=args.key, value=args.value)
     except KeyboardInterrupt:

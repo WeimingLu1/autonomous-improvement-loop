@@ -972,6 +972,8 @@ def choose_next_task(project: Path, roadmap, done_titles: set[str], language: st
     Uses real project context (git history, file sizes, test files) to
     generate differentiated task candidates with specific scope.
     """
+    from scripts.config import load_config
+    cfg = load_config()
     ctx = _read_project_context(project)
 
     # Build full candidate list

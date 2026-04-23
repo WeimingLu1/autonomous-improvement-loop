@@ -51,6 +51,21 @@ from .state import (
     resolve_language,
 )
 
+from enum import Enum, auto
+
+
+class DryRunMode(Enum):
+    """Dry-run level for CLI commands.
+
+    OFF      — real execution (default)
+    PLAN_ONCE — a-plan dry-run: show task that would be generated but don't write ROADMAP.md
+    FULL     — a-trigger dry-run: show everything that would happen without writing anything
+    """
+
+    OFF = auto()
+    PLAN_ONLY = auto()   # used by a-plan
+    FULL = auto()        # used by a-trigger (and any future FULL dry-run)
+
 # Detection functions (also moved from init.py)
 from .detect import (
     detect_project_path,
@@ -737,8 +752,12 @@ def _collect_completed_titles_from_project_state(project: Path) -> set[str]:
     return done_titles
 
 
-def cmd_plan(force: bool = False, count: int = 1) -> None:
-    step(f"🗺️  Generating {'current task + ' if count == 1 else f'{count} tasks + '}plan{'s' if count > 1 else ''}")
+def cmd_plan(force: bool = False, count: int = 1, dry_run: bool = False) -> None:
+    dry_run_mode = DryRunMode.PLAN_ONLY if (dry_run or os.environ.get("DRY_RUN") == "1") else DryRunMode.OFF
+    if dry_run_mode == DryRunMode.PLAN_ONLY:
+        step(f"[dry-run] 🗺️  Would generate {'current task + ' if count == 1 else f'{count} tasks + '}plan{'s' if count > 1 else ''}")
+    else:
+        step(f"🗺️  Generating {'current task + ' if count == 1 else f'{count} tasks + '}plan{'s' if count > 1 else ''}")
     project, roadmap_path = _get_roadmap_and_project()
     _migrate_to_ail(project)
     from scripts.roadmap import load_roadmap, set_current_task, init_roadmap, CurrentTask
@@ -779,33 +798,34 @@ def cmd_plan(force: bool = False, count: int = 1) -> None:
             done_titles.add(planned.title)  # avoid duplicates in same batch
             planned_tasks.append(planned)
 
-        # Write all plan files
+        # Write all plan files (or print in dry-run)
         plan_paths: list[Path] = []
         task_ids: list[str] = []
         for i, planned in enumerate(planned_tasks):
             task_id = next_task_id(plans_dir)
             task_ids.append(task_id)
-            plan_path = write_plan_doc(
-                plans_dir=plans_dir,
-                task_id=task_id,
-                title=planned.title,
-                task_type=planned.task_type,
-                source=planned.source,
-                effort=planned.effort,
-                context=planned.context,
-                why_now=planned.why_now,
-                scope=planned.scope,
-                non_goals=planned.non_goals,
-                relevant_files=planned.relevant_files,
-                execution_plan=planned.execution_plan,
-                acceptance_criteria=planned.acceptance_criteria,
-                verification=planned.verification,
-                risks=planned.risks,
-                background=planned.background,
-                rollback=planned.rollback,
-            )
-            plan_paths.append(plan_path)
-            ok(f"Task {task_id} ({i+1}/{count}): {planned.title}")
+            if dry_run_mode == DryRunMode.OFF:
+                plan_path = write_plan_doc(
+                    plans_dir=plans_dir,
+                    task_id=task_id,
+                    title=planned.title,
+                    task_type=planned.task_type,
+                    source=planned.source,
+                    effort=planned.effort,
+                    context=planned.context,
+                    why_now=planned.why_now,
+                    scope=planned.scope,
+                    non_goals=planned.non_goals,
+                    relevant_files=planned.relevant_files,
+                    execution_plan=planned.execution_plan,
+                    acceptance_criteria=planned.acceptance_criteria,
+                    verification=planned.verification,
+                    risks=planned.risks,
+                    background=planned.background,
+                    rollback=planned.rollback,
+                )
+                plan_paths.append(plan_path)
+            ok(f"[dry-run] Would create task {task_id} ({i+1}/{count}): {planned.title}" if dry_run_mode == DryRunMode.PLAN_ONLY else f"Task {task_id} ({i+1}/{count}): {planned.title}")
 
         # Set first task as current, rhythm updated from last task
         first = planned_tasks[0]
@@ -826,15 +846,19 @@ def cmd_plan(force: bool = False, count: int = 1) -> None:
         maintenance_remaining = roadmap.post_feature_maintenance_remaining
         if any_consumed and maintenance_remaining > 0:
             maintenance_remaining -= 1
-        set_current_task(
-            roadmap_path, current,
-            plan_path=str(plan_paths[0].relative_to(project / ".ail")),
-            next_default_type=next_type,
-            improves_since_last_idea=improves,
-            post_feature_maintenance_remaining=maintenance_remaining,
-            maintenance_anchor_title=roadmap.maintenance_anchor_title,
-            reserved_user_task_id=roadmap.reserved_user_task_id,
-        )
+        if dry_run_mode == DryRunMode.OFF:
+            set_current_task(
+                roadmap_path, current,
+                plan_path=str(plan_paths[0].relative_to(project / ".ail")) if plan_paths else "",
+                next_default_type=next_type,
+                improves_since_last_idea=improves,
+                post_feature_maintenance_remaining=maintenance_remaining,
+                maintenance_anchor_title=roadmap.maintenance_anchor_title,
+                reserved_user_task_id=roadmap.reserved_user_task_id,
+            )
+        if dry_run_mode == DryRunMode.PLAN_ONLY:
+            ok(f"[dry-run] Would set current task to {task_ids[0]} and update ROADMAP.md")
+            return
         print()
         _print_plan_doc(plan_paths[0])
         return
@@ -842,25 +866,28 @@ def cmd_plan(force: bool = False, count: int = 1) -> None:
     # Single-task mode (default)
     planned, consumed = choose_next_task(project, roadmap, done_titles, language)
     task_id = next_task_id(plans_dir)
-    plan_path = write_plan_doc(
-        plans_dir=plans_dir,
-        task_id=task_id,
-        title=planned.title,
-        task_type=planned.task_type,
-        source=planned.source,
-        effort=planned.effort,
-        context=planned.context,
-        why_now=planned.why_now,
-        scope=planned.scope,
-        non_goals=planned.non_goals,
-        relevant_files=planned.relevant_files,
-        execution_plan=planned.execution_plan,
-        acceptance_criteria=planned.acceptance_criteria,
-        verification=planned.verification,
-        risks=planned.risks,
-        background=planned.background,
-        rollback=planned.rollback,
-    )
+    if dry_run_mode == DryRunMode.OFF:
+        plan_path = write_plan_doc(
+            plans_dir=plans_dir,
+            task_id=task_id,
+            title=planned.title,
+            task_type=planned.task_type,
+            source=planned.source,
+            effort=planned.effort,
+            context=planned.context,
+            why_now=planned.why_now,
+            scope=planned.scope,
+            non_goals=planned.non_goals,
+            relevant_files=planned.relevant_files,
+            execution_plan=planned.execution_plan,
+            acceptance_criteria=planned.acceptance_criteria,
+            verification=planned.verification,
+            risks=planned.risks,
+            background=planned.background,
+            rollback=planned.rollback,
+        )
+    else:
+        plan_path = plans_dir / f"{task_id}.md"  # dummy for dry-run print
 
     created = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     task = CurrentTask(
@@ -877,15 +904,21 @@ def cmd_plan(force: bool = False, count: int = 1) -> None:
 
     maintenance_remaining = roadmap.post_feature_maintenance_remaining - 1 if consumed else roadmap.post_feature_maintenance_remaining
     maintenance_anchor = roadmap.maintenance_anchor_title
-    set_current_task(
-        roadmap_path, task,
-        plan_path=str(plan_path.relative_to(project / ".ail")),
-        next_default_type=next_type,
-        improves_since_last_idea=improves,
-        post_feature_maintenance_remaining=maintenance_remaining,
-        maintenance_anchor_title=maintenance_anchor,
-        reserved_user_task_id=roadmap.reserved_user_task_id,
-    )
+    if dry_run_mode == DryRunMode.OFF:
+        set_current_task(
+            roadmap_path, task,
+            plan_path=str(plan_path.relative_to(project / ".ail")),
+            next_default_type=next_type,
+            improves_since_last_idea=improves,
+            post_feature_maintenance_remaining=maintenance_remaining,
+            maintenance_anchor_title=maintenance_anchor,
+            reserved_user_task_id=roadmap.reserved_user_task_id,
+        )
+    if dry_run_mode == DryRunMode.PLAN_ONLY:
+        ok(f"[dry-run] Would create task {task_id}: {planned.title}")
+        ok(f"[dry-run] Would write plan doc to {plans_dir / f'{task_id}.md'}")
+        ok(f"[dry-run] Would set current task and update ROADMAP.md")
+        return
     ok(f"Task {task_id} generated and set as current")
     print()
     _print_plan_doc(plan_path)
@@ -1008,12 +1041,13 @@ def _git_head_short(project: Path) -> str:
         cwd=project,
         capture_output=True,
         text=True,
-        timeout=cfg['detect_timeout'],
+        timeout=30,
     )
     return r.stdout.strip() if r.returncode == 0 else "unknown"
 
 
 def _execute_task_plan(project: Path, task) -> tuple[bool, str]:
+    cfg = load_config()
     plan_path = project / ".ail" / "plans" / f"{task.task_id}.md"
     if not plan_path.exists():
         return False, f"Plan file not found: {plan_path}"
@@ -1089,8 +1123,12 @@ def _cleanup_stale_locks(project: Path) -> None:
         pass
 
 
-def cmd_trigger(force: bool = False, no_spawn: bool = False) -> None:
-    step("⚡ Triggering plan execution")
+def cmd_trigger(force: bool = False, no_spawn: bool = False, dry_run: bool = False) -> None:
+    dry_run_mode = DryRunMode.FULL if (dry_run or os.environ.get("DRY_RUN") == "1") else DryRunMode.OFF
+    if dry_run_mode == DryRunMode.FULL:
+        step("[dry-run] ⚡ Would trigger plan execution")
+    else:
+        step("⚡ Triggering plan execution")
     project, roadmap_path = _get_roadmap_and_project()
     _migrate_to_ail(project)
     if not roadmap_path.exists():
@@ -1104,6 +1142,20 @@ def cmd_trigger(force: bool = False, no_spawn: bool = False) -> None:
         sys.exit(1)
 
     try:
+        if dry_run_mode == DryRunMode.FULL:
+            # Show what would happen without executing
+            from scripts.roadmap import load_roadmap
+            roadmap = load_roadmap(roadmap_path)
+            if roadmap.current_task:
+                current = roadmap.current_task
+                ok(f"[dry-run] Would execute task: {current.task_id} — {current.title}")
+                ok(f"[dry-run] Would call _record_result_only() → writes Done Log to ROADMAP.md")
+                ok(f"[dry-run] Would call _maybe_update_project_md() → regenerates .ail/PROJECT.md")
+            else:
+                ok("[dry-run] No current task to execute")
+            ok("[dry-run] Would NOT write git commit")
+            return
+
         if os.environ.get("OPENCLAW_CRON_SESSION") == "1" or no_spawn:
             try:
                 _timeout_call(_record_result_only, TRIGGER_TIMEOUT_S, project, roadmap_path, force)
@@ -1156,6 +1208,8 @@ def _pm_review_project_md(project: Path, project_md_path: Path) -> None:
     """Append a PM-quality qualitative review to PROJECT.md based on recent git changes."""
     import subprocess, re
     from datetime import datetime, timezone
+    from scripts.config import load_config
+    cfg = load_config()
 
     # Get last commit info
     log_result = subprocess.run(
