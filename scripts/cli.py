@@ -699,8 +699,8 @@ def _collect_completed_titles_from_project_state(project: Path) -> set[str]:
     return done_titles
 
 
-def cmd_plan(force: bool = False) -> None:
-    step("🗺️  Generating current task + plan")
+def cmd_plan(force: bool = False, count: int = 1) -> None:
+    step(f"🗺️  Generating {'current task + ' if count == 1 else f'{count} tasks + '}plan{'s' if count > 1 else ''}")
     project, roadmap_path = _get_roadmap_and_project()
     _migrate_to_ail(project)
     from scripts.roadmap import load_roadmap, set_current_task, init_roadmap, CurrentTask
@@ -728,10 +728,73 @@ def cmd_plan(force: bool = False) -> None:
         return
 
     done_titles = _collect_completed_titles(project, roadmap_path, plans_dir)
-
     language = read_current_config().get("project_language", DEFAULT_LANGUAGE).strip() or "zh"
-    planned = choose_next_task(project, roadmap, done_titles, language)
 
+    # Multi-task mode: generate N tasks
+    if count > 1:
+        planned_tasks: list = []
+        for i in range(count):
+            planned = choose_next_task(project, roadmap, done_titles, language)
+            done_titles.add(planned.title)  # avoid duplicates in same batch
+            planned_tasks.append(planned)
+
+        # Write all plan files
+        plan_paths: list[Path] = []
+        task_ids: list[str] = []
+        for i, planned in enumerate(planned_tasks):
+            task_id = next_task_id(plans_dir)
+            task_ids.append(task_id)
+            plan_path = write_plan_doc(
+                plans_dir=plans_dir,
+                task_id=task_id,
+                title=planned.title,
+                task_type=planned.task_type,
+                source=planned.source,
+                effort=planned.effort,
+                context=planned.context,
+                why_now=planned.why_now,
+                scope=planned.scope,
+                non_goals=planned.non_goals,
+                relevant_files=planned.relevant_files,
+                execution_plan=planned.execution_plan,
+                acceptance_criteria=planned.acceptance_criteria,
+                verification=planned.verification,
+                risks=planned.risks,
+                background=planned.background,
+                rollback=planned.rollback,
+            )
+            plan_paths.append(plan_path)
+            ok(f"Task {task_id} ({i+1}/{count}): {planned.title}")
+
+        # Set first task as current, rhythm updated from last task
+        first = planned_tasks[0]
+        last = planned_tasks[-1]
+        created = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        current = CurrentTask(
+            task_id=task_ids[0],
+            task_type=first.task_type,
+            source=first.source,
+            title=first.title,
+            status="pending",
+            created=created,
+        )
+        next_type = "improve" if roadmap.next_default_type == "idea" else "idea"
+        improves = roadmap.improves_since_last_idea + sum(
+            1 for p in planned_tasks if p.task_type == "improve"
+        )
+        set_current_task(
+            roadmap_path, current,
+            plan_path=str(plan_paths[0].relative_to(project / ".ail")),
+            next_default_type=next_type,
+            improves_since_last_idea=improves,
+            reserved_user_task_id=roadmap.reserved_user_task_id,
+        )
+        print()
+        _print_plan_doc(plan_paths[0])
+        return
+
+    # Single-task mode (default)
+    planned = choose_next_task(project, roadmap, done_titles, language)
     task_id = next_task_id(plans_dir)
     plan_path = write_plan_doc(
         plans_dir=plans_dir,

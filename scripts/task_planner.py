@@ -698,12 +698,13 @@ _SELECTION_STATE: dict[str, int] = {}
 def _selection_key(project: Path, roadmap, done_titles: set[str]) -> str:
     next_type = getattr(roadmap, "next_default_type", "idea")
     improves_since = getattr(roadmap, "improves_since_last_idea", 0)
+    # done_titles is used for filtering only; the hash omits it to keep
+    # the selection state stable across iterations within a planning batch.
     payload = "|".join(
         [
             str(project.resolve()),
             next_type,
             str(improves_since),
-            "||".join(sorted(done_titles)),
         ]
     )
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()

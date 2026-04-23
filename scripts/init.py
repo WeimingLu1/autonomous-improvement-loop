@@ -180,7 +180,8 @@ def main() -> int:
 
     plan_p = sub.add_parser("a-plan", help="Generate current task and full plan (PM mode)")
     plan_p.add_argument("--force", action="store_true", help="Regenerate even if current task exists")
-    plan_p.set_defaults(func=lambda a: cmd_plan(force=a.force))
+    plan_p.add_argument("--count", "-n", type=int, default=1, help="Number of tasks to generate (default: 1)")
+    plan_p.set_defaults(func=lambda a: cmd_plan(force=a.force, count=a.count))
 
     current_p = sub.add_parser("a-current", help="Show current task + full plan doc")
     current_p.set_defaults(func=lambda _a: cmd_current())
@@ -268,7 +269,7 @@ def main() -> int:
         elif args.command == "a-add":
             cmd_add(" ".join(args.content))
         elif args.command == "a-plan":
-            cmd_plan(force=args.force)
+            cmd_plan(force=args.force, count=args.count)
         elif args.command == "a-current":
             cmd_current()
         elif args.command == "a-queue":
