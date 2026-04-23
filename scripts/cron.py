@@ -38,7 +38,7 @@ def cmd_start() -> None:
             fail("Agent ID not set. Configure via: python3 scripts/init.py a-config set agent_id YOUR_AGENT_ID")
             return
 
-    chat_id = config.get("telegram_chat_id", "").strip()
+    chat_id = config.get("chat_id", "").strip() or config.get("telegram_chat_id", "").strip()
     if not chat_id:
         chat_id = detect_telegram_chat_id() or ""
         if not chat_id:

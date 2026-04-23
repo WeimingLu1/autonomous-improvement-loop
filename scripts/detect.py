@@ -130,11 +130,11 @@ def detect_agent_language() -> str:
 # ── Version File Detection ─────────────────────────────────────────────────────
 
 def detect_version_file(project: Path) -> Path:
-    for candidate in ["version.py", "__version__.py", "_version.py", " VERSION", "version.txt"]:
+    for candidate in ["VERSION", "version.py", "__version__.py", "_version.py", "version.txt"]:
         p = project / candidate
         if p.exists():
             return p
-    return project / "version.py"
+    return project / "VERSION"
 
 
 # ── CLI Name Detection ────────────────────────────────────────────────────────
@@ -175,7 +175,7 @@ def detect_telegram_chat_id() -> str | None:
     config_file = config_home / "config.md"
     if config_file.exists():
         text = config_file.read_text(encoding="utf-8")
-        m = re.search(r"telegram_chat_id:\s*(\S+)", text)
+        m = re.search(r"(?:chat_id|telegram_chat_id):\s*(\S+)", text)
         if m:
             return m.group(1)
     return os.environ.get("TELEGRAM_CHAT_ID", "").strip() or None
@@ -297,6 +297,7 @@ def check_project_readiness(project: Path) -> dict[str, bool]:
     has_version = (
         (project / "version.py").exists() or
         (project / "__version__.py").exists() or
+        (project / "VERSION").exists() or
         (project / "pyproject.toml").exists()
     )
     checks["version file"] = has_version
