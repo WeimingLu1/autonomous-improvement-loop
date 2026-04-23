@@ -59,6 +59,15 @@ def _count_lines(path: Path) -> int:
         return 0
 
 
+def _get_quality_scores(project: Path) -> dict[str, int]:
+    """Get quality scores for all scripts/ modules. Returns dict of module_name -> score."""
+    try:
+        from scripts.task_quality import score_all_modules
+        return {r["module"]: r["score"] for r in score_all_modules(project)}
+    except Exception:
+        return {}
+
+
 def _project_summary(project: Path) -> str:
     project_md = project / "PROJECT.md"
     if not project_md.exists():
@@ -116,6 +125,7 @@ def _read_project_context(project: Path) -> dict:
         "commits": commits,
         "test_files": test_files,
         "init_funcs": init_funcs,
+        "quality_scores": _get_quality_scores(project),
     }
 
 
@@ -902,9 +912,25 @@ def _selection_key(project: Path, roadmap, done_titles: set[str]) -> str:
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()
 
 
-def _pick_from_pool(pool: list[PlannedTask], key: str) -> PlannedTask | None:
+def _pick_from_pool(pool: list[PlannedTask], key: str, quality_scores: dict[str, int] | None = None) -> PlannedTask | None:
     if not pool:
         return None
+    # Sort by quality score priority (higher = more urgent) when available
+    if quality_scores:
+        def quality_priority(t: PlannedTask) -> int:
+            score = 0
+            # Check scope files for module references
+            for ref in getattr(t, "relevant_files", []):
+                for fname, qs in quality_scores.items():
+                    if fname in ref:
+                        score = max(score, qs)
+            # Also check scope strings directly
+            for ref in getattr(t, "scope", []):
+                for fname, qs in quality_scores.items():
+                    if fname in str(ref):
+                        score = max(score, qs)
+            return score
+        pool = sorted(pool, key=quality_priority, reverse=True)
     offset = _SELECTION_STATE.get(key, 0) % len(pool)
     _SELECTION_STATE[key] = offset + 1
     return pool[offset]
@@ -987,11 +1013,12 @@ def choose_next_task(project: Path, roadmap, done_titles: set[str], language: st
 
     selection_key = _selection_key(project, roadmap, done_titles)
     consumed = maintenance_remaining > 0
-    candidate = _pick_from_pool(primary_available, selection_key)
+    quality_scores = ctx.get("quality_scores") or {}
+    candidate = _pick_from_pool(primary_available, selection_key, quality_scores)
     if candidate is not None:
         return candidate, consumed
 
-    candidate = _pick_from_pool(fallback_available, f"{selection_key}:fallback")
+    candidate = _pick_from_pool(fallback_available, f"{selection_key}:fallback", quality_scores)
     if candidate is not None:
         return candidate, consumed
 
@@ -1010,10 +1037,10 @@ def choose_next_task(project: Path, roadmap, done_titles: set[str], language: st
             done_titles.discard(title)
         primary_available = [c for c in primary_pool if c.title not in done_titles and c.title not in sticky_titles]
         fallback_available = [c for c in fallback_pool if c.title not in done_titles and c.title not in sticky_titles]
-        candidate = _pick_from_pool(primary_available, selection_key)
+        candidate = _pick_from_pool(primary_available, selection_key, quality_scores)
         if candidate is not None:
             return candidate, consumed
-        candidate = _pick_from_pool(fallback_available, f"{selection_key}:fallback")
+        candidate = _pick_from_pool(fallback_available, f"{selection_key}:fallback", quality_scores)
         if candidate is not None:
             return candidate, consumed
 
