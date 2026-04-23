@@ -166,6 +166,9 @@ def main() -> int:
     status_p = sub.add_parser("a-status", help="Check project readiness")
     status_p.add_argument("project", nargs="?", type=Path,
                           default=detect_project_path())
+    status_p.add_argument("--language", "--lang", "-l", default=None,
+                          choices=["en", "zh"],
+                          help="Output language (default: Chinese)")
     status_p.set_defaults(func=cmd_status)
 
     start_p = sub.add_parser("a-start", help="Start cron托管 (create cron job)")
@@ -261,7 +264,7 @@ def main() -> int:
                 model=args.model,
             )
         elif args.command == "a-status":
-            cmd_status(args.project)
+            cmd_status(args.project, language=args.language)
         elif args.command == "a-start":
             cmd_start()
         elif args.command == "a-stop":

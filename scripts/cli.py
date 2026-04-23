@@ -456,15 +456,19 @@ def cmd_add(content_text: str) -> None:
 
 # ── cmd_status ────────────────────────────────────────────────────────────────
 
-def cmd_status(project: Path) -> None:
+def cmd_status(project: Path, language: str | None = None) -> None:
     from scripts.roadmap import load_roadmap
+    from scripts.i18n import get_message, get_lang
 
-    step("📊 Checking project status")
+    lang = get_lang(language)
+    _ = lambda key: get_message(key, lang)
+
+    step(_("checking_project_status"))
 
     if project is None:
         detected = detect_project_path()
         if not detected:
-            fail("No project found. Run from a project directory or configure project_path.")
+            fail(_("no_project_found"))
             sys.exit(1)
         project = detected
 
@@ -474,46 +478,46 @@ def cmd_status(project: Path) -> None:
     roadmap_path = ail_roadmap(project)
     config = read_current_config()
 
-    print(f"\n  {c('Project:', COLOR_BOLD)} {project.name}")
-    print(f"  {c('Path:', COLOR_BOLD)} {project}")
+    print(f"\n  {c(_('project'), COLOR_BOLD)} {project.name}")
+    print(f"  {c(_('path'), COLOR_BOLD)} {project}")
 
-    step("📋 Readiness checks")
+    step(_("readiness_checks"))
     all_ok = True
     for check, result in readiness.items():
         if result:
             ok(check)
         else:
-            warn(f"{check} {c('(missing)', COLOR_YELLOW)}")
+            warn(f"{check} {c(_('missing'), COLOR_YELLOW)}")
             all_ok = False
     print()
 
     if all_ok:
-        ok("Project is fully configured")
+        ok(_("project_fully_configured"))
     else:
-        warn("Project has missing readiness items")
+        warn(_("project_has_missing_items"))
 
     if roadmap_path.exists():
         roadmap = load_roadmap(roadmap_path)
         if roadmap.current_task:
-            step("🧠 Current task")
+            step(_("current_task"))
             ct = roadmap.current_task
-            print(f"  {c('ID:', COLOR_BOLD)} {ct.task_id}")
-            print(f"  {c('Title:', COLOR_BOLD)} {ct.title}")
-            print(f"  {c('Status:', COLOR_BOLD)} {ct.status}")
-            print(f"  {c('Type:', COLOR_BOLD)} {ct.task_type}")
-            print(f"  {c('Created:', COLOR_BOLD)} {ct.created}")
+            print(f"  {c(_('id'), COLOR_BOLD)} {ct.task_id}")
+            print(f"  {c(_('title'), COLOR_BOLD)} {ct.title}")
+            print(f"  {c(_('status'), COLOR_BOLD)} {ct.status}")
+            print(f"  {c(_('type'), COLOR_BOLD)} {ct.task_type}")
+            print(f"  {c(_('created'), COLOR_BOLD)} {ct.created}")
             if roadmap.reserved_user_task_id:
-                print(f"  {c('Reserved user task:', COLOR_BOLD)} {roadmap.reserved_user_task_id}")
+                print(f"  {c(_('reserved_user_task'), COLOR_BOLD)} {roadmap.reserved_user_task_id}")
         else:
-            warn("No current task in ROADMAP.md")
+            warn(_("no_current_task"))
     else:
-        warn("ROADMAP.md not found — run a-plan first")
+        warn(_("roadmap_not_found"))
 
     print()
     if config.get("cron_job_id"):
-        ok(f"Cron Job ID: {config['cron_job_id']}")
+        ok(f"{_('cron_job_id')}: {config['cron_job_id']}")
     else:
-        warn("  Cron Job: not detected")
+        warn(f"  {_('cron_job_not_detected')}")
 
     print()
 
