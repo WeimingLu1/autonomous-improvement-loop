@@ -772,6 +772,26 @@ def _pick_from_pool(pool: list[PlannedTask], key: str) -> PlannedTask | None:
 # Main API
 # ---------------------------------------------------------------------------
 
+def _sticky_done_titles(project: Path, threshold: int = 3) -> set[str]:
+    """Return titles from Done Log that appeared >= threshold times (stuck tasks)."""
+    roadmap_path = project / ".ail" / "ROADMAP.md"
+    if not roadmap_path.exists():
+        return set()
+    text = roadmap_path.read_text(encoding="utf-8")
+    done_log_match = re.search(r"## Done Log\n\n([\s\S]*?)(?=\n## |\Z)", text, re.IGNORECASE)
+    if not done_log_match:
+        return set()
+    counts: dict[str, int] = {}
+    for line in done_log_match.group(1).splitlines():
+        if not line.strip().startswith("|") or "---" in line:
+            continue
+        cells = [c.strip() for c in line.split("|")[1:-1]]
+        if len(cells) >= 7 and cells[1].startswith("TASK-"):
+            title = cells[4]
+            counts[title] = counts.get(title, 0) + 1
+    return {title for title, count in counts.items() if count >= threshold}
+
+
 def choose_next_task(project: Path, roadmap, done_titles: set[str], language: str) -> tuple[PlannedTask, bool]:
     """Choose the next task based on roadmap rhythm and done titles.
     
@@ -835,6 +855,10 @@ def choose_next_task(project: Path, roadmap, done_titles: set[str], language: st
 
     # All candidates exhausted in both pools — clear done_titles for both and retry.
     # This allows the system to cycle through tasks indefinitely rather than getting stuck.
+    # Titles appearing >= STICKY_THRESHOLD times in Done Log are excluded from retry
+    # to prevent a repeated task from being selected again.
+    STICKY_THRESHOLD = 3
+    sticky_titles: set[str] = _sticky_done_titles(project, STICKY_THRESHOLD)
     primary_titles = {c.title for c in primary_pool}
     fallback_titles = {c.title for c in fallback_pool}
     all_pool_titles = primary_titles | fallback_titles
@@ -842,8 +866,8 @@ def choose_next_task(project: Path, roadmap, done_titles: set[str], language: st
     if cleared_titles:
         for title in cleared_titles:
             done_titles.discard(title)
-        primary_available = [c for c in primary_pool if c.title not in done_titles]
-        fallback_available = [c for c in fallback_pool if c.title not in done_titles]
+        primary_available = [c for c in primary_pool if c.title not in done_titles and c.title not in sticky_titles]
+        fallback_available = [c for c in fallback_pool if c.title not in done_titles and c.title not in sticky_titles]
         candidate = _pick_from_pool(primary_available, selection_key)
         if candidate is not None:
             return candidate, consumed
