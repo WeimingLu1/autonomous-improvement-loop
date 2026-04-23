@@ -833,6 +833,24 @@ def choose_next_task(project: Path, roadmap, done_titles: set[str], language: st
     if candidate is not None:
         return candidate, consumed
 
+    # All candidates exhausted in both pools — clear done_titles for both and retry.
+    # This allows the system to cycle through tasks indefinitely rather than getting stuck.
+    primary_titles = {c.title for c in primary_pool}
+    fallback_titles = {c.title for c in fallback_pool}
+    all_pool_titles = primary_titles | fallback_titles
+    cleared_titles = done_titles & all_pool_titles
+    if cleared_titles:
+        for title in cleared_titles:
+            done_titles.discard(title)
+        primary_available = [c for c in primary_pool if c.title not in done_titles]
+        fallback_available = [c for c in fallback_pool if c.title not in done_titles]
+        candidate = _pick_from_pool(primary_available, selection_key)
+        if candidate is not None:
+            return candidate, consumed
+        candidate = _pick_from_pool(fallback_available, f"{selection_key}:fallback")
+        if candidate is not None:
+            return candidate, consumed
+
     raise ValueError("No unique task title available")
 
 

@@ -1238,6 +1238,7 @@ def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
 
     roadmap_text = roadmap_path.read_text(encoding="utf-8")
     done_log_match = re.search(r"## Done Log\n\n([\s\S]*?)(?=\n## |\Z)", roadmap_text, re.IGNORECASE)
+    skip_generate_next = False
     if done_log_match:
         done_block = done_log_match.group(1)
         escaped_title = re.escape(current.title)
@@ -1247,8 +1248,33 @@ def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
         )
         if pass_pattern.search(done_block):
             ok(f"Task '{current.title}' already passed — skipping Done Log record.")
-            _generate_next_task(project, roadmap_path, roadmap)
-            return
+            # If this was a maintenance task, decrement the counter so we don't
+            # keep generating the same maintenance task in an infinite loop.
+            if roadmap.post_feature_maintenance_remaining > 0:
+                new_remaining = roadmap.post_feature_maintenance_remaining - 1
+                new_anchor = roadmap.maintenance_anchor_title if new_remaining > 0 else ""
+                # Update the roadmap to clear maintenance state before generating next task
+                from scripts.roadmap import set_current_task
+                set_current_task(
+                    roadmap_path,
+                    task=None,
+                    plan_path="",
+                    next_default_type=roadmap.next_default_type,
+                    improves_since_last_idea=roadmap.improves_since_last_idea,
+                    post_feature_maintenance_remaining=new_remaining,
+                    maintenance_anchor_title=new_anchor,
+                    reserved_user_task_id=roadmap.reserved_user_task_id,
+                )
+                skip_generate_next = True
+            else:
+                _generate_next_task(project, roadmap_path, roadmap)
+                return
+
+    if skip_generate_next:
+        # Reload roadmap so _generate_next_task sees the updated maintenance counter
+        roadmap = load_roadmap(roadmap_path)
+        _generate_next_task(project, roadmap_path, roadmap)
+        return
 
     ok(f"Recording result for {current.task_id}: {current.title}")
     exec_ok, exec_msg = _execute_task_plan(project, current)
