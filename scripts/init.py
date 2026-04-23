@@ -80,6 +80,7 @@ from scripts.cli import (
     cmd_log,
     cmd_trigger,
     cmd_config,
+    cmd_switch,
 )
 from scripts.cron import cmd_start, cmd_stop
 from scripts.detect import detect_project_path, detect_openclaw_agent_id, detect_telegram_chat_id
@@ -171,6 +172,7 @@ def main() -> int:
     status_p.add_argument("project", nargs="?", type=Path,
                           default=detect_project_path(),
                           help="Project path (auto-detected if omitted)")
+    status_p.add_argument("--all", action="store_true", help="Show all registered projects")
     status_p.add_argument("--language", "--lang", "-l", default=None,
                           choices=["en", "zh"],
                           help="Output language (default: Chinese)")
@@ -256,6 +258,11 @@ def main() -> int:
     config_sp.add_argument("value", nargs="?", help="New value (required for 'set')")
     config_sp.set_defaults(func=lambda a: cmd_config(action=a.action, key=a.key, value=a.value))
 
+    switch_p = sub.add_parser("a-switch", help="Switch active project (by alias or path)")
+    switch_p.add_argument("alias_or_path", help="Project alias or absolute path")
+    switch_p.add_argument("--language", "--lang", "-l", default=None, choices=["en", "zh"])
+    switch_p.set_defaults(func=lambda a: cmd_switch(alias_or_path=a.alias_or_path, language=a.language))
+
     args = parser.parse_args()
 
     # Auto-detect project path if not given
@@ -305,7 +312,7 @@ def main() -> int:
                 model=args.model,
             )
         elif args.command == "a-status":
-            cmd_status(args.project, language=args.language)
+            cmd_status(args.project, language=args.language, all_projects=args.all)
         elif args.command == "a-start":
             cmd_start()
         elif args.command == "a-stop":

@@ -461,9 +461,14 @@ def cmd_add(content_text: str) -> None:
 
 # ── cmd_status ────────────────────────────────────────────────────────────────
 
-def cmd_status(project: Path, language: str | None = None) -> None:
+def cmd_status(project: Path, language: str | None = None, all_projects: bool = False) -> None:
     from scripts.roadmap import load_roadmap
     from scripts.i18n import get_message, get_lang
+    from scripts.multi_project import cmd_status_all
+
+    if all_projects:
+        cmd_status_all()
+        return
 
     lang = get_lang(language)
     _ = lambda key: get_message(key, lang)
@@ -1459,3 +1464,34 @@ def cmd_config(action: str, key: str, value: str | None = None) -> None:
             new_raw = raw + f"{key}: {value}\n"
         write_file(CONFIG_FILE, new_raw)
         ok(f"Set {key} = {value}")
+
+def cmd_switch(alias_or_path: str, language: str | None = None) -> None:
+    """Switch the active project by alias or path."""
+    from scripts.i18n import get_message, get_lang
+    from scripts.multi_project import (
+        cmd_switch as mp_switch,
+        list_registered_projects,
+        SKILL_CONFIG_HOME,
+        CONFIG_FILE_NAME,
+    )
+
+    lang = get_lang(language)
+    _ = lambda key: get_message(key, lang)
+
+    step(_("switching_project"))
+
+    projects = list_registered_projects()
+    if not projects:
+        fail("No projects registered in multi_project.cfg.")
+        print(f"  Create {SKILL_CONFIG_HOME / CONFIG_FILE_NAME} first.")
+        print("  Format: /path/to/project = Display Name  (one per line, # for comments)")
+        sys.exit(1)
+
+    if not mp_switch(alias_or_path):
+        fail(f"Project '{alias_or_path}' not found.")
+        print("  Available projects:")
+        for p in projects:
+            print(f"    {p.alias}")
+        sys.exit(1)
+
+    ok(f"Switched active project to '{alias_or_path}'")
