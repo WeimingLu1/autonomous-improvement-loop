@@ -41,17 +41,59 @@ def register_candidate_plugin(plugin_fn: callable) -> None:
     _PLUGIN_REGISTRY.append(plugin_fn)
 
 
-def _load_plugins(project: Path, ctx: dict) -> list[dict]:
-    """Load candidates from all registered plugins."""
+def _discover_and_load_dir_plugins(project: Path, ctx: dict) -> list[dict]:
+    """Auto-discover and invoke plugins from .ail/plugins/ directory.
+    
+    Each .py file (except __init__.py) is loaded as a module.
+    If it exports a `candidates(project, ctx) -> list[dict]` function,
+    that function is called and its results returned.
+    
+    Loaded modules are NOT cached in sys.modules to allow re-loading
+    from different project paths (multi-project support).
+    """
+    import importlib.util
+
+    plugins_dir = project / ".ail" / "plugins"
+    if not plugins_dir.is_dir():
+        return []
+
     all_candidates = []
+    for plugin_file in sorted(plugins_dir.glob("*.py")):
+        if plugin_file.name == "__init__.py":
+            continue
+        module_name = f"_ail_plugin_{plugin_file.stem}_{project.name}"
+        try:
+            spec = importlib.util.spec_from_file_location(module_name, plugin_file)
+            if spec is None or spec.loader is None:
+                continue
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+            if hasattr(module, "candidates") and callable(module.candidates):
+                result = module.candidates(project, ctx)
+                if result:
+                    all_candidates.extend(result)
+        except Exception:
+            # Fail silently — plugin loading errors should not crash the planner
+            pass
+    return all_candidates
+
+
+def _load_plugins(project: Path, ctx: dict) -> list[dict]:
+    """Load candidates from auto-discovered directory plugins and registered plugins."""
+    # Auto-discover plugins from .ail/plugins/ directory (no caching)
+    dir_candidates = _discover_and_load_dir_plugins(project, ctx)
+
+    # Also call programmatically registered plugins
+    reg_candidates = []
     for plugin_fn in _PLUGIN_REGISTRY:
         try:
-            candidates = plugin_fn(project, ctx)
-            if candidates:
-                all_candidates.extend(candidates)
+            result = plugin_fn(project, ctx)
+            if result:
+                reg_candidates.extend(result)
         except Exception:
-            pass  # Fail silently — plugin should not break core logic
-    return all_candidates
+            pass  # Fail silently
+
+    return dir_candidates + reg_candidates
 
 
 def _count_lines(path: Path) -> int:
