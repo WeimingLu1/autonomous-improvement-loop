@@ -9,9 +9,11 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import textwrap
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -1020,6 +1022,34 @@ def _execute_task_plan(project: Path, task) -> tuple[bool, str]:
         return False, f"Verification failed (exit {result.returncode}): {result.stderr.strip() or result.stdout.strip()}"
 
 
+TRIGGER_TIMEOUT_S = 300  # 5 minutes default timeout for a-trigger execution
+
+
+class _TimeoutError(Exception):
+    pass
+
+
+def _timeout_call(func, timeout_s: int, *args, **kwargs) -> None:
+    """Run func(*args, **kwargs) with a timeout. Raises _TimeoutError on timeout."""
+    result = [None]
+    exception = [None]
+
+    def target():
+        try:
+            result[0] = func(*args, **kwargs)
+        except Exception as e:
+            exception[0] = e
+
+    t = threading.Thread(target=target, daemon=True)
+    t.start()
+    t.join(timeout=timeout_s)
+    if t.is_alive():
+        raise _TimeoutError(f"Execution timed out after {timeout_s} seconds")
+    if exception[0]:
+        raise exception[0]
+    return result[0]
+
+
 def cmd_trigger(force: bool = False, no_spawn: bool = False) -> None:
     step("⚡ Triggering plan execution")
     project, roadmap_path = _get_roadmap_and_project()
@@ -1036,8 +1066,12 @@ def cmd_trigger(force: bool = False, no_spawn: bool = False) -> None:
 
     try:
         if os.environ.get("OPENCLAW_CRON_SESSION") == "1" or no_spawn:
-            _record_result_only(project, roadmap_path, force)
-            _maybe_update_project_md(project)
+            try:
+                _timeout_call(_record_result_only, TRIGGER_TIMEOUT_S, project, roadmap_path, force)
+                _timeout_call(_maybe_update_project_md, TRIGGER_TIMEOUT_S, project)
+            except _TimeoutError as e:
+                fail(f"Execution timed out")
+                sys.exit(1)
             return
 
         config = read_current_config()
