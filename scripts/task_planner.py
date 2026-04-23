@@ -689,6 +689,54 @@ _IDEA_CANDIDATES: list[dict] = [
 
 
 # ---------------------------------------------------------------------------
+# Maintenance pool — activated after a PM idea/feature task completes
+# ---------------------------------------------------------------------------
+
+_MAINTENANCE_CANDIDATES: list[dict] = [
+    {
+        "title": "回归验证 + 修复发现的 bug",
+        "background": "上一个 feature 刚完成，需要验证没有引入回归。",
+        "why_now": "feature task 完成后必须确认代码仍然健康，这是交付标准的一部分。",
+        "scope": ["scripts/", "tests/"],
+        "non_goals": ["不进行大规模重构", "不扩展功能范围"],
+        "relevant_files": ["tests/", "scripts/"],
+        "execution_plan": [
+            "Step 1: 运行全量测试 python3 -m pytest tests/ -q",
+            "Step 2: 如有失败，在当前 task 内定位并修复",
+            "Step 3: 修复后再次运行测试确认全部通过",
+            "Step 4: 如有 bug 修复，另起 commit 记录",
+        ],
+        "acceptance_criteria": [
+            "全量测试 52/52 通过",
+            "如有失败，当前 task 内修复并验证通过",
+        ],
+        "verification": ["cd /Users/weiminglu/Projects/autonomous-improvement-loop && python3 -m pytest tests/ -q 2>&1 | tail -3"],
+        "risks": ["如测试本身就有 bug，修复优先级最高"],
+    },
+    {
+        "title": "补测试 + 补文档",
+        "background": "上一个 feature 刚完成，需要补上相应的测试和文档。",
+        "why_now": "没有测试覆盖的 feature 等同于不存在；文档缺失会拖累后续维护。",
+        "scope": ["tests/", "docs/", "README.md"],
+        "non_goals": ["不重写已有测试", "不做大范围文档重构"],
+        "relevant_files": ["tests/test_cli_integration.py", "docs/superpowers/"],
+        "execution_plan": [
+            "Step 1: 找出上一个 feature 新增/修改的文件",
+            "Step 2: 为每个新文件或关键函数补充至少 1 个测试用例",
+            "Step 3: 检查 docs/ 目录是否有对应文档更新需求",
+            "Step 4: 如有新增测试，运行确认通过",
+        ],
+        "acceptance_criteria": [
+            "新文件有对应测试覆盖",
+            "全量测试仍然通过",
+        ],
+        "verification": ["cd /Users/weiminglu/Projects/autonomous-improvement-loop && python3 -m pytest tests/ -q 2>&1 | tail -3"],
+        "risks": ["测试桩不好写时优先写集成测试而非单元测试"],
+    },
+]
+
+
+# ---------------------------------------------------------------------------
 # Selection state
 # ---------------------------------------------------------------------------
 
@@ -722,8 +770,12 @@ def _pick_from_pool(pool: list[PlannedTask], key: str) -> PlannedTask | None:
 # Main API
 # ---------------------------------------------------------------------------
 
-def choose_next_task(project: Path, roadmap, done_titles: set[str], language: str) -> PlannedTask:
+def choose_next_task(project: Path, roadmap, done_titles: set[str], language: str) -> tuple[PlannedTask, bool]:
     """Choose the next task based on roadmap rhythm and done titles.
+    
+    Returns (planned_task, consumed_maintenance_slot).
+    consumed_maintenance_slot is True when a maintenance task was chosen
+    (post_feature_maintenance_remaining was > 0 and we drew from that pool).
     
     Uses real project context (git history, file sizes, test files) to
     generate differentiated task candidates with specific scope.
@@ -752,8 +804,13 @@ def choose_next_task(project: Path, roadmap, done_titles: set[str], language: st
     # Decide which pool to draw from based on rhythm state
     next_type = getattr(roadmap, "next_default_type", "idea")
     improves_since = getattr(roadmap, "improves_since_last_idea", 0)
+    maintenance_remaining = getattr(roadmap, "post_feature_maintenance_remaining", 0)
 
-    if next_type == "idea" or improves_since >= 3:
+    if maintenance_remaining > 0:
+        # Force maintenance pool
+        primary_pool = [_make_task("improve", c, ctx) for c in _MAINTENANCE_CANDIDATES]
+        fallback_pool = improve_pool
+    elif next_type == "idea" or improves_since >= 3:
         primary_pool = idea_pool
         fallback_pool = improve_pool
     else:
@@ -764,13 +821,14 @@ def choose_next_task(project: Path, roadmap, done_titles: set[str], language: st
     fallback_available = [candidate for candidate in fallback_pool if candidate.title not in done_titles]
 
     selection_key = _selection_key(project, roadmap, done_titles)
+    consumed = maintenance_remaining > 0
     candidate = _pick_from_pool(primary_available, selection_key)
     if candidate is not None:
-        return candidate
+        return candidate, consumed
 
     candidate = _pick_from_pool(fallback_available, f"{selection_key}:fallback")
     if candidate is not None:
-        return candidate
+        return candidate, consumed
 
     raise ValueError("No unique task title available")
 

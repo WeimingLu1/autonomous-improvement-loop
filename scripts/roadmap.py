@@ -24,8 +24,9 @@ class RoadmapState:
     current_task: CurrentTask | None
     next_default_type: str
     improves_since_last_idea: int
-    current_plan_path: str
-    reserved_user_task_id: str
+    post_feature_maintenance_remaining: int = 0  # 0=normal, 1 or 2=maintenance slots left
+    current_plan_path: str = ""
+    reserved_user_task_id: str = ""
 
 
 def init_roadmap(path: Path) -> None:
@@ -39,6 +40,7 @@ def init_roadmap(path: Path) -> None:
         "|------|-------|\n"
         "| next_default_type | idea |\n"
         "| improves_since_last_idea | 0 |\n"
+        "| post_feature_maintenance_remaining | 0 |\n"
         "| current_plan_path |  |\n"
         "| reserved_user_task_id |  |\n\n"
         "## PM Notes\n\n"
@@ -84,7 +86,7 @@ def _extract_done_log_block(text: str) -> str:
     return DONE_LOG_HEADER + "\n|------|---------|------|--------|-------|--------|--------|\n"
 
 
-def _render_roadmap(task: CurrentTask | None, *, next_default_type: str, improves_since_last_idea: int, plan_path: str, reserved_user_task_id: str, done_log_block: str) -> str:
+def _render_roadmap(task: CurrentTask | None, *, next_default_type: str, improves_since_last_idea: int, post_feature_maintenance_remaining: int, plan_path: str, reserved_user_task_id: str, done_log_block: str) -> str:
     current_row = ""
     if task is not None:
         current_row = f"| {task.task_id} | {task.task_type} | {task.source} | {task.title} | {task.priority} | {task.status} | {task.created} |\n"
@@ -99,6 +101,7 @@ def _render_roadmap(task: CurrentTask | None, *, next_default_type: str, improve
         "|------|-------|\n"
         f"| next_default_type | {next_default_type} |\n"
         f"| improves_since_last_idea | {improves_since_last_idea} |\n"
+        f"| post_feature_maintenance_remaining | {post_feature_maintenance_remaining} |\n"
         f"| current_plan_path | {plan_path} |\n"
         f"| reserved_user_task_id | {reserved_user_task_id} |\n\n"
         "## PM Notes\n\n"
@@ -114,12 +117,13 @@ def load_roadmap(path: Path) -> RoadmapState:
         current_task=_extract_current_task(text),
         next_default_type=_get_rhythm_value(text, "next_default_type", "idea") or "idea",
         improves_since_last_idea=int(_get_rhythm_value(text, "improves_since_last_idea", "0") or "0"),
+        post_feature_maintenance_remaining=int(_get_rhythm_value(text, "post_feature_maintenance_remaining", "0") or "0"),
         current_plan_path=_get_rhythm_value(text, "current_plan_path", ""),
         reserved_user_task_id=_get_rhythm_value(text, "reserved_user_task_id", ""),
     )
 
 
-def set_current_task(path: Path, task: CurrentTask | None, plan_path: str, next_default_type: str, improves_since_last_idea: int, reserved_user_task_id: str = "") -> None:
+def set_current_task(path: Path, task: CurrentTask | None, plan_path: str, next_default_type: str, improves_since_last_idea: int, post_feature_maintenance_remaining: int = 0, reserved_user_task_id: str = "") -> None:
     text = path.read_text(encoding="utf-8") if path.exists() else ""
     done_log_block = _extract_done_log_block(text)
     path.write_text(
@@ -127,6 +131,7 @@ def set_current_task(path: Path, task: CurrentTask | None, plan_path: str, next_
             task,
             next_default_type=next_default_type,
             improves_since_last_idea=improves_since_last_idea,
+            post_feature_maintenance_remaining=post_feature_maintenance_remaining,
             plan_path=plan_path,
             reserved_user_task_id=reserved_user_task_id,
             done_log_block=done_log_block,
@@ -141,12 +146,13 @@ def append_done_log(path: Path, *, timestamp: str, task_id: str, task_type: str,
     done_log_block = _extract_done_log_block(text)
     if row not in done_log_block:
         done_log_block += row
-    state = load_roadmap(path) if path.exists() else RoadmapState(None, "idea", 0, "", "")
+    state = load_roadmap(path) if path.exists() else RoadmapState(None, "idea", 0, 0, "", "")
     path.write_text(
         _render_roadmap(
             state.current_task,
             next_default_type=state.next_default_type,
             improves_since_last_idea=state.improves_since_last_idea,
+            post_feature_maintenance_remaining=state.post_feature_maintenance_remaining,
             plan_path=state.current_plan_path,
             reserved_user_task_id=state.reserved_user_task_id,
             done_log_block=done_log_block,

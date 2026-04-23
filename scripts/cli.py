@@ -403,6 +403,7 @@ def cmd_add(content_text: str) -> None:
             plan_path=roadmap.current_plan_path,
             next_default_type=roadmap.next_default_type,
             improves_since_last_idea=roadmap.improves_since_last_idea,
+            post_feature_maintenance_remaining=roadmap.post_feature_maintenance_remaining,
             reserved_user_task_id=task_id,
         )
         ok(f"Reserved user task {task_id} for after current doing task")
@@ -445,6 +446,7 @@ def cmd_add(content_text: str) -> None:
         plan_path=str(plan_path.relative_to(project / ".ail")),
         next_default_type=roadmap.next_default_type,
         improves_since_last_idea=roadmap.improves_since_last_idea,
+        post_feature_maintenance_remaining=roadmap.post_feature_maintenance_remaining,
         reserved_user_task_id="",
     )
     ok(f"User request saved as {task_id}")
@@ -733,8 +735,11 @@ def cmd_plan(force: bool = False, count: int = 1) -> None:
     # Multi-task mode: generate N tasks
     if count > 1:
         planned_tasks: list = []
+        any_consumed = False
         for i in range(count):
-            planned = choose_next_task(project, roadmap, done_titles, language)
+            planned, consumed = choose_next_task(project, roadmap, done_titles, language)
+            if consumed:
+                any_consumed = True
             done_titles.add(planned.title)  # avoid duplicates in same batch
             planned_tasks.append(planned)
 
@@ -782,11 +787,15 @@ def cmd_plan(force: bool = False, count: int = 1) -> None:
         improves = roadmap.improves_since_last_idea + sum(
             1 for p in planned_tasks if p.task_type == "improve"
         )
+        maintenance_remaining = roadmap.post_feature_maintenance_remaining
+        if any_consumed and maintenance_remaining > 0:
+            maintenance_remaining -= 1
         set_current_task(
             roadmap_path, current,
             plan_path=str(plan_paths[0].relative_to(project / ".ail")),
             next_default_type=next_type,
             improves_since_last_idea=improves,
+            post_feature_maintenance_remaining=maintenance_remaining,
             reserved_user_task_id=roadmap.reserved_user_task_id,
         )
         print()
@@ -794,7 +803,7 @@ def cmd_plan(force: bool = False, count: int = 1) -> None:
         return
 
     # Single-task mode (default)
-    planned = choose_next_task(project, roadmap, done_titles, language)
+    planned, consumed = choose_next_task(project, roadmap, done_titles, language)
     task_id = next_task_id(plans_dir)
     plan_path = write_plan_doc(
         plans_dir=plans_dir,
@@ -829,11 +838,13 @@ def cmd_plan(force: bool = False, count: int = 1) -> None:
     next_type = "improve" if roadmap.next_default_type == "idea" else "idea"
     improves = roadmap.improves_since_last_idea + (1 if planned.task_type == "improve" else 0)
 
+    maintenance_remaining = roadmap.post_feature_maintenance_remaining - 1 if consumed else roadmap.post_feature_maintenance_remaining
     set_current_task(
         roadmap_path, task,
         plan_path=str(plan_path.relative_to(project / ".ail")),
         next_default_type=next_type,
         improves_since_last_idea=improves,
+        post_feature_maintenance_remaining=maintenance_remaining,
         reserved_user_task_id=roadmap.reserved_user_task_id,
     )
     ok(f"Task {task_id} generated and set as current")
@@ -1066,6 +1077,7 @@ def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
             plan_path=roadmap.current_plan_path,
             next_default_type=roadmap.next_default_type,
             improves_since_last_idea=roadmap.improves_since_last_idea,
+            post_feature_maintenance_remaining=roadmap.post_feature_maintenance_remaining,
             reserved_user_task_id=roadmap.reserved_user_task_id,
         )
         # Reload roadmap after status update
@@ -1142,6 +1154,7 @@ def _generate_next_task(project: Path, roadmap_path: Path, roadmap) -> None:
             plan_path=str(Path(".ail") / "plans" / f"{reserved}.md"),
             next_default_type=roadmap.next_default_type,
             improves_since_last_idea=roadmap.improves_since_last_idea,
+            post_feature_maintenance_remaining=roadmap.post_feature_maintenance_remaining,
             reserved_user_task_id="",
         )
         ok(f"Next user task is now current: {next_task.task_id}")
@@ -1188,6 +1201,7 @@ def _generate_next_task(project: Path, roadmap_path: Path, roadmap) -> None:
         plan_path=str(plan_path.relative_to(project / ".ail")),
         next_default_type=next_type,
         improves_since_last_idea=improves,
+        post_feature_maintenance_remaining=roadmap.post_feature_maintenance_remaining - 1 if roadmap.post_feature_maintenance_remaining > 0 else 0,
         reserved_user_task_id="",
     )
     ok(f"Next task generated and set as current: {task_id}")
