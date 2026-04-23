@@ -1052,12 +1052,12 @@ def cmd_trigger(force: bool = False, no_spawn: bool = False) -> None:
 
 
 def _maybe_update_project_md(project: Path) -> None:
-    """Update .ail/PROJECT.md if it doesn't exist or is stale."""
+    """Always regenerate .ail/PROJECT.md — the AI reviews and refines it like a PM."""
     from scripts.project_md import generate_project_md
     project_md_path = ail_project_md(project)
-    if not project_md_path.exists():
-        generate_project_md(project, project_md_path, language=resolve_language(project))
-        ok("Generated initial PROJECT.md")
+    language = resolve_language(project)
+    generate_project_md(project, project_md_path, language=language)
+    ok("PROJECT.md regenerated")
 
 
 def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
