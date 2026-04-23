@@ -25,3 +25,4 @@
 | time | task_id | type | source | title | result | commit |
 |------|---------|------|--------|-------|--------|--------|
 | 2026-04-23T16:00:00Z | TASK-157 | improve | pm | 为 project_md.py 增加对 scripts/ 下各模块的 docstring 解析，生成核心模块说明 | pass | e90342d |
+| 2026-04-23T18:00:00Z | TASK-169 | improve | pm | 为 file_lock.py 增加锁超时机制，防止进程崩溃后锁无法释放 | pass | bab14c2 |
