@@ -26,6 +26,32 @@ class PlannedTask:
     effort: str = "medium"
 
 
+# Plugin registry for custom candidate generators
+_PLUGIN_REGISTRY: list[callable] = []
+
+
+def register_candidate_plugin(plugin_fn: callable) -> None:
+    """Register a plugin function that yields candidate dicts.
+    
+    Plugin signature:  def my_plugin(project: Path, ctx: dict) -> list[dict]
+    Each dict follows the same shape as _IMPROVE_CANDIDATES items.
+    """
+    _PLUGIN_REGISTRY.append(plugin_fn)
+
+
+def _load_plugins(project: Path, ctx: dict) -> list[dict]:
+    """Load candidates from all registered plugins."""
+    all_candidates = []
+    for plugin_fn in _PLUGIN_REGISTRY:
+        try:
+            candidates = plugin_fn(project, ctx)
+            if candidates:
+                all_candidates.extend(candidates)
+        except Exception:
+            pass  # Fail silently — plugin should not break core logic
+    return all_candidates
+
+
 def _count_lines(path: Path) -> int:
     try:
         return len(path.read_text(encoding="utf-8", errors="ignore").splitlines())
@@ -706,6 +732,21 @@ def choose_next_task(project: Path, roadmap, done_titles: set[str], language: st
     # Build full candidate list
     improve_pool = [_make_task("improve", c, ctx) for c in _IMPROVE_CANDIDATES]
     idea_pool = [_make_task("idea", c, ctx) for c in _IDEA_CANDIDATES]
+
+
+    # Extend from plugins
+    plugin_improve = []
+    plugin_idea = []
+    for c in _load_plugins(project, ctx):
+        task_type = c.get("task_type", "improve")
+        if task_type == "idea":
+            plugin_idea.append(c)
+        else:
+            plugin_improve.append(c)
+    improve_pool.extend(_make_task("improve", c, ctx) for c in plugin_improve)
+    idea_pool.extend(_make_task("idea", c, ctx) for c in plugin_idea)
+
+
 
     # Decide which pool to draw from based on rhythm state
     next_type = getattr(roadmap, "next_default_type", "idea")
