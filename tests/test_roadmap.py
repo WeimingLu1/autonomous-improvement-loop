@@ -10,7 +10,7 @@ def test_init_roadmap_creates_single_current_task_table(tmp_path: Path):
     init_roadmap(roadmap)
     text = roadmap.read_text(encoding="utf-8")
     assert "## Current Task" in text
-    assert "| task_id | type | source | title | status | created |" in text
+    assert "| task_id | type | source | title | priority | status | created |" in text
     assert "## Done Log" in text
 
 

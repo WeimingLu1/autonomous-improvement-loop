@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import re
 
-CURRENT_TASK_HEADER = "| task_id | type | source | title | status | created |"
+CURRENT_TASK_HEADER = "| task_id | type | source | title | priority | status | created |"
 DONE_LOG_HEADER = "| time | task_id | type | source | title | result | commit |"
 
 
@@ -14,8 +14,9 @@ class CurrentTask:
     task_type: str
     source: str
     title: str
-    status: str
-    created: str
+    priority: str = 'P1'
+    status: str = 'pending'
+    created: str = ''
 
 
 @dataclass
@@ -32,7 +33,7 @@ def init_roadmap(path: Path) -> None:
         "# Roadmap\n\n"
         "## Current Task\n\n"
         f"{CURRENT_TASK_HEADER}\n"
-        "|--------|------|--------|-------|--------|---------|\n\n"
+        "|--------|------|--------|-------|----------|--------|---------|\n\n"
         "## Rhythm State\n\n"
         "| field | value |\n"
         "|------|-------|\n"
@@ -52,7 +53,7 @@ def init_roadmap(path: Path) -> None:
 def _extract_current_task(text: str) -> CurrentTask | None:
     section_match = re.search(r"## Current Task\n\n([\s\S]*?)\n## ", text)
     section = section_match.group(1) if section_match else text
-    rows = re.findall(r"^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|$", section, re.MULTILINE)
+    rows = re.findall(r"^\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|$", section, re.MULTILINE)
     for row in rows:
         if row[0] in {"task_id", "--------", "field", "------", "time"}:
             continue
@@ -62,8 +63,9 @@ def _extract_current_task(text: str) -> CurrentTask | None:
                 task_type=row[1].strip(),
                 source=row[2].strip(),
                 title=row[3].strip(),
-                status=row[4].strip(),
-                created=row[5].strip(),
+                priority=row[4].strip() or 'P1',
+                status=row[5].strip(),
+                created=row[6].strip(),
             )
     return None
 
@@ -85,12 +87,12 @@ def _extract_done_log_block(text: str) -> str:
 def _render_roadmap(task: CurrentTask | None, *, next_default_type: str, improves_since_last_idea: int, plan_path: str, reserved_user_task_id: str, done_log_block: str) -> str:
     current_row = ""
     if task is not None:
-        current_row = f"| {task.task_id} | {task.task_type} | {task.source} | {task.title} | {task.status} | {task.created} |\n"
+        current_row = f"| {task.task_id} | {task.task_type} | {task.source} | {task.title} | {task.priority} | {task.status} | {task.created} |\n"
     return (
         "# Roadmap\n\n"
         "## Current Task\n\n"
         f"{CURRENT_TASK_HEADER}\n"
-        "|--------|------|--------|-------|--------|---------|\n"
+        "|--------|------|--------|-------|----------|--------|---------|\n"
         f"{current_row}\n"
         "## Rhythm State\n\n"
         "| field | value |\n"
