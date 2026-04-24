@@ -46,7 +46,8 @@ Output ONLY valid JSON (no markdown fences, no commentary), with this schema:
   "acceptance_criteria": ["Criterion 1", "Criterion 2"],
   "why_now": "Why this task should be done now",
   "risks": "Potential risks or concerns",
-  "rollback": "How to revert if needed"
+  "rollback": "How to revert if needed",
+  "verification": ["bash command to verify the task was done successfully (e.g. 'python3 -m pytest tests/ -q')"]
 }}
 """
 

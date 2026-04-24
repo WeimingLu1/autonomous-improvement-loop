@@ -1205,12 +1205,29 @@ def _execute_task_plan(project: Path, task) -> tuple[bool, str]:
 
     verification_match = re.search(r"## Verification\n\n```bash\n(.*?)\n```", content, re.DOTALL)
     if not verification_match:
-        return True, "No verification block found — task treated as pass"
+        # No verification block — do NOT auto-pass in no_spawn mode;
+        # derive a verification from execution_plan steps instead.
+        plan_match = re.search(r"## Execution Plan\n\n(?:-\s+(.*?)\n)+", content, re.DOTALL)
+        if plan_match:
+            steps = [m.group(1).strip() for m in re.finditer(r"-\s+(.+)", plan_match.group(0))]
+            if steps:
+                # Use the first concrete step that looks runnable
+                verification_script = next(
+                    (s for s in steps if s and not s.startswith("#") and len(s) > 5), None
+                )
+                if verification_script:
+                    step(f"🔍 No explicit Verification block — deriving from Execution Plan:\n  {verification_script}")
+                else:
+                    return False, "No verification block and no runnable Execution Plan step found — task NOT recorded as pass"
+            else:
+                return False, "No verification block and Execution Plan is empty — task NOT recorded as pass"
+        else:
+            return False, "No verification block and no Execution Plan found — task NOT recorded as pass"
 
     verification_script = verification_match.group(1).strip()
 
-    if verification_script.startswith("#") or not verification_script:
-        return True, "Comment-only verification — task treated as pass"
+    if verification_script.startswith("#") or not verification_script or "No verification" in verification_script:
+        return False, f"Placeholder verification ('{verification_script}') is not a real verification — task NOT recorded as pass"
 
     step(f"🔍 Running verification:\n  {verification_script}")
 

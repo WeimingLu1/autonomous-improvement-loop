@@ -40,7 +40,12 @@ def write_plan_doc(
     content += f"## Relevant Files\n{_bullets(relevant_files or [])}\n\n"
     content += f"## Execution Plan\n{_bullets(execution_plan or [])}\n\n"
     content += f"## Acceptance Criteria\n{_bullets(acceptance_criteria or [])}\n\n"
-    content += f"## Verification\n{_bullets(verification or [])}\n\n"
+    if verification:
+        # Write as a bash code block — _execute_task_plan expects ```bash
+        verif_text = "\n".join(f"{item}" for item in verification)
+        content += f"## Verification\n\n```bash\n{verif_text}\n```\n\n"
+    # Omit the Verification section entirely if not provided —
+    # _execute_task_plan will then derive from Execution Plan steps.
     if rollback:
         content += f"## Rollback\n{rollback}\n\n"
     content += f"## Risks / Notes\n{_bullets(risks or [])}\n"

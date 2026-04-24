@@ -1119,15 +1119,15 @@ def get_seed_task(project: Path, mode: str, language: str) -> PlannedTask:
     return task
 
 
-def _sticky_done_titles(project: Path, threshold: int = 3) -> set[str]:
-    """Return titles from Done Log that appeared >= threshold times (stuck tasks)."""
+def _done_log_title_counts(project: Path) -> dict[str, int]:
+    """Return title -> count for all entries in Done Log."""
     roadmap_path = project / ".ail" / "ROADMAP.md"
     if not roadmap_path.exists():
-        return set()
+        return {}
     text = roadmap_path.read_text(encoding="utf-8")
     done_log_match = re.search(r"## Done Log\n\n([\s\S]*?)(?=\n## |\Z)", text, re.IGNORECASE)
     if not done_log_match:
-        return set()
+        return {}
     counts: dict[str, int] = {}
     for line in done_log_match.group(1).splitlines():
         if not line.strip().startswith("|") or "---" in line:
@@ -1136,7 +1136,12 @@ def _sticky_done_titles(project: Path, threshold: int = 3) -> set[str]:
         if len(cells) >= 7 and cells[1].startswith("TASK-"):
             title = cells[4]
             counts[title] = counts.get(title, 0) + 1
-    return {title for title, count in counts.items() if count >= threshold}
+    return counts
+
+
+def _sticky_done_titles(project: Path, threshold: int = 3) -> set[str]:
+    """Return titles from Done Log that appeared >= threshold times (stuck tasks)."""
+    return {title for title, count in _done_log_title_counts(project).items() if count >= threshold}
 
 
 def _plan_to_planned_task(plan) -> PlannedTask:
@@ -1146,7 +1151,7 @@ def _plan_to_planned_task(plan) -> PlannedTask:
     - goal: appended to context since both PMPlan.context and PlannedTask.context exist
     - maintenance_tag: PMPlan-specific, dropped (PlannedTask has no equivalent)
     - source: hardcoded to 'llm'
-    - verification: hardcoded to '' (no LLM-generated verification yet)
+    - verification: mapped from plan.verification
     """
     extra_context = f"\n\nGoal: {plan.goal}" if plan.goal else ""
     context = (plan.context or "") + extra_context
@@ -1162,7 +1167,7 @@ def _plan_to_planned_task(plan) -> PlannedTask:
         relevant_files=plan.relevant_files if plan.relevant_files else [],
         execution_plan=plan.execution_plan if plan.execution_plan else [],
         acceptance_criteria=plan.acceptance_criteria if plan.acceptance_criteria else [],
-        verification=[],
+        verification=plan.verification if plan.verification else [],
         risks=plan.risks,
         background=plan.background,
         rollback=plan.rollback,
@@ -1264,11 +1269,19 @@ def choose_next_task(
     # All candidates exhausted in both pools — clear done_titles and retry.
     # Titles appearing >= STICKY_THRESHOLD times in Done Log are excluded from retry
     # to prevent a repeated task from being selected again.
+    # Additionally, any title appearing >= 2 times in Done Log (even if just marked
+    # as "pass" without real code) is permanently excluded — a second Done Log
+    # entry strongly indicates the work was either done elsewhere or skipped.
     # NOTE: forbidden_titles is NOT applied during retry because done_titles
     # already contains the genuinely done titles; clearing done_titles entries
     # that are candidates allows the system to cycle through tasks.
     STICKY_THRESHOLD = cfg['sticky_threshold']
     sticky_titles: set[str] = _sticky_done_titles(project, STICKY_THRESHOLD)
+    # Super-sticky: titles appearing >= 2 times in Done Log are blocked on retry.
+    # These are tasks that were marked done more than once, indicating either
+    # duplicate passes or skipped executions — not actual completions.
+    all_done_counts = _done_log_title_counts(project)
+    super_sticky_titles: set[str] = {t for t, c in all_done_counts.items() if c >= 2}
     primary_titles = {c.title for c in primary_pool}
     fallback_titles = {c.title for c in fallback_pool}
     all_pool_titles = primary_titles | fallback_titles
@@ -1276,8 +1289,10 @@ def choose_next_task(
     if cleared_titles:
         for title in cleared_titles:
             done_titles.discard(title)
-        primary_available = [c for c in primary_pool if c.title not in done_titles and c.title not in sticky_titles]
-        fallback_available = [c for c in fallback_pool if c.title not in done_titles and c.title not in sticky_titles]
+        # Apply BOTH sticky_titles (>= threshold) AND super_sticky_titles (>= 2)
+        blocked_titles = sticky_titles | super_sticky_titles
+        primary_available = [c for c in primary_pool if c.title not in done_titles and c.title not in blocked_titles]
+        fallback_available = [c for c in fallback_pool if c.title not in done_titles and c.title not in blocked_titles]
         candidate = _pick_from_pool(primary_available, selection_key, quality_scores)
         if candidate is not None:
             return candidate, consumed

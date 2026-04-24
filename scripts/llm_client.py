@@ -31,6 +31,7 @@ class PMPlan:
     risks: str = ""
     rollback: str = ""
     maintenance_tag: str = ""
+    verification: list[str] = field(default_factory=list)
 
 def _get_api_key() -> str:
     key = os.environ.get("MINIMAX_API_KEY", "").strip()
@@ -54,6 +55,12 @@ def _parse_json_response(raw: str) -> PMPlan:
         data = json.loads(stripped)
     except json.JSONDecodeError as e:
         raise JSONParseError(f"LLM output is not valid JSON: {e}\n--- raw:\n{raw[:500]}")
+    # Normalize verification to a list — LLM may return a string or a list
+    _verif_raw = data.get("verification", [])
+    if isinstance(_verif_raw, str):
+        _verif_list = [_verif_raw] if _verif_raw else []
+    else:
+        _verif_list = list(_verif_raw) if _verif_raw else []
     return PMPlan(
         title=data.get("title", "Untitled"),
         task_type=data.get("task_type", "improve"),
@@ -71,6 +78,7 @@ def _parse_json_response(raw: str) -> PMPlan:
         risks=data.get("risks", ""),
         rollback=data.get("rollback", ""),
         maintenance_tag=data.get("maintenance_tag", ""),
+        verification=_verif_list,
     )
 
 def generate_pm_plan(project: Path, language: str = "zh") -> PMPlan:
