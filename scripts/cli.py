@@ -922,13 +922,17 @@ def cmd_plan(force: bool = False, count: int = 1, dry_run: bool = False) -> None
     done_titles = _collect_completed_titles(project, roadmap_path, plans_dir)
     forbidden_titles = _collect_forbidden_titles(project, roadmap_path, plans_dir, roadmap, done_titles)
     language = read_current_config().get("project_language", DEFAULT_LANGUAGE).strip() or "zh"
+    use_llm = bool(os.environ.get("MINIMAX_API_KEY", "").strip())
 
     # Multi-task mode: generate N tasks
     if count > 1:
         planned_tasks: list = []
         any_consumed = False
         for i in range(count):
-            planned, consumed = choose_next_task(project, roadmap, done_titles, language, forbidden_titles=forbidden_titles)
+            planned, consumed = choose_next_task(
+                project, roadmap, done_titles, language,
+                forbidden_titles=forbidden_titles, use_llm=use_llm
+            )
             if consumed:
                 any_consumed = True
             done_titles.add(planned.title)  # avoid duplicates in same batch
@@ -1000,8 +1004,13 @@ def cmd_plan(force: bool = False, count: int = 1, dry_run: bool = False) -> None
         _print_plan_doc(plan_paths[0])
         return
 
+    use_llm = bool(os.environ.get("MINIMAX_API_KEY", "").strip())
+
     # Single-task mode (default)
-    planned, consumed = choose_next_task(project, roadmap, done_titles, language, forbidden_titles=forbidden_titles)
+    planned, consumed = choose_next_task(
+        project, roadmap, done_titles, language,
+        forbidden_titles=forbidden_titles, use_llm=use_llm
+    )
     task_id = next_task_id(plans_dir)
     if dry_run_mode == DryRunMode.OFF:
         plan_path = write_plan_doc(
@@ -1717,3 +1726,40 @@ def cmd_switch(alias_or_path: str, language: str | None = None) -> None:
         sys.exit(1)
 
     ok(f"Switched active project to '{alias_or_path}'")
+
+
+def cmd_maintenance(action: str) -> None:
+    """Enable, disable, or check maintenance mode."""
+    from scripts.roadmap import load_roadmap, set_current_task
+    project, roadmap_path = _get_roadmap_and_project()
+    _migrate_to_ail(project)
+    if not roadmap_path.exists():
+        fail("No ROADMAP.md found. Run 'a-plan' first.")
+        sys.exit(1)
+    roadmap = load_roadmap(roadmap_path)
+
+    if action == "status":
+        mode = getattr(roadmap, "maintenance_mode", False)
+        status = c("enabled", COLOR_GREEN) if mode else c("disabled", COLOR_YELLOW)
+        print(f"  Maintenance mode: {status}")
+        return
+
+    if action not in ("on", "off"):
+        fail("Usage: a-maintenance on|off|status")
+        sys.exit(1)
+
+    new_mode = action == "on"
+    step(f"{c('Maintenance Mode', COLOR_BOLD)}: {'enable' if new_mode else 'disable'}")
+
+    set_current_task(
+        roadmap_path,
+        roadmap.current_task,
+        plan_path=roadmap.current_plan_path,
+        next_default_type=roadmap.next_default_type,
+        improves_since_last_idea=roadmap.improves_since_last_idea,
+        post_feature_maintenance_remaining=roadmap.post_feature_maintenance_remaining,
+        maintenance_anchor_title=roadmap.maintenance_anchor_title,
+        reserved_user_task_id=roadmap.reserved_user_task_id,
+        maintenance_mode=new_mode,
+    )
+    ok(f"Maintenance mode {'enabled' if new_mode else 'disabled'}")

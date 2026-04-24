@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -1048,17 +1049,69 @@ def _sticky_done_titles(project: Path, threshold: int = 3) -> set[str]:
     return {title for title, count in counts.items() if count >= threshold}
 
 
-def choose_next_task(project: Path, roadmap, done_titles: set[str], language: str, forbidden_titles: set[str] | None = None) -> tuple[PlannedTask, bool]:
+def _plan_to_planned_task(plan) -> PlannedTask:
+    """Convert an LLM-generated PMPlan to a PlannedTask.
+    
+    PMPlan fields map to PlannedTask fields as follows:
+    - goal: appended to context since both PMPlan.context and PlannedTask.context exist
+    - maintenance_tag: PMPlan-specific, dropped (PlannedTask has no equivalent)
+    - source: hardcoded to 'llm'
+    - verification: hardcoded to '' (no LLM-generated verification yet)
+    """
+    extra_context = f"\n\nGoal: {plan.goal}" if plan.goal else ""
+    context = (plan.context or "") + extra_context
+    return PlannedTask(
+        title=plan.title,
+        task_type=plan.task_type,
+        source="llm",
+        effort=plan.effort,
+        context=context,
+        why_now=plan.why_now,
+        scope=plan.scope if plan.scope else [],
+        non_goals=plan.non_goals if plan.non_goals else [],
+        relevant_files=plan.relevant_files if plan.relevant_files else [],
+        execution_plan=plan.execution_plan if plan.execution_plan else [],
+        acceptance_criteria=plan.acceptance_criteria if plan.acceptance_criteria else [],
+        verification=[],
+        risks=plan.risks,
+        background=plan.background,
+        rollback=plan.rollback,
+    )
+
+
+def choose_next_task(
+    project: Path,
+    roadmap,
+    done_titles: set[str],
+    language: str,
+    forbidden_titles: set[str] | None = None,
+    use_llm: bool | None = None,
+) -> tuple[PlannedTask, bool]:
     """Choose the next task based on roadmap rhythm and done titles.
     
     Returns (planned_task, consumed_maintenance_slot).
     consumed_maintenance_slot is True when a maintenance task was chosen
     (post_feature_maintenance_remaining was > 0 and we drew from that pool).
     
-    Uses real project context (git history, file sizes, test files) to
-    generate differentiated task candidates with specific scope.
+    When use_llm is True (or auto-detected from MINIMAX_API_KEY), the LLM
+    is consulted first to generate a contextualised plan before falling
+    back to the static candidate pool.
     """
     from scripts.config import load_config
+
+    # Auto-detect LLM availability
+    if use_llm is None:
+        use_llm = bool(os.environ.get("MINIMAX_API_KEY", "").strip())
+
+    if use_llm:
+        from scripts.llm_client import generate_pm_plan as llm_generate
+        try:
+            raw_plan = llm_generate(project, language)
+            return _plan_to_planned_task(raw_plan), False
+        except Exception:
+            # Fallback to pool on LLM failure
+            pass
+
     cfg = load_config()
     ctx = _read_project_context(project)
 
