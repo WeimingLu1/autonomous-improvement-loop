@@ -11,7 +11,6 @@ from .state import (
     CONFIG_FILE,
     _config_template,
     read_current_config,
-    detect_existing_cron,
     create_cron,
     delete_cron,
     detect_openclaw_agent_id,
@@ -24,6 +23,7 @@ from .state import (
     write_file,
     read_file,
 )
+from .detect import detect_existing_cron, detect_existing_crons
 
 
 def cmd_start() -> None:
@@ -49,16 +49,23 @@ def cmd_start() -> None:
 
     model = config.get("model", "").strip()
 
-    existing = detect_existing_cron()
+    existing_ids = detect_existing_crons()
+    if len(existing_ids) > 1:
+        warn(f"Found duplicate AIL cron jobs: {', '.join(existing_ids)}")
+        keep_id = existing_ids[0]
+        for duplicate_id in existing_ids[1:]:
+            warn(f"Deleting duplicate cron job: {duplicate_id}")
+            delete_cron(duplicate_id)
+        existing_ids = [keep_id]
+
+    existing = existing_ids[0] if existing_ids else None
     if existing:
         ok(f"Existing Cron Job found: {existing}")
         use_existing = ask("Use existing cron job? [Y/n]", "y").lower()
         if use_existing != "n":
-            # Update config with existing cron job ID
             _update_cron_job_id(existing)
             ok("Cron job is already running.")
             return
-        # Delete and recreate
         warn("Deleting existing cron job...")
         delete_cron(existing)
 
@@ -79,23 +86,23 @@ def cmd_stop() -> None:
     """Stop cron hosting — remove the cron job."""
     step("🛑 Stopping Autonomous Improvement Loop cron")
 
-    existing = detect_existing_cron()
-    if not existing:
+    existing_ids = detect_existing_crons()
+    if not existing_ids:
         warn("No cron job found.")
         return
 
-    ok(f"Found cron job: {existing}")
-    confirm = ask("Delete this cron job? [y/N]", "n").lower()
+    ok(f"Found cron job(s): {', '.join(existing_ids)}")
+    confirm = ask("Delete these cron job(s)? [y/N]", "n").lower()
     if confirm != "y":
         warn("Aborted.")
         return
 
-    delete_cron(existing)
+    for cron_id in existing_ids:
+        delete_cron(cron_id)
 
-    # Clear cron_job_id from config
     _clear_cron_job_id()
 
-    ok("Cron job removed.")
+    ok("Cron job(s) removed.")
 
 
 def _update_cron_job_id(cron_id: str) -> None:

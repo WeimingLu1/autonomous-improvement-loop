@@ -183,22 +183,31 @@ def detect_telegram_chat_id() -> str | None:
 
 # ── Cron Detection ────────────────────────────────────────────────────────────
 
-def detect_existing_cron() -> str | None:
+def detect_existing_crons() -> list[str]:
+    ids: list[str] = []
     try:
         result = subprocess.run(
             ["openclaw", "cron", "list", "--json"],
             capture_output=True, text=True, timeout=10,
         )
-        if result.returncode == 0:
+        if result.returncode == 0 and result.stdout.strip():
             import json
             jobs = json.loads(result.stdout)
             for job in jobs:
-                label = job.get("label", "")
-                if "autonomous-improvement-loop" in label:
-                    return job.get("id") or job.get("cron_job_id") or label
+                label = (job.get("label") or job.get("name") or "").lower()
+                if "autonomous improvement loop" in label or "autonomous-improvement-loop" in label:
+                    cron_id = job.get("id") or job.get("cron_job_id") or ""
+                    if cron_id and cron_id not in ids:
+                        ids.append(cron_id)
+            return ids
     except Exception:
         pass
-    return None
+    return ids
+
+
+def detect_existing_cron() -> str | None:
+    ids = detect_existing_crons()
+    return ids[0] if ids else None
 
 
 # ── Testing Detection ─────────────────────────────────────────────────────────

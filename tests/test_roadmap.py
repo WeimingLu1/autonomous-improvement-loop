@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from scripts.plan_writer import write_plan_doc
-from scripts.roadmap import CurrentTask, init_roadmap, load_roadmap, append_done_log, set_current_task
+from scripts.roadmap import CurrentTask, init_roadmap, load_roadmap, normalize_roadmap, append_done_log, set_current_task
 from scripts.task_ids import next_task_id
 
 
@@ -137,3 +137,25 @@ def test_load_roadmap_handles_missing_rhythm_field_gracefully(tmp_path: Path):
     roadmap.write_text(text, encoding="utf-8")
     state = load_roadmap(roadmap)
     assert state.improves_since_last_idea == 0
+
+
+def test_normalize_roadmap_clears_done_current_task_and_stale_anchor(tmp_path: Path):
+    roadmap = tmp_path / "ROADMAP.md"
+    init_roadmap(roadmap)
+    task = CurrentTask("TASK-001", "idea", "pm", "Title", status="done", created="2026-04-24")
+    set_current_task(
+        roadmap,
+        task,
+        "plans/TASK-001.md",
+        "idea",
+        0,
+        post_feature_maintenance_remaining=0,
+        maintenance_anchor_title="stale-anchor",
+    )
+
+    normalized = normalize_roadmap(roadmap)
+
+    assert normalized.current_task is None
+    assert normalized.maintenance_anchor_title == ""
+    text = roadmap.read_text(encoding="utf-8")
+    assert "| TASK-001 |" not in text

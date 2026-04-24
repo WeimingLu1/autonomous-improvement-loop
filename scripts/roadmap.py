@@ -127,6 +127,41 @@ def load_roadmap(path: Path) -> RoadmapState:
     )
 
 
+def normalize_roadmap(path: Path) -> RoadmapState:
+    """Normalize inconsistent roadmap state in place.
+
+    - Clear Current Task when it is already marked done/pass.
+    - Clear stale maintenance anchor when no maintenance slots remain.
+    """
+    state = load_roadmap(path)
+    dirty = False
+
+    current_task = state.current_task
+    if current_task and current_task.status.strip().lower() in {"done", "pass"}:
+        current_task = None
+        dirty = True
+
+    maintenance_anchor_title = state.maintenance_anchor_title
+    if state.post_feature_maintenance_remaining <= 0 and maintenance_anchor_title:
+        maintenance_anchor_title = ""
+        dirty = True
+
+    if dirty:
+        set_current_task(
+            path,
+            current_task,
+            plan_path="" if current_task is None else state.current_plan_path,
+            next_default_type=state.next_default_type,
+            improves_since_last_idea=state.improves_since_last_idea,
+            post_feature_maintenance_remaining=max(0, state.post_feature_maintenance_remaining),
+            maintenance_anchor_title=maintenance_anchor_title,
+            reserved_user_task_id=state.reserved_user_task_id,
+        )
+        return load_roadmap(path)
+
+    return state
+
+
 def set_current_task(path: Path, task: CurrentTask | None, plan_path: str, next_default_type: str, improves_since_last_idea: int, post_feature_maintenance_remaining: int = 0, maintenance_anchor_title: str = "", reserved_user_task_id: str = "") -> None:
     text = path.read_text(encoding="utf-8") if path.exists() else ""
     done_log_block = _extract_done_log_block(text)

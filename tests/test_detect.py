@@ -1,6 +1,7 @@
 from pathlib import Path
+from types import SimpleNamespace
 
-from scripts.detect import check_project_readiness, detect_telegram_chat_id, detect_version_file
+from scripts.detect import check_project_readiness, detect_existing_crons, detect_telegram_chat_id, detect_version_file
 
 
 def test_detect_version_file_accepts_uppercase_VERSION(tmp_path):
@@ -37,3 +38,18 @@ def test_detect_telegram_chat_id_reads_chat_id_key(tmp_path, monkeypatch):
     detected = detect_telegram_chat_id()
 
     assert detected == "5535183090"
+
+
+def test_detect_existing_crons_returns_all_matching_ids(monkeypatch):
+    payload = (
+        '[{"id":"cron-1","label":"Autonomous Improvement Loop"},'
+        '{"id":"cron-2","label":"Autonomous Improvement Loop"},'
+        '{"id":"other","label":"Something Else"}]'
+    )
+
+    def fake_run(*args, **kwargs):
+        return SimpleNamespace(returncode=0, stdout=payload)
+
+    monkeypatch.setattr("scripts.detect.subprocess.run", fake_run)
+
+    assert detect_existing_crons() == ["cron-1", "cron-2"]

@@ -77,6 +77,7 @@ from .detect import (
     detect_openclaw_agent_id,
     detect_telegram_chat_id,
     detect_existing_cron,
+    detect_existing_crons,
     detect_pytest_available,
     detect_any_test_command,
     detect_build_config,
@@ -478,7 +479,7 @@ def cmd_add(content_text: str) -> None:
 # ── cmd_status ────────────────────────────────────────────────────────────────
 
 def cmd_status(project: Path, language: str | None = None, all_projects: bool = False) -> None:
-    from scripts.roadmap import load_roadmap
+    from scripts.roadmap import normalize_roadmap
     from scripts.i18n import get_message, get_lang
     from scripts.multi_project import cmd_status_all
 
@@ -523,7 +524,7 @@ def cmd_status(project: Path, language: str | None = None, all_projects: bool = 
         warn(_("project_has_missing_items"))
 
     if roadmap_path.exists():
-        roadmap = load_roadmap(roadmap_path)
+        roadmap = normalize_roadmap(roadmap_path)
         if roadmap.current_task:
             step(_("current_task"))
             ct = roadmap.current_task
@@ -540,8 +541,15 @@ def cmd_status(project: Path, language: str | None = None, all_projects: bool = 
         warn(_("roadmap_not_found"))
 
     print()
-    if config.get("cron_job_id"):
-        ok(f"{_('cron_job_id')}: {config['cron_job_id']}")
+    active_crons = detect_existing_crons()
+    if active_crons:
+        if len(active_crons) == 1:
+            ok(f"{_('cron_job_id')}: {active_crons[0]}")
+        else:
+            warn(f"{_('cron_job_id')}: {', '.join(active_crons)}")
+            warn(f"Active cron count = {len(active_crons)} (expected 1)")
+    elif config.get("cron_job_id"):
+        warn(f"{_('cron_job_id')}: {config['cron_job_id']} (not currently active)")
     else:
         warn(f"  {_('cron_job_not_detected')}")
 
@@ -568,6 +576,7 @@ def cmd_status(project: Path, language: str | None = None, all_projects: bool = 
 COLOR_BOLD = "\033[1m"
 
 def _get_roadmap_and_project():
+    from scripts.roadmap import normalize_roadmap
     config = read_current_config()
     project_path_str = config.get("project_path", "").strip()
 
@@ -587,6 +596,8 @@ def _get_roadmap_and_project():
 
     project = Path(project_path_str).expanduser().resolve()
     roadmap_path = ail_roadmap(project)
+    if roadmap_path.exists():
+        normalize_roadmap(roadmap_path)
     return project, roadmap_path
 
 
