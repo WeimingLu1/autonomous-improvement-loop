@@ -39,11 +39,17 @@ def _get_api_key() -> str:
     return key
 
 def _parse_json_response(raw: str) -> PMPlan:
-    """Parse LLM JSON output into PMPlan. Strips markdown fences if present."""
+    """Parse LLM JSON output into PMPlan. Strips markdown fences and LLM reasoning if present."""
     stripped = raw.strip()
     if stripped.startswith("```"):
         stripped = re.sub(r"^```(?:json)?\s*", "", stripped)
         stripped = re.sub(r"\s*```$", "", stripped)
+    # MiniMax with reasoning may prefix output with <notes>...</notes>
+    # Extract the first { ... } JSON block
+    first_brace = stripped.find("{")
+    last_brace = stripped.rfind("}")
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        stripped = stripped[first_brace:last_brace + 1]
     try:
         data = json.loads(stripped)
     except json.JSONDecodeError as e:
@@ -85,7 +91,7 @@ def _call_minimax(api_key: str, user_prompt: str, language: str) -> str:
     }
     body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
-        f"{API_BASE}/v1/text/chat/completion",
+        f"{API_BASE}/v1/chat/completions",
         data=body,
         headers={
             "Authorization": f"Bearer {api_key}",
