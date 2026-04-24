@@ -599,16 +599,19 @@ def _get_roadmap_and_project():
     config = read_current_config()
     project_path_str = config.get("project_path", "").strip()
 
-    # Self-hosting detection: when running from inside the skill's own tree,
-    # prefer the skill's local .ail/ over the configured external project_path.
-    # This makes 'ail' commands work correctly during skill self-testing.
+    # Self-hosting: when running from inside the skill's own tree,
+    # operate on the skill's local .ail/ — even if project_path points
+    # somewhere else (allows 'ail' commands to work on the skill itself).
+    # This activates only when cwd is the skill root or one level deep.
     cwd = Path.cwd()
-    if (cwd / ".ail").exists():
-        # cwd is the project root (has its own .ail/ state)
-        project_path_str = str(cwd)
-    elif (cwd / "scripts").exists() and (cwd.parent / ".ail").exists():
-        # cwd is inside the skill tree — use skill's local .ail/
-        project_path_str = str(cwd.parent)
+    skill_root = Path(__file__).resolve().parent.parent
+    in_skill_tree = (
+        cwd.resolve() == skill_root.resolve()
+        or (cwd.parent.resolve() == skill_root.resolve() and cwd.name == "scripts")
+    )
+    if in_skill_tree and (cwd / ".ail").exists():
+        # Always use the skill's own .ail/ when running from within the skill tree
+        project_path_str = str(cwd if cwd.resolve() == skill_root.resolve() else cwd.parent)
     elif not project_path_str or project_path_str in (".", "YOUR_PROJECT_PATH"):
         detected = detect_project_path()
         project_path_str = str(detected) if detected else str(cwd)
