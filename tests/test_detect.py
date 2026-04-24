@@ -1,7 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from scripts.detect import check_project_readiness, detect_existing_crons, detect_telegram_chat_id, detect_version_file
+from scripts.detect import check_project_readiness, detect_existing_crons, detect_project_path, detect_telegram_chat_id, detect_version_file
 
 
 def test_detect_version_file_accepts_uppercase_VERSION(tmp_path):
@@ -53,3 +53,17 @@ def test_detect_existing_crons_returns_all_matching_ids(monkeypatch):
     monkeypatch.setattr("scripts.detect.subprocess.run", fake_run)
 
     assert detect_existing_crons() == ["cron-1", "cron-2"]
+
+
+def test_detect_project_path_falls_back_when_git_unavailable(tmp_path, monkeypatch):
+    workspace = tmp_path / "nested" / "repo"
+    workspace.mkdir(parents=True)
+    (tmp_path / ".git").mkdir()
+    monkeypatch.chdir(workspace)
+
+    def raise_missing_git(*args, **kwargs):
+        raise FileNotFoundError("git missing")
+
+    monkeypatch.setattr("scripts.detect.subprocess.run", raise_missing_git)
+
+    assert detect_project_path() == tmp_path

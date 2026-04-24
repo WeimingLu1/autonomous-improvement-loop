@@ -20,11 +20,14 @@ def detect_project_path() -> Path | None:
     cwd = Path.cwd()
     if (cwd / ".ail").exists() or (cwd / "ROADMAP.md").exists():
         return cwd
-    git_dir = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
-        capture_output=True, text=True, timeout=5,
-    )
-    if git_dir.returncode == 0:
+    try:
+        git_dir = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except Exception:
+        git_dir = None
+    if git_dir and git_dir.returncode == 0:
         candidate = Path(git_dir.stdout.strip())
         if candidate.exists():
             return candidate

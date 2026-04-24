@@ -464,7 +464,7 @@ def cmd_add(content_text: str) -> None:
     set_current_task(
         roadmap_path,
         task,
-        plan_path=str(plan_path.relative_to(project / ".ail")),
+        plan_path=str(plan_path.relative_to((project / ".ail").resolve())),
         next_default_type=roadmap.next_default_type,
         improves_since_last_idea=roadmap.improves_since_last_idea,
         post_feature_maintenance_remaining=roadmap.post_feature_maintenance_remaining,
@@ -825,20 +825,33 @@ def _collect_done_log_titles(roadmap_path: Path) -> set[str]:
     return done_titles
 
 
-def _collect_pending_plan_titles(plans_dir: Path, done_task_ids: set[str], done_titles: set[str]) -> set[str]:
+def _collect_pending_plan_titles(plans_dir: Path, done_task_ids: set[str], done_log_titles: set[str], done_titles: set[str]) -> set[str]:
+    """Collect titles of pending plan files.
+
+    A plan is pending only if:
+    - Its task_id is not in done_task_ids (not yet done),
+    - Its title is not in done_log_titles (not completed via Done Log),
+    - Its title is not in done_titles (not in the in-progress done set).
+    """
     pending_titles: set[str] = set()
     for plan_path in plans_dir.glob("TASK-*.md"):
         if plan_path.stem in done_task_ids:
             continue
         title = _extract_plan_title(plan_path)
-        if title and title not in done_titles:
+        if title and title not in done_log_titles and title not in done_titles:
             pending_titles.add(title)
     return pending_titles
 
 
 def _collect_forbidden_titles(project: Path, roadmap_path: Path, plans_dir: Path, roadmap, done_titles: set[str]) -> set[str]:
+    # forbidden_titles = done_log_titles + pending_plan_titles + done_titles
+    # done_log_titles: titles completed via the Done Log (authoritative source)
+    # pending_plan_titles: titles from pending plan files not yet in done_log
+    # done_titles: ALL completed titles (Done Log + git history + benchmarks);
+    #              must also be forbidden to prevent the git-history bypass bug
     forbidden_titles = set(_collect_done_log_titles(roadmap_path))
-    forbidden_titles.update(_collect_pending_plan_titles(plans_dir, _collect_done_task_ids(roadmap_path), done_titles))
+    forbidden_titles.update(done_titles)  # block titles completed outside Done Log
+    forbidden_titles.update(_collect_pending_plan_titles(plans_dir, _collect_done_task_ids(roadmap_path), forbidden_titles, done_titles))
     if roadmap.current_task and roadmap.current_task.status in {"pending", "doing"}:
         forbidden_titles.add(roadmap.current_task.title)
     reserved = roadmap.reserved_user_task_id.strip()
@@ -970,7 +983,7 @@ def cmd_plan(force: bool = False, count: int = 1, dry_run: bool = False) -> None
         if dry_run_mode == DryRunMode.OFF:
             set_current_task(
                 roadmap_path, current,
-                plan_path=str(plan_paths[0].relative_to(project / ".ail")) if plan_paths else "",
+                plan_path=str(plan_path.relative_to((project / ".ail").resolve())) if plan_paths else "",
                 next_default_type=next_type,
                 improves_since_last_idea=improves,
                 post_feature_maintenance_remaining=maintenance_remaining,
@@ -1023,12 +1036,12 @@ def cmd_plan(force: bool = False, count: int = 1, dry_run: bool = False) -> None
     next_type = "improve" if roadmap.next_default_type == "idea" else "idea"
     improves = roadmap.improves_since_last_idea + (1 if planned.task_type == "improve" else 0)
 
-    maintenance_remaining = roadmap.post_feature_maintenance_remaining - 1 if consumed else roadmap.post_feature_maintenance_remaining
+    maintenance_remaining = roadmap.post_feature_maintenance_remaining - 1 if (consumed and roadmap.post_feature_maintenance_remaining > 0) else roadmap.post_feature_maintenance_remaining
     maintenance_anchor = roadmap.maintenance_anchor_title
     if dry_run_mode == DryRunMode.OFF:
         set_current_task(
             roadmap_path, task,
-            plan_path=str(plan_path.relative_to(project / ".ail")),
+            plan_path=str(plan_path.relative_to((project / ".ail").resolve())),
             next_default_type=next_type,
             improves_since_last_idea=improves,
             post_feature_maintenance_remaining=maintenance_remaining,
@@ -1614,7 +1627,7 @@ def _generate_next_task(project: Path, roadmap_path: Path, roadmap) -> None:
     set_current_task(
         roadmap_path,
         task,
-        plan_path=str(plan_path.relative_to(project / ".ail")),
+        plan_path=str(plan_path.relative_to((project / ".ail").resolve())),
         next_default_type=next_type,
         improves_since_last_idea=improves,
         post_feature_maintenance_remaining=maintenance_remaining,

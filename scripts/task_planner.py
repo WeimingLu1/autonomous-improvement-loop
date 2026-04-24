@@ -1069,10 +1069,12 @@ def choose_next_task(project: Path, roadmap, done_titles: set[str], language: st
     if candidate is not None:
         return candidate, consumed
 
-    # All candidates exhausted in both pools — clear done_titles for both and retry.
-    # This allows the system to cycle through tasks indefinitely rather than getting stuck.
+    # All candidates exhausted in both pools — clear done_titles and retry.
     # Titles appearing >= STICKY_THRESHOLD times in Done Log are excluded from retry
     # to prevent a repeated task from being selected again.
+    # NOTE: forbidden_titles is NOT applied during retry because done_titles
+    # already contains the genuinely done titles; clearing done_titles entries
+    # that are candidates allows the system to cycle through tasks.
     STICKY_THRESHOLD = cfg['sticky_threshold']
     sticky_titles: set[str] = _sticky_done_titles(project, STICKY_THRESHOLD)
     primary_titles = {c.title for c in primary_pool}
@@ -1082,8 +1084,8 @@ def choose_next_task(project: Path, roadmap, done_titles: set[str], language: st
     if cleared_titles:
         for title in cleared_titles:
             done_titles.discard(title)
-        primary_available = [c for c in primary_pool if c.title not in done_titles and c.title not in sticky_titles and c.title not in forbidden_titles]
-        fallback_available = [c for c in fallback_pool if c.title not in done_titles and c.title not in sticky_titles and c.title not in forbidden_titles]
+        primary_available = [c for c in primary_pool if c.title not in done_titles and c.title not in sticky_titles]
+        fallback_available = [c for c in fallback_pool if c.title not in done_titles and c.title not in sticky_titles]
         candidate = _pick_from_pool(primary_available, selection_key, quality_scores)
         if candidate is not None:
             return candidate, consumed
