@@ -535,6 +535,11 @@ def cmd_status(project: Path, language: str | None = None, all_projects: bool = 
             print(f"  {c(_('created'), COLOR_BOLD)} {ct.created}")
             if roadmap.reserved_user_task_id:
                 print(f"  {c(_('reserved_user_task'), COLOR_BOLD)} {roadmap.reserved_user_task_id}")
+            print(f"  {c('rhythm', COLOR_BOLD)} next={roadmap.next_default_type}  "
+                  f"improves_since_idea={roadmap.improves_since_last_idea}  "
+                  f"maint_remaining={roadmap.post_feature_maintenance_remaining}")
+            if roadmap.maintenance_anchor_title:
+                print(f"  {c('maint_anchor', COLOR_BOLD)} {roadmap.maintenance_anchor_title}")
         else:
             warn(_("no_current_task"))
     else:
