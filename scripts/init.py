@@ -81,6 +81,7 @@ from scripts.cli import (
     cmd_trigger,
     cmd_config,
     cmd_switch,
+    cmd_maintenance,
 )
 from scripts.cron import cmd_start, cmd_stop
 from scripts.detect import detect_project_path, detect_openclaw_agent_id, detect_telegram_chat_id
@@ -268,6 +269,9 @@ def main() -> int:
     switch_p.add_argument("--language", "--lang", "-l", default=None, choices=["en", "zh"])
     switch_p.set_defaults(func=lambda a: cmd_switch(alias_or_path=a.alias_or_path, language=a.language))
 
+    maint_p = sub.add_parser("a-maintenance", help="Manage maintenance mode")
+    maint_p.add_argument("action", choices=["on", "off", "status"], nargs="?", default="status")
+
     args = parser.parse_args()
 
     # Auto-detect project path if not given
@@ -338,6 +342,8 @@ def main() -> int:
             cmd_trigger(force=args.force, no_spawn=args.no_spawn, dry_run=args.dry_run)
         elif args.command == "a-config":
             cmd_config(action=args.action, key=args.key, value=args.value)
+        elif args.command == "a-maintenance":
+            cmd_maintenance(action=args.action)
     except KeyboardInterrupt:
         print("\n\nCancelled.")
         return 130
