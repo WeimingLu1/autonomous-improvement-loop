@@ -28,6 +28,7 @@ class RoadmapState:
     maintenance_anchor_title: str = ""
     current_plan_path: str = ""
     reserved_user_task_id: str = ""
+    maintenance_mode: bool = False
 
 
 def init_roadmap(path: Path) -> None:
@@ -44,7 +45,8 @@ def init_roadmap(path: Path) -> None:
         "| post_feature_maintenance_remaining | 0 |\n"
         "| maintenance_anchor_title |  |\n"
         "| current_plan_path |  |\n"
-        "| reserved_user_task_id |  |\n\n"
+        "| reserved_user_task_id |  |\n"
+        "| maintenance_mode | false |\n\n"
         "## PM Notes\n\n"
         "- Roadmap initialized.\n\n"
         "## Done Log\n\n"
@@ -88,7 +90,7 @@ def _extract_done_log_block(text: str) -> str:
     return DONE_LOG_HEADER + "\n|------|---------|------|--------|-------|--------|--------|\n"
 
 
-def _render_roadmap(task: CurrentTask | None, *, next_default_type: str, improves_since_last_idea: int, post_feature_maintenance_remaining: int, maintenance_anchor_title: str, plan_path: str, reserved_user_task_id: str, done_log_block: str) -> str:
+def _render_roadmap(task: CurrentTask | None, *, next_default_type: str, improves_since_last_idea: int, post_feature_maintenance_remaining: int, maintenance_anchor_title: str, plan_path: str, reserved_user_task_id: str, maintenance_mode: bool, done_log_block: str) -> str:
     current_row = ""
     if task is not None:
         current_row = f"| {task.task_id} | {task.task_type} | {task.source} | {task.title} | {task.priority} | {task.status} | {task.created} |\n"
@@ -106,7 +108,8 @@ def _render_roadmap(task: CurrentTask | None, *, next_default_type: str, improve
         f"| post_feature_maintenance_remaining | {post_feature_maintenance_remaining} |\n"
         f"| maintenance_anchor_title | {maintenance_anchor_title} |\n"
         f"| current_plan_path | {plan_path} |\n"
-        f"| reserved_user_task_id | {reserved_user_task_id} |\n\n"
+        f"| reserved_user_task_id | {reserved_user_task_id} |\n"
+        f"| maintenance_mode | {'true' if maintenance_mode else 'false'} |\n\n"
         "## PM Notes\n\n"
         "- Roadmap initialized.\n\n"
         "## Done Log\n\n"
@@ -124,6 +127,7 @@ def load_roadmap(path: Path) -> RoadmapState:
         maintenance_anchor_title=_get_rhythm_value(text, "maintenance_anchor_title", ""),
         current_plan_path=_get_rhythm_value(text, "current_plan_path", ""),
         reserved_user_task_id=_get_rhythm_value(text, "reserved_user_task_id", ""),
+        maintenance_mode=_get_rhythm_value(text, "maintenance_mode", "false") in ("true", "1", "yes"),
     )
 
 
@@ -156,13 +160,14 @@ def normalize_roadmap(path: Path) -> RoadmapState:
             post_feature_maintenance_remaining=max(0, state.post_feature_maintenance_remaining),
             maintenance_anchor_title=maintenance_anchor_title,
             reserved_user_task_id=state.reserved_user_task_id,
+            maintenance_mode=state.maintenance_mode,
         )
         return load_roadmap(path)
 
     return state
 
 
-def set_current_task(path: Path, task: CurrentTask | None, plan_path: str, next_default_type: str, improves_since_last_idea: int, post_feature_maintenance_remaining: int = 0, maintenance_anchor_title: str = "", reserved_user_task_id: str = "") -> None:
+def set_current_task(path: Path, task: CurrentTask | None, plan_path: str, next_default_type: str, improves_since_last_idea: int, post_feature_maintenance_remaining: int = 0, maintenance_anchor_title: str = "", reserved_user_task_id: str = "", maintenance_mode: bool = False) -> None:
     text = path.read_text(encoding="utf-8") if path.exists() else ""
     done_log_block = _extract_done_log_block(text)
     path.write_text(
@@ -174,6 +179,7 @@ def set_current_task(path: Path, task: CurrentTask | None, plan_path: str, next_
             maintenance_anchor_title=maintenance_anchor_title,
             plan_path=plan_path,
             reserved_user_task_id=reserved_user_task_id,
+            maintenance_mode=maintenance_mode,
             done_log_block=done_log_block,
         ),
         encoding="utf-8",
@@ -186,7 +192,7 @@ def append_done_log(path: Path, *, timestamp: str, task_id: str, task_type: str,
     done_log_block = _extract_done_log_block(text)
     if row not in done_log_block:
         done_log_block += row
-    state = load_roadmap(path) if path.exists() else RoadmapState(None, "idea", 0, 0, "", "", "")
+    state = load_roadmap(path) if path.exists() else RoadmapState(None, "idea", 0, 0, "", "", "", False)
     path.write_text(
         _render_roadmap(
             state.current_task,
@@ -196,6 +202,7 @@ def append_done_log(path: Path, *, timestamp: str, task_id: str, task_type: str,
             maintenance_anchor_title=state.maintenance_anchor_title,
             plan_path=state.current_plan_path,
             reserved_user_task_id=state.reserved_user_task_id,
+            maintenance_mode=state.maintenance_mode,
             done_log_block=done_log_block,
         ),
         encoding="utf-8",

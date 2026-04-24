@@ -888,6 +888,24 @@ _IDEA_CANDIDATES: list[dict] = [
 # Maintenance pool — activated after a PM idea/feature task completes
 # ---------------------------------------------------------------------------
 
+_MAINTENANCE_CANDIDATES: list[dict] = [
+    {"title": "补充单元测试覆盖，提升关键函数的测试用例数量", "task_type": "maintenance", "maintenance_tag": "testing"},
+    {"title": "补充集成测试覆盖，验证模块间交互", "task_type": "maintenance", "maintenance_tag": "testing"},
+    {"title": "更新项目依赖版本，检查安全更新", "task_type": "maintenance", "maintenance_tag": "deps"},
+    {"title": "进行安全漏洞审计，检查常见安全风险", "task_type": "maintenance", "maintenance_tag": "security"},
+    {"title": "提升代码可读性，重命名不清晰的变量和函数", "task_type": "maintenance", "maintenance_tag": "readability"},
+    {"title": "完善错误处理，为核心函数添加异常处理", "task_type": "maintenance", "maintenance_tag": "error-handling"},
+    {"title": "完善日志语句，提升可调试性", "task_type": "maintenance", "maintenance_tag": "logging"},
+    {"title": "进行性能 profiling，识别并优化性能瓶颈", "task_type": "maintenance", "maintenance_tag": "performance"},
+    {"title": "更新项目文档，确保 README 和 CHANGELOG 最新", "task_type": "maintenance", "maintenance_tag": "docs"},
+    {"title": "清理无用代码和文件，减少技术债务", "task_type": "maintenance", "maintenance_tag": "cleanup"},
+    {"title": "修复已知的边界 case，提升鲁棒性", "task_type": "maintenance", "maintenance_tag": "bug"},
+    {"title": "提升配置灵活性，减少硬编码", "task_type": "maintenance", "maintenance_tag": "config"},
+    {"title": "代码重复检测和消除，提升复用性", "task_type": "maintenance", "maintenance_tag": "refactor"},
+    {"title": "完善项目可复现性验证，确保构建步骤可重复", "task_type": "maintenance", "maintenance_tag": "reproducibility"},
+    {"title": "补充横向移动工具脚本，提升日常开发效率", "task_type": "maintenance", "maintenance_tag": "tooling"},
+]
+
 def _build_maintenance_candidates(anchor_title: str, remaining: int) -> list[dict]:
     """Build maintenance tasks dynamically so title-based dedupe does not disable them forever."""
     anchor = anchor_title.strip() or "最近完成的 feature"
@@ -1068,8 +1086,13 @@ def choose_next_task(project: Path, roadmap, done_titles: set[str], language: st
     improves_since = getattr(roadmap, "improves_since_last_idea", 0)
     maintenance_remaining = getattr(roadmap, "post_feature_maintenance_remaining", 0)
     maintenance_anchor_title = getattr(roadmap, "maintenance_anchor_title", "")
+    maintenance_mode = getattr(roadmap, "maintenance_mode", False)
 
-    if maintenance_remaining > 0:
+    if maintenance_mode:
+        # Restrict to maintenance candidates only, ignoring rhythm-based selection.
+        primary_pool = [_make_task("maintenance", c, ctx) for c in _MAINTENANCE_CANDIDATES]
+        fallback_pool = improve_pool
+    elif maintenance_remaining > 0:
         # Force maintenance pool using titles anchored to the triggering feature.
         primary_pool = [_make_task("improve", c, ctx) for c in _build_maintenance_candidates(maintenance_anchor_title, maintenance_remaining)]
         fallback_pool = improve_pool
