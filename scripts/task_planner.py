@@ -984,6 +984,32 @@ def _pick_from_pool(pool: list[PlannedTask], key: str, quality_scores: dict[str,
 # Main API
 # ---------------------------------------------------------------------------
 
+def get_seed_task(project: Path, mode: str, language: str) -> PlannedTask:
+    """Return the initial task used by onboard/adopt seed_queue.
+
+    Historically seed_queue delegated to cmd_plan(force=True), which selected
+    the next PM task from the default rhythm state. During module split, the
+    call site was converted to import get_seed_task(), but that helper was not
+    migrated, breaking onboard/adopt with ImportError.
+
+    mode is currently informational only; the initial task follows the same
+    planner selection as the first PM planning cycle.
+    """
+    from scripts.roadmap import RoadmapState
+
+    roadmap = RoadmapState(
+        current_task=None,
+        next_default_type="idea",
+        improves_since_last_idea=0,
+        post_feature_maintenance_remaining=0,
+        maintenance_anchor_title="",
+        current_plan_path="",
+        reserved_user_task_id="",
+    )
+    task, _ = choose_next_task(project, roadmap, set(), language, forbidden_titles=set())
+    return task
+
+
 def _sticky_done_titles(project: Path, threshold: int = 3) -> set[str]:
     """Return titles from Done Log that appeared >= threshold times (stuck tasks)."""
     roadmap_path = project / ".ail" / "ROADMAP.md"

@@ -164,7 +164,10 @@ def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
 def ask(prompt: str, default: str | None = None) -> str:
     if default:
         prompt = f"{prompt} [{default}]"
-    result = input(f"  {prompt}: ").strip()
+    try:
+        result = input(f"  {prompt}: ").strip()
+    except EOFError:
+        return default or ""
     return result if result else (default or "")
 
 
@@ -248,6 +251,7 @@ def seed_queue(project: Path, mode: str, language: str) -> None:
     from scripts.plan_writer import write_plan_doc
 
     roadmap_path = ail_roadmap(project)
+    ail_state_dir(project).mkdir(parents=True, exist_ok=True)
     init_roadmap(roadmap_path)
 
     plans_dir = ail_plans_dir(project)
@@ -287,7 +291,7 @@ def seed_queue(project: Path, mode: str, language: str) -> None:
     )
     set_current_task(
         roadmap_path, task,
-        plan_path=str(plan_path.relative_to(project / ".ail")),
+        plan_path=str(plan_path.relative_to((project / ".ail").resolve())),
         next_default_type="idea",
         improves_since_last_idea=0,
         reserved_user_task_id="",
