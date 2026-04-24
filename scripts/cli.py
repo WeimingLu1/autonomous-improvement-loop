@@ -555,6 +555,20 @@ def cmd_status(project: Path, language: str | None = None, all_projects: bool = 
 
     print()
 
+    plans_dir = ail_plans_dir(project)
+    metrics = _plan_health_snapshot(plans_dir)
+    info(
+        "plan health: "
+        f"count={metrics['plan_count']}  unique_titles={metrics['unique_titles']}  "
+        f"duplicates={metrics['duplicate_count']}  duplicate_ratio={metrics['duplicate_ratio']:.1%}"
+    )
+    top_duplicates = metrics["top_duplicates"]
+    if top_duplicates:
+        for title, count in top_duplicates[:3]:
+            print(f"  dup x{count}: {title}")
+
+    print()
+
     # Show config source
     from .config import load_config
     yaml_cfg = load_config(project)
@@ -763,6 +777,95 @@ def _collect_completed_titles_from_project_state(project: Path) -> set[str]:
     return done_titles
 
 
+def _extract_plan_title(plan_path: Path) -> str:
+    try:
+        first_line = plan_path.read_text(encoding="utf-8").splitlines()[0].strip()
+    except Exception:
+        return ""
+    m = re.match(r"#\s+TASK-\d+\s+·\s+(.+)$", first_line)
+    return m.group(1).strip() if m else ""
+
+
+def _collect_done_task_ids(roadmap_path: Path) -> set[str]:
+    done_ids: set[str] = set()
+    if not roadmap_path.exists():
+        return done_ids
+    roadmap_text = roadmap_path.read_text(encoding="utf-8")
+    done_log_match = re.search(r"## Done Log\n\n([\s\S]*?)(?=\n## |\Z)", roadmap_text, re.IGNORECASE)
+    if not done_log_match:
+        return done_ids
+    for line in done_log_match.group(1).splitlines():
+        if not line.strip().startswith("|") or "---" in line:
+            continue
+        cells = [c.strip() for c in line.split("|")[1:-1]]
+        if len(cells) >= 7 and cells[1].startswith("TASK-"):
+            done_ids.add(cells[1])
+    return done_ids
+
+
+def _collect_done_log_titles(roadmap_path: Path) -> set[str]:
+    done_titles: set[str] = set()
+    if not roadmap_path.exists():
+        return done_titles
+    roadmap_text = roadmap_path.read_text(encoding="utf-8")
+    done_log_match = re.search(r"## Done Log\n\n([\s\S]*?)(?=\n## |\Z)", roadmap_text, re.IGNORECASE)
+    if not done_log_match:
+        return done_titles
+    for line in done_log_match.group(1).splitlines():
+        if not line.strip().startswith("|") or "---" in line:
+            continue
+        cells = [c.strip() for c in line.split("|")[1:-1]]
+        if len(cells) >= 7 and cells[1].startswith("TASK-"):
+            done_titles.add(cells[4])
+    return done_titles
+
+
+def _collect_pending_plan_titles(plans_dir: Path, done_task_ids: set[str], done_titles: set[str]) -> set[str]:
+    pending_titles: set[str] = set()
+    for plan_path in plans_dir.glob("TASK-*.md"):
+        if plan_path.stem in done_task_ids:
+            continue
+        title = _extract_plan_title(plan_path)
+        if title and title not in done_titles:
+            pending_titles.add(title)
+    return pending_titles
+
+
+def _collect_forbidden_titles(project: Path, roadmap_path: Path, plans_dir: Path, roadmap, done_titles: set[str]) -> set[str]:
+    forbidden_titles = set(_collect_done_log_titles(roadmap_path))
+    forbidden_titles.update(_collect_pending_plan_titles(plans_dir, _collect_done_task_ids(roadmap_path), done_titles))
+    if roadmap.current_task and roadmap.current_task.status in {"pending", "doing"}:
+        forbidden_titles.add(roadmap.current_task.title)
+    reserved = roadmap.reserved_user_task_id.strip()
+    if reserved:
+        reserved_plan = plans_dir / f"{reserved}.md"
+        reserved_title = _extract_plan_title(reserved_plan)
+        if reserved_title and reserved_title not in done_titles:
+            forbidden_titles.add(reserved_title)
+    return forbidden_titles
+
+
+def _plan_health_snapshot(plans_dir: Path) -> dict[str, object]:
+    plan_paths = sorted(plans_dir.glob("TASK-*.md")) if plans_dir.exists() else []
+    title_counts: dict[str, int] = {}
+    for plan_path in plan_paths:
+        title = _extract_plan_title(plan_path)
+        if title:
+            title_counts[title] = title_counts.get(title, 0) + 1
+    total = len(plan_paths)
+    unique = len(title_counts)
+    duplicates = total - unique
+    duplicate_ratio = (duplicates / total) if total else 0.0
+    top_duplicates = sorted(title_counts.items(), key=lambda item: (-item[1], item[0]))[:5]
+    return {
+        "plan_count": total,
+        "unique_titles": unique,
+        "duplicate_count": duplicates,
+        "duplicate_ratio": duplicate_ratio,
+        "top_duplicates": top_duplicates,
+    }
+
+
 def cmd_plan(force: bool = False, count: int = 1, dry_run: bool = False) -> None:
     dry_run_mode = DryRunMode.PLAN_ONLY if (dry_run or os.environ.get("DRY_RUN") == "1") else DryRunMode.OFF
     if dry_run_mode == DryRunMode.PLAN_ONLY:
@@ -796,6 +899,7 @@ def cmd_plan(force: bool = False, count: int = 1, dry_run: bool = False) -> None
         return
 
     done_titles = _collect_completed_titles(project, roadmap_path, plans_dir)
+    forbidden_titles = _collect_forbidden_titles(project, roadmap_path, plans_dir, roadmap, done_titles)
     language = read_current_config().get("project_language", DEFAULT_LANGUAGE).strip() or "zh"
 
     # Multi-task mode: generate N tasks
@@ -803,10 +907,11 @@ def cmd_plan(force: bool = False, count: int = 1, dry_run: bool = False) -> None
         planned_tasks: list = []
         any_consumed = False
         for i in range(count):
-            planned, consumed = choose_next_task(project, roadmap, done_titles, language)
+            planned, consumed = choose_next_task(project, roadmap, done_titles, language, forbidden_titles=forbidden_titles)
             if consumed:
                 any_consumed = True
             done_titles.add(planned.title)  # avoid duplicates in same batch
+            forbidden_titles.add(planned.title)
             planned_tasks.append(planned)
 
         # Write all plan files (or print in dry-run)
@@ -875,7 +980,7 @@ def cmd_plan(force: bool = False, count: int = 1, dry_run: bool = False) -> None
         return
 
     # Single-task mode (default)
-    planned, consumed = choose_next_task(project, roadmap, done_titles, language)
+    planned, consumed = choose_next_task(project, roadmap, done_titles, language, forbidden_titles=forbidden_titles)
     task_id = next_task_id(plans_dir)
     if dry_run_mode == DryRunMode.OFF:
         plan_path = write_plan_doc(
@@ -1440,6 +1545,7 @@ def _generate_next_task(project: Path, roadmap_path: Path, roadmap) -> None:
         return
 
     done_titles = _collect_completed_titles(project, roadmap_path, plans_dir)
+    forbidden_titles = _collect_forbidden_titles(project, roadmap_path, plans_dir, roadmap, done_titles)
 
     completed_task = roadmap.current_task
     if roadmap.post_feature_maintenance_remaining > 0:
@@ -1459,7 +1565,7 @@ def _generate_next_task(project: Path, roadmap_path: Path, roadmap) -> None:
         selection_roadmap = roadmap
 
     language = read_current_config().get("project_language", DEFAULT_LANGUAGE).strip() or "zh"
-    planned, consumed = choose_next_task(project, selection_roadmap, done_titles, language)
+    planned, consumed = choose_next_task(project, selection_roadmap, done_titles, language, forbidden_titles=forbidden_titles)
     task_id = next_task_id(plans_dir)
     plan_path = write_plan_doc(
         plans_dir=plans_dir,

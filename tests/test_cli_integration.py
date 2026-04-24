@@ -244,11 +244,15 @@ def test_config_set_updates_value():
 def test_status_shows_project_info():
     """a-status shows project readiness information (may timeout on slow systems)."""
     result = _run(["a-status"])
-    # a-status may timeout due to pytest execution time; we accept both pass and timeout
     combined = result.stdout + result.stderr
-    # Should show some readiness info or timeout
-    assert ("Project" in combined or "project" in combined or "Queue" in combined
-            or "timeout" in combined.lower() or "TimeoutExpired" in combined)
+    assert (
+        "Project" in combined
+        or "project" in combined
+        or "项目" in combined
+        or "plan health" in combined
+        or "timeout" in combined.lower()
+        or "TimeoutExpired" in combined
+    )
 
 
 # ── PM Roadmap command tests ─────────────────────────────────────────────────
@@ -451,3 +455,54 @@ def test_add_preserves_doing_task_and_reserves_user_task_id():
             for p in plans_dir.glob('TASK-*.md'):
                 if p.name not in existing_plans:
                     p.unlink(missing_ok=True)
+
+
+def test_plan_force_avoids_duplicate_unfinished_title():
+    roadmap_path = PROJECT / ".ail" / "ROADMAP.md"
+    plans_dir = PROJECT / ".ail" / "plans"
+    original_roadmap = roadmap_path.read_bytes() if roadmap_path.exists() else None
+    existing_plans = {p.name: p.read_bytes() for p in plans_dir.glob('TASK-*.md')} if plans_dir.exists() else {}
+    try:
+        roadmap_path.parent.mkdir(parents=True, exist_ok=True)
+        plans_dir.mkdir(parents=True, exist_ok=True)
+        roadmap_path.write_text(
+            "# Roadmap\n\n"
+            "## Current Task\n\n"
+            "| task_id | type | source | title | priority | status | created |\n"
+            "|--------|------|--------|-------|----------|--------|---------|\n"
+            "| TASK-001 | improve | pm | 为 roadmap 命令流补齐集成测试覆盖 | P1 | pending | 2026-04-24 |\n\n"
+            "## Rhythm State\n\n"
+            "| field | value |\n"
+            "|------|-------|\n"
+            "| next_default_type | improve |\n"
+            "| improves_since_last_idea | 1 |\n"
+            "| post_feature_maintenance_remaining | 0 |\n"
+            "| maintenance_anchor_title |  |\n"
+            "| current_plan_path | plans/TASK-001.md |\n"
+            "| reserved_user_task_id |  |\n\n"
+            "## PM Notes\n\n- Roadmap initialized.\n\n"
+            "## Done Log\n\n"
+            "| time | task_id | type | source | title | result | commit |\n"
+            "|------|---------|------|--------|-------|--------|--------|\n",
+            encoding="utf-8",
+        )
+        (plans_dir / "TASK-001.md").write_text(
+            "# TASK-001 · 为 roadmap 命令流补齐集成测试覆盖\n\n## Goal\n保持唯一标题\n",
+            encoding="utf-8",
+        )
+
+        result = _run(["a-plan", "--force"])
+        combined = result.stdout + result.stderr
+        assert result.returncode == 0, combined
+        assert "为 roadmap 命令流补齐集成测试覆盖" not in combined.split("## Goal", 1)[-1]
+    finally:
+        if original_roadmap is not None:
+            roadmap_path.write_bytes(original_roadmap)
+        else:
+            roadmap_path.unlink(missing_ok=True)
+        if plans_dir.exists():
+            current_names = {p.name for p in plans_dir.glob('TASK-*.md')}
+            for name in current_names - set(existing_plans):
+                (plans_dir / name).unlink(missing_ok=True)
+            for name, data in existing_plans.items():
+                (plans_dir / name).write_bytes(data)

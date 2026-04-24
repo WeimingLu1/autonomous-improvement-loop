@@ -1004,7 +1004,7 @@ def _sticky_done_titles(project: Path, threshold: int = 3) -> set[str]:
     return {title for title, count in counts.items() if count >= threshold}
 
 
-def choose_next_task(project: Path, roadmap, done_titles: set[str], language: str) -> tuple[PlannedTask, bool]:
+def choose_next_task(project: Path, roadmap, done_titles: set[str], language: str, forbidden_titles: set[str] | None = None) -> tuple[PlannedTask, bool]:
     """Choose the next task based on roadmap rhythm and done titles.
     
     Returns (planned_task, consumed_maintenance_slot).
@@ -1054,8 +1054,9 @@ def choose_next_task(project: Path, roadmap, done_titles: set[str], language: st
         primary_pool = improve_pool
         fallback_pool = idea_pool
 
-    primary_available = [candidate for candidate in primary_pool if candidate.title not in done_titles]
-    fallback_available = [candidate for candidate in fallback_pool if candidate.title not in done_titles]
+    forbidden_titles = forbidden_titles or set()
+    primary_available = [candidate for candidate in primary_pool if candidate.title not in done_titles and candidate.title not in forbidden_titles]
+    fallback_available = [candidate for candidate in fallback_pool if candidate.title not in done_titles and candidate.title not in forbidden_titles]
 
     selection_key = _selection_key(project, roadmap, done_titles)
     consumed = maintenance_remaining > 0
@@ -1081,8 +1082,8 @@ def choose_next_task(project: Path, roadmap, done_titles: set[str], language: st
     if cleared_titles:
         for title in cleared_titles:
             done_titles.discard(title)
-        primary_available = [c for c in primary_pool if c.title not in done_titles and c.title not in sticky_titles]
-        fallback_available = [c for c in fallback_pool if c.title not in done_titles and c.title not in sticky_titles]
+        primary_available = [c for c in primary_pool if c.title not in done_titles and c.title not in sticky_titles and c.title not in forbidden_titles]
+        fallback_available = [c for c in fallback_pool if c.title not in done_titles and c.title not in sticky_titles and c.title not in forbidden_titles]
         candidate = _pick_from_pool(primary_available, selection_key, quality_scores)
         if candidate is not None:
             return candidate, consumed
