@@ -981,9 +981,11 @@ def cmd_plan(force: bool = False, count: int = 1, dry_run: bool = False) -> None
             created=created,
         )
         next_type = "improve" if roadmap.next_default_type == "idea" else "idea"
-        improves = roadmap.improves_since_last_idea + sum(
+        maintenance_mode = roadmap.post_feature_maintenance_remaining > 0
+        improves_delta = 0 if maintenance_mode else sum(
             1 for p in planned_tasks if p.task_type == "improve"
         )
+        improves = roadmap.improves_since_last_idea + improves_delta
         maintenance_remaining = roadmap.post_feature_maintenance_remaining
         if any_consumed and maintenance_remaining > 0:
             maintenance_remaining -= 1
@@ -1046,7 +1048,8 @@ def cmd_plan(force: bool = False, count: int = 1, dry_run: bool = False) -> None
     )
 
     next_type = "improve" if roadmap.next_default_type == "idea" else "idea"
-    improves = roadmap.improves_since_last_idea + (1 if planned.task_type == "improve" else 0)
+    maintenance_mode = roadmap.post_feature_maintenance_remaining > 0
+    improves = roadmap.improves_since_last_idea + (0 if maintenance_mode else (1 if planned.task_type == "improve" else 0))
 
     maintenance_remaining = roadmap.post_feature_maintenance_remaining - 1 if (consumed and roadmap.post_feature_maintenance_remaining > 0) else roadmap.post_feature_maintenance_remaining
     maintenance_anchor = roadmap.maintenance_anchor_title
@@ -1643,7 +1646,8 @@ def _generate_next_task(project: Path, roadmap_path: Path, roadmap) -> None:
         created=created,
     )
     next_type = "improve" if roadmap.next_default_type == "idea" else "idea"
-    improves = roadmap.improves_since_last_idea + (1 if planned.task_type == "improve" else 0)
+    maintenance_mode = selection_roadmap.post_feature_maintenance_remaining > 0
+    improves = roadmap.improves_since_last_idea + (0 if maintenance_mode else (1 if planned.task_type == "improve" else 0))
     selection_remaining = selection_roadmap.post_feature_maintenance_remaining
     selection_anchor = selection_roadmap.maintenance_anchor_title
 

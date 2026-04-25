@@ -1021,6 +1021,7 @@ def _build_maintenance_candidates(anchor_title: str, remaining: int) -> list[dic
     anchor = anchor_title.strip() or "最近完成的 feature"
     regression = {
         "title": f"回归验证并修复：{anchor}",
+        "maintenance_tag": "regression",
         "background": f"刚完成 feature：{anchor}，需要立即验证没有引入回归。",
         "why_now": "feature task 完成后必须确认代码仍然健康，这是交付标准的一部分。",
         "scope": ["scripts/", "tests/"],
@@ -1041,6 +1042,7 @@ def _build_maintenance_candidates(anchor_title: str, remaining: int) -> list[dic
     }
     docs = {
         "title": f"补测试与文档：{anchor}",
+        "maintenance_tag": "testing",
         "background": f"刚完成 feature：{anchor}，需要补上相应的测试和文档。",
         "why_now": "没有测试覆盖的 feature 等同于不存在；文档缺失会拖累后续维护。",
         "scope": ["tests/", "docs/", "README.md"],
