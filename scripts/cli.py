@@ -1329,7 +1329,7 @@ def cmd_trigger(force: bool = False, no_spawn: bool = False, dry_run: bool = Fal
 
         if os.environ.get("OPENCLAW_CRON_SESSION") == "1" or no_spawn:
             try:
-                _timeout_call(_record_result_only, TRIGGER_TIMEOUT_S, project, roadmap_path, force)
+                _timeout_call(_record_result_only, TRIGGER_TIMEOUT_S, project, roadmap_path, force, no_spawn)
                 _timeout_call(_maybe_update_project_md, TRIGGER_TIMEOUT_S, project)
             except _TimeoutError as e:
                 fail(f"Trigger timed out after {e.timeout_s} seconds")
@@ -1457,7 +1457,7 @@ def _pm_review_project_md(project: Path, project_md_path: Path) -> None:
     existing = existing.rstrip() + review_block
     project_md_path.write_text(existing, encoding="utf-8")
 
-def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
+def _record_result_only(project: Path, roadmap_path: Path, force: bool, no_spawn: bool = False) -> None:
     """Record task result — called from within a cron session."""
     from scripts.roadmap import load_roadmap, append_done_log, set_current_task, CurrentTask
     roadmap = load_roadmap(roadmap_path)
@@ -1558,6 +1558,10 @@ def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
 
     if not exec_ok:
         fail(f"Task execution failed: {exec_msg}")
+        if no_spawn:
+            # In cron/no-spawn mode, continue to generate next task instead of crashing
+            _generate_next_task(project, roadmap_path, roadmap)
+            return
         sys.exit(1)
 
     ok(f"Result recorded: {exec_msg}")
