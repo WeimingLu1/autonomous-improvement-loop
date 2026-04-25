@@ -122,6 +122,24 @@ def _project_summary(project: Path) -> str:
     return text[:240]
 
 
+def _changed_files_from_git(project: Path, since_days: int = 7) -> list[str]:
+    """Return list of files changed in last N days via git diff --name-only."""
+    try:
+        since = f"--since='{since_days} days ago'"
+        result = subprocess.run(
+            ["git", "diff", "--name-only", since, "--", "."],
+            cwd=project,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if result.returncode == 0:
+            return [f.strip() for f in result.stdout.strip().split("\n") if f.strip()]
+    except Exception:
+        pass
+    return []
+
+
 def _read_project_context(project: Path) -> dict:
     """Read real project info for task planning."""
     scripts_dir = project / "scripts"
@@ -171,6 +189,7 @@ def _read_project_context(project: Path) -> dict:
         "test_files": test_files,
         "init_funcs": init_funcs,
         "quality_scores": _get_quality_scores(project),
+        "changed_files": _changed_files_from_git(project),
     }
 
 
@@ -1170,6 +1189,47 @@ def _maintenance_candidate_title(candidate: dict, version: int) -> str:
     return f"{candidate['title']} v{version}"
 
 
+def _dynamic_scope_for_candidate(candidate: dict, changed_files: list[str]) -> list[str]:
+    """Generate dynamic scope based on changed files and maintenance_tag.
+
+    Returns a focused list of files relevant to the candidate's maintenance_tag,
+    or a fallback if no changed files are available.
+    """
+    tag = candidate.get("maintenance_tag", "")
+    if not changed_files:
+        return candidate.get("scope", ["scripts/"])
+
+    # Filter to relevant changed files based on tag
+    if tag == "security":
+        relevant = [f for f in changed_files if f.startswith(("scripts/", "tests/"))]
+    elif tag == "testing":
+        relevant = [f for f in changed_files if "test" in f or f.startswith("tests/")]
+    elif tag == "docs":
+        relevant = [f for f in changed_files if f.endswith(".md") or "docs" in f]
+    elif tag == "performance":
+        relevant = [f for f in changed_files if f.startswith("scripts/")]
+    elif tag == "cleanup":
+        relevant = [f for f in changed_files if f.startswith("scripts/")]
+    elif tag == "readability":
+        relevant = [f for f in changed_files if f.startswith("scripts/")]
+    elif tag == "error-handling":
+        relevant = [f for f in changed_files if f.startswith("scripts/")]
+    elif tag == "logging":
+        relevant = [f for f in changed_files if f.startswith("scripts/")]
+    elif tag == "deps":
+        relevant = [f for f in changed_files if any(f.endswith(ext) for ext in (".txt", ".toml", ".cfg", "pyproject.toml", "requirements.txt"))]
+    elif tag == "bug":
+        relevant = [f for f in changed_files if f.startswith(("scripts/", "tests/"))]
+    elif tag == "regression":
+        relevant = [f for f in changed_files if f.startswith(("scripts/", "tests/"))]
+    elif tag == "testing-docs":
+        relevant = changed_files[:5]
+    else:
+        relevant = changed_files[:5]  # fallback: first 5 changed files
+
+    return relevant[:5] if relevant else candidate.get("scope", ["scripts/"])
+
+
 def _plan_to_planned_task(plan) -> PlannedTask:
     """Convert an LLM-generated PMPlan to a PlannedTask.
     
@@ -1272,12 +1332,15 @@ def choose_next_task(
         done_entries = _parse_done_log_entries(done_log_block)
         tag_versions = _maintenance_tag_versions(done_entries)
 
+        changed_files = ctx.get("changed_files", [])
         maintenance_pool = []
         for c in _MAINTENANCE_CANDIDATES:
             task = _make_task("maintenance", c, ctx)
             tag = c.get("maintenance_tag", "")
             version = tag_versions.get(tag, 0) + 1  # next version number
             task.title = _maintenance_candidate_title(c, version)
+            # Inject dynamic scope based on changed files
+            task.scope = _dynamic_scope_for_candidate(c, changed_files)
             maintenance_pool.append(task)
 
         primary_pool = maintenance_pool
