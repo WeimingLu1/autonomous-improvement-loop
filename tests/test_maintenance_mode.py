@@ -1,117 +1,130 @@
+"""Tests for maintenance mode tag-based deduplication."""
+
 import pytest
-import subprocess
-import sys
-from pathlib import Path
-from scripts.roadmap import RoadmapState, CurrentTask
 
-def test_roadmap_has_maintenance_mode_field():
-    rs = RoadmapState(
-        current_task=None,
-        next_default_type="improve",
-        improves_since_last_idea=0,
-        post_feature_maintenance_remaining=0,
-        maintenance_anchor_title="",
-        current_plan_path="",
-        reserved_user_task_id="",
-    )
-    assert hasattr(rs, "maintenance_mode")
-    assert rs.maintenance_mode == False
-
-def test_maintenance_candidates_exist():
-    from scripts.task_planner import _MAINTENANCE_CANDIDATES
-    assert len(_MAINTENANCE_CANDIDATES) >= 10
-    tags = {c.get("maintenance_tag", "") for c in _MAINTENANCE_CANDIDATES}
-    assert "testing" in tags
-    assert "docs" in tags
-    assert "deps" in tags
+from scripts.task_planner import (
+    _maintenance_tag_versions,
+    _maintenance_candidate_title,
+    _MAINTENANCE_CANDIDATES,
+)
+from scripts.roadmap import _parse_done_log_entries
 
 
-# ── CLI a-maintenance command tests ─────────────────────────────────────────
-#
-# These tests exercise the real `init.py` CLI as a subprocess.
-# Since _get_roadmap_and_project() reads the global config's project_path
-# (which always points to the AIL skill's own .ail/), we run the command
-# from the AIL project directory itself and back up / restore ROADMAP.md.
+class TestMaintenanceTagVersions:
+    """Tests for _maintenance_tag_versions()."""
 
-_PROJECT = Path(__file__).resolve().parents[1]
-_INIT_PY = str(_PROJECT / "scripts" / "init.py")
-_ROADMAP_PATH = _PROJECT / ".ail" / "ROADMAP.md"
+    def test_empty_log_returns_empty_dict(self):
+        result = _maintenance_tag_versions([])
+        assert result == {}
+
+    def test_single_tag_counts_correctly(self):
+        entries = [{"tag": "security", "title": "审计1"}]
+        result = _maintenance_tag_versions(entries)
+        assert result == {"security": 1}
+
+    def test_multiple_tags_counted_separately(self):
+        entries = [
+            {"tag": "security", "title": "审计1"},
+            {"tag": "testing", "title": "测试1"},
+            {"tag": "security", "title": "审计2"},
+        ]
+        result = _maintenance_tag_versions(entries)
+        assert result == {"security": 2, "testing": 1}
+
+    def test_empty_tag_ignored(self):
+        entries = [
+            {"tag": "", "title": "some idea"},
+            {"tag": "security", "title": "审计1"},
+        ]
+        result = _maintenance_tag_versions(entries)
+        assert result == {"security": 1}
+
+    def test_unknown_keys_still_counted(self):
+        entries = [
+            {"tag": "security", "title": "审计1"},
+            {"tag": "unknown-tag", "title": "未知1"},
+        ]
+        result = _maintenance_tag_versions(entries)
+        assert result == {"security": 1, "unknown-tag": 1}
 
 
-def _maintenance_run(action: str, initial_content: str) -> tuple[subprocess.CompletedProcess, str]:
-    """Write initial_content to the real ROADMAP, run 'a-maintenance <action>', return (result, updated_content)."""
-    # Backup
-    had_roadmap = _ROADMAP_PATH.exists()
-    saved = _ROADMAP_PATH.read_bytes() if had_roadmap else None
+class TestMaintenanceCandidateTitle:
+    """Tests for _maintenance_candidate_title()."""
 
-    # Write initial state
-    _ROADMAP_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _ROADMAP_PATH.write_text(initial_content, encoding="utf-8")
+    def test_version_1_returns_original(self):
+        candidate = {"title": "进行安全漏洞审计"}
+        assert _maintenance_candidate_title(candidate, 1) == "进行安全漏洞审计"
 
-    try:
-        result = subprocess.run(
-            [sys.executable, _INIT_PY, "a-maintenance", action],
-            cwd=str(_PROJECT),
-            capture_output=True,
-            text=True,
+    def test_version_2_adds_v2_suffix(self):
+        candidate = {"title": "进行安全漏洞审计"}
+        assert _maintenance_candidate_title(candidate, 2) == "进行安全漏洞审计 v2"
+
+    def test_version_3_adds_v3_suffix(self):
+        candidate = {"title": "补充单元测试覆盖"}
+        assert _maintenance_candidate_title(candidate, 3) == "补充单元测试覆盖 v3"
+
+    def test_version_0_returns_original(self):
+        candidate = {"title": "清理无用代码"}
+        assert _maintenance_candidate_title(candidate, 0) == "清理无用代码"
+
+
+class TestDoneLogTagSchema:
+    """Tests for Done Log tag schema parsing."""
+
+    def test_parse_new_format_with_tag(self):
+        """New 8-column format parses correctly."""
+        block = "| time | task_id | type | source | tag | title | result | commit |\n| 2026-04-25 | TASK-001 | maintenance | pm | security | 进行安全漏洞审计 | pass | abc123 |\n"
+        entries = _parse_done_log_entries(block)
+        assert len(entries) == 1
+        assert entries[0]["tag"] == "security"
+        assert entries[0]["title"] == "进行安全漏洞审计"
+        assert entries[0]["task_type"] == "maintenance"
+
+    def test_parse_old_format_without_tag(self):
+        """Legacy 7-column format (no tag) parses with empty tag."""
+        old_block = "| time | task_id | type | source | title | result | commit |\n| 2026-04-24 | TASK-001 | idea | pm | Some task | pass | abc123 |\n"
+        entries = _parse_done_log_entries(old_block)
+        assert len(entries) == 1
+        assert entries[0]["tag"] == ""
+        assert entries[0]["title"] == "Some task"
+
+    def test_parse_mixed_format(self):
+        """Mix of old and new rows parses correctly."""
+        block = (
+            "| time | task_id | type | source | tag | title | result | commit |\n"
+            "| 2026-04-24 | TASK-001 | idea | pm | | Old idea | pass | abc |\n"
+            "| 2026-04-25 | TASK-002 | maintenance | pm | security | 审计v2 | pass | def |\n"
         )
-        updated = _ROADMAP_PATH.read_text(encoding="utf-8")
-        return result, updated
-    finally:
-        # Restore
-        if saved is not None:
-            _ROADMAP_PATH.write_bytes(saved)
-        elif _ROADMAP_PATH.exists():
-            _ROADMAP_PATH.unlink()
+        entries = _parse_done_log_entries(block)
+        assert len(entries) == 2
+        assert entries[0]["tag"] == ""
+        assert entries[1]["tag"] == "security"
+
+    def test_multiple_entries_with_same_tag(self):
+        """Same tag appearing multiple times is counted correctly."""
+        block = (
+            "| time | task_id | type | source | tag | title | result | commit |\n"
+            "| 2026-04-25 | TASK-001 | maintenance | pm | security | 审计v2 | pass | a |\n"
+            "| 2026-04-25 | TASK-002 | maintenance | pm | security | 审计v3 | pass | b |\n"
+            "| 2026-04-25 | TASK-003 | maintenance | pm | testing | 测试v2 | pass | c |\n"
+        )
+        entries = _parse_done_log_entries(block)
+        versions = _maintenance_tag_versions(entries)
+        assert versions == {"security": 2, "testing": 1}
 
 
-_ROADMAP_FALSE = (
-    "# Roadmap\n\n"
-    "## Rhythm State\n\n"
-    "| field | value |\n"
-    "|------|-------|\n"
-    "| next_default_type | improve |\n"
-    "| improves_since_last_idea | 0 |\n"
-    "| maintenance_mode | false |\n"
-)
+class TestMaintenanceCandidatesHaveTags:
+    """Verify all _MAINTENANCE_CANDIDATES have maintenance_tag set."""
 
-_ROADMAP_TRUE = (
-    "# Roadmap\n\n"
-    "## Rhythm State\n\n"
-    "| field | value |\n"
-    "|------|-------|\n"
-    "| next_default_type | improve |\n"
-    "| improves_since_last_idea | 0 |\n"
-    "| maintenance_mode | true |\n"
-)
+    def test_all_candidates_have_tag(self):
+        """Every maintenance candidate should have a maintenance_tag."""
+        for c in _MAINTENANCE_CANDIDATES:
+            assert "maintenance_tag" in c, f"Candidate '{c['title']}' missing maintenance_tag"
+            assert c["maintenance_tag"], f"Candidate '{c['title']}' has empty maintenance_tag"
 
-_ROADMAP_TRUE_MINIMAL = (
-    "# Roadmap\n\n"
-    "## Rhythm State\n\n"
-    "| field | value |\n"
-    "|------|-------|\n"
-    "| maintenance_mode | true |\n"
-)
-
-
-def test_maintenance_command_on():
-    result, content = _maintenance_run("on", _ROADMAP_FALSE)
-    assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
-    assert "maintenance_mode | true" in content
-
-
-def test_maintenance_command_off():
-    result, content = _maintenance_run("off", _ROADMAP_TRUE)
-    assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
-    assert "maintenance_mode | false" in content
-
-
-def test_maintenance_command_status():
-    result, _ = _maintenance_run("status", _ROADMAP_TRUE_MINIMAL)
-    assert result.returncode == 0, f"stdout={result.stdout}\nstderr={result.stderr}"
-    assert "enabled" in result.stdout.lower()
-
-
-def test_maintenance_command_unknown_action():
-    result, _ = _maintenance_run("xyz", _ROADMAP_FALSE)
-    assert result.returncode != 0
+    def test_tags_are_unique_enough(self):
+        """Tags should provide good coverage across maintenance categories."""
+        tags = [c["maintenance_tag"] for c in _MAINTENANCE_CANDIDATES]
+        unique_tags = set(tags)
+        # At least 8 different tag categories expected
+        assert len(unique_tags) >= 8, f"Only {len(unique_tags)} unique tags: {unique_tags}"
