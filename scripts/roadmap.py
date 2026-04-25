@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 
 CURRENT_TASK_HEADER = "| task_id | type | source | title | priority | status | created |"
-DONE_LOG_HEADER = "| time | task_id | type | source | title | result | commit |"
+DONE_LOG_HEADER = "| time | task_id | type | source | tag | title | result | commit |"
 
 
 @dataclass
@@ -51,7 +51,7 @@ def init_roadmap(path: Path) -> None:
         "- Roadmap initialized.\n\n"
         "## Done Log\n\n"
         f"{DONE_LOG_HEADER}\n"
-        "|------|---------|------|--------|-------|--------|--------|\n",
+        "|------|---------|------|--------|----|-------|--------|--------|\n",
         encoding="utf-8",
     )
 
@@ -87,7 +87,36 @@ def _extract_done_log_block(text: str) -> str:
         block = match.group(1).strip("\n")
         if block:
             return block + "\n"
-    return DONE_LOG_HEADER + "\n|------|---------|------|--------|-------|--------|--------|\n"
+    return DONE_LOG_HEADER + "\n|------|---------|------|--------|----|-------|--------|--------|\n"
+
+
+def _parse_done_log_entries(block: str) -> list[dict]:
+    """Parse Done Log block into list of dicts with tag field (empty string if absent).
+
+    Supports both old (7 cols: time/task_id/type/source/title/result/commit)
+    and new (8 cols: time/task_id/type/source/tag/title/result/commit) formats.
+    """
+    entries = []
+    for line in block.splitlines():
+        if line.startswith("|") and "time" not in line:
+            parts = [p.strip() for p in line.strip().strip("|").split("|")]
+            if len(parts) == 7:
+                parts.insert(4, "")  # insert empty tag at position 4
+            elif len(parts) == 8:
+                pass  # already has tag
+            else:
+                continue
+            entries.append({
+                "time": parts[0],
+                "task_id": parts[1],
+                "task_type": parts[2],
+                "source": parts[3],
+                "tag": parts[4],
+                "title": parts[5],
+                "result": parts[6],
+                "commit": parts[7],
+            })
+    return entries
 
 
 def _render_roadmap(task: CurrentTask | None, *, next_default_type: str, improves_since_last_idea: int, post_feature_maintenance_remaining: int, maintenance_anchor_title: str, plan_path: str, reserved_user_task_id: str, maintenance_mode: bool, done_log_block: str) -> str:
@@ -186,9 +215,9 @@ def set_current_task(path: Path, task: CurrentTask | None, plan_path: str, next_
     )
 
 
-def append_done_log(path: Path, *, timestamp: str, task_id: str, task_type: str, source: str, title: str, result: str, commit: str) -> None:
+def append_done_log(path: Path, *, timestamp: str, task_id: str, task_type: str, source: str, tag: str, title: str, result: str, commit: str) -> None:
     text = path.read_text(encoding="utf-8") if path.exists() else ""
-    row = f"| {timestamp} | {task_id} | {task_type} | {source} | {title} | {result} | {commit} |\n"
+    row = f"| {timestamp} | {task_id} | {task_type} | {source} | {tag} | {title} | {result} | {commit} |\n"
     done_log_block = _extract_done_log_block(text)
     if row not in done_log_block:
         done_log_block += row
