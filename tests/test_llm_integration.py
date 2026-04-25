@@ -139,6 +139,7 @@ def test_choose_next_task_with_llm(monkeypatch, tmp_path):
 
     roadmap = RoadmapState(
         current_task=None,
+        maintenance_mode=True,
         next_default_type="improve",
         improves_since_last_idea=0,
         post_feature_maintenance_remaining=0,
@@ -154,6 +155,7 @@ def test_choose_next_task_with_llm(monkeypatch, tmp_path):
 
     assert isinstance(planned, PlannedTask)
     assert planned.title == "LLM-generated test improvement"
+    assert planned.source == "llm"  # LLM path was taken
     assert planned.task_type == "improve"
     assert consumed is False
 
@@ -179,6 +181,7 @@ def test_choose_next_task_llm_fallback_to_pool(monkeypatch, tmp_path):
 
     roadmap = RoadmapState(
         current_task=None,
+        maintenance_mode=False,
         next_default_type="improve",
         improves_since_last_idea=0,
         post_feature_maintenance_remaining=0,
@@ -235,6 +238,7 @@ def test_choose_next_task_auto_detects_llm_key(monkeypatch, tmp_path):
 
     roadmap = RoadmapState(
         current_task=None,
+        maintenance_mode=True,
         next_default_type="improve",
         improves_since_last_idea=0,
         post_feature_maintenance_remaining=0,
@@ -250,3 +254,4 @@ def test_choose_next_task_auto_detects_llm_key(monkeypatch, tmp_path):
 
     assert called[0], "LLM should have been called when MINIMAX_API_KEY is set"
     assert planned.title == "Auto-detected LLM task"
+    assert planned.source == "llm"  # LLM path was taken

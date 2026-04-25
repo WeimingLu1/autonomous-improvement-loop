@@ -3,7 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 
-def _bullets(items: list[str]) -> str:
+def _bullets(items: list[str] | str | None) -> str:
+    if items is None:
+        return "- None"
+    if isinstance(items, str):
+        # Split on newlines to support both "- item1\n- item2" and plain strings
+        lines = [line.strip() for line in items.split("\n") if line.strip()]
+        return "\n".join(f"- {line}" for line in lines) if lines else "- None"
     return "\n".join(f"- {item}" for item in items) if items else "- None"
 
 

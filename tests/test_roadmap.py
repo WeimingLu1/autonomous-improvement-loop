@@ -74,13 +74,14 @@ def test_append_done_log_uses_new_table_shape(tmp_path: Path):
         task_id="TASK-001",
         task_type="idea",
         source="pm",
+        tag="test",
         title="Add roadmap export",
         result="pass",
         commit="abc1234",
         timestamp="2026-04-21T02:11:00Z",
     )
     text = roadmap.read_text(encoding="utf-8")
-    assert "| 2026-04-21T02:11:00Z | TASK-001 | idea | pm | Add roadmap export | pass | abc1234 |" in text
+    assert "| 2026-04-21T02:11:00Z | TASK-001 | idea | pm | test | Add roadmap export | pass | abc1234 |" in text
 
 
 def test_set_current_task_rewrites_single_rhythm_state_block(tmp_path: Path):
@@ -101,6 +102,7 @@ def test_set_current_task_none_preserves_done_log(tmp_path: Path):
         task_id="TASK-001",
         task_type="idea",
         source="pm",
+        tag="test",
         title="Add roadmap export",
         result="pass",
         commit="abc1234",
@@ -119,6 +121,7 @@ def test_append_done_log_deduplicates_same_row(tmp_path: Path):
         task_id="TASK-001",
         task_type="idea",
         source="pm",
+        tag="test",
         title="Add roadmap export",
         result="pass",
         commit="abc1234",
