@@ -1282,9 +1282,14 @@ def choose_next_task(
     """
     from scripts.config import load_config
 
-    # Auto-detect LLM availability
+    # Maintenance mode: skip LLM, use pool-based candidates
+    maintenance_mode = getattr(roadmap, "maintenance_mode", False)
+
+    # Auto-detect LLM availability (skip if maintenance mode is on)
     if use_llm is None:
         use_llm = bool(os.environ.get("MINIMAX_API_KEY", "").strip())
+    if maintenance_mode:
+        use_llm = False
 
     if use_llm:
         from scripts.llm_client import generate_pm_plan as llm_generate
@@ -1322,7 +1327,6 @@ def choose_next_task(
     improves_since = getattr(roadmap, "improves_since_last_idea", 0)
     maintenance_remaining = getattr(roadmap, "post_feature_maintenance_remaining", 0)
     maintenance_anchor_title = getattr(roadmap, "maintenance_anchor_title", "")
-    maintenance_mode = getattr(roadmap, "maintenance_mode", False)
 
     if maintenance_mode:
         # Build maintenance pool with versioned titles based on tag history.
@@ -1330,7 +1334,9 @@ def choose_next_task(
         from scripts.roadmap import _extract_done_log_block, _parse_done_log_entries
 
         # Read Done Log entries to get tag version counts
-        done_log_block = _extract_done_log_block(roadmap)
+        # Build path from project since roadmap is RoadmapState object (not text)
+        roadmap_path = project / ".ail" / "ROADMAP.md"
+        done_log_block = _extract_done_log_block(roadmap_path.read_text(encoding="utf-8"))
         done_entries = _parse_done_log_entries(done_log_block)
         tag_versions = _maintenance_tag_versions(done_entries)
 

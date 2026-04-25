@@ -426,6 +426,7 @@ def cmd_add(content_text: str) -> None:
             post_feature_maintenance_remaining=roadmap.post_feature_maintenance_remaining,
             maintenance_anchor_title=roadmap.maintenance_anchor_title,
             reserved_user_task_id=task_id,
+            maintenance_mode=roadmap.maintenance_mode,
         )
         ok(f"Reserved user task {task_id} for after current doing task")
         print()
@@ -470,6 +471,7 @@ def cmd_add(content_text: str) -> None:
         post_feature_maintenance_remaining=roadmap.post_feature_maintenance_remaining,
         maintenance_anchor_title=roadmap.maintenance_anchor_title,
         reserved_user_task_id="",
+        maintenance_mode=roadmap.maintenance_mode,
     )
     ok(f"User request saved as {task_id}")
     print()
@@ -998,6 +1000,7 @@ def cmd_plan(force: bool = False, count: int = 1, dry_run: bool = False) -> None
                 post_feature_maintenance_remaining=maintenance_remaining,
                 maintenance_anchor_title=roadmap.maintenance_anchor_title,
                 reserved_user_task_id=roadmap.reserved_user_task_id,
+                maintenance_mode=roadmap.maintenance_mode,
             )
         if dry_run_mode == DryRunMode.PLAN_ONLY:
             ok(f"[dry-run] Would set current task to {task_ids[0]} and update ROADMAP.md")
@@ -1062,6 +1065,7 @@ def cmd_plan(force: bool = False, count: int = 1, dry_run: bool = False) -> None
             post_feature_maintenance_remaining=maintenance_remaining,
             maintenance_anchor_title=maintenance_anchor,
             reserved_user_task_id=roadmap.reserved_user_task_id,
+            maintenance_mode=roadmap.maintenance_mode,
         )
     if dry_run_mode == DryRunMode.PLAN_ONLY:
         ok(f"[dry-run] Would create task {task_id}: {planned.title}")
@@ -1486,6 +1490,7 @@ def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
             post_feature_maintenance_remaining=roadmap.post_feature_maintenance_remaining,
             maintenance_anchor_title=roadmap.maintenance_anchor_title,
             reserved_user_task_id=roadmap.reserved_user_task_id,
+            maintenance_mode=roadmap.maintenance_mode,
         )
         # Reload roadmap after status update
         roadmap = load_roadmap(roadmap_path)
@@ -1519,6 +1524,7 @@ def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
                     post_feature_maintenance_remaining=new_remaining,
                     maintenance_anchor_title=new_anchor,
                     reserved_user_task_id=roadmap.reserved_user_task_id,
+                    maintenance_mode=roadmap.maintenance_mode,
                 )
                 skip_generate_next = True
             else:
@@ -1542,6 +1548,7 @@ def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
         task_id=current.task_id,
         task_type=current.task_type,
         source=current.source,
+        tag="",
         title=current.title,
         result="pass" if exec_ok else "fail",
         commit=commit,
@@ -1590,6 +1597,7 @@ def _generate_next_task(project: Path, roadmap_path: Path, roadmap) -> None:
             post_feature_maintenance_remaining=roadmap.post_feature_maintenance_remaining,
             maintenance_anchor_title=roadmap.maintenance_anchor_title,
             reserved_user_task_id="",
+            maintenance_mode=roadmap.maintenance_mode,
         )
         ok(f"Next user task is now current: {next_task.task_id}")
         return
@@ -1666,6 +1674,7 @@ def _generate_next_task(project: Path, roadmap_path: Path, roadmap) -> None:
         post_feature_maintenance_remaining=maintenance_remaining,
         maintenance_anchor_title=maintenance_anchor,
         reserved_user_task_id="",
+        maintenance_mode=roadmap.maintenance_mode,
     )
     ok(f"Next task generated and set as current: {task_id}")
 
