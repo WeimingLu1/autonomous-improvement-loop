@@ -1293,11 +1293,10 @@ def choose_next_task(
 
     # In maintenance mode, use LLM PM to dynamically find real bugs (not static pool)
     if maintenance_mode and use_llm:
-        from scripts.llm_client import generate_pm_plan as llm_generate
         from scripts.llm_prompts import build_bug_finding_prompt
         try:
             user_prompt = build_bug_finding_prompt(project, language)
-            from scripts.llm_client import _call_minimax
+            from scripts.llm_client import _call_minimax, _parse_json_response
             api_key = os.environ.get("MINIMAX_API_KEY", "").strip()
             if api_key:
                 response = _call_minimax(api_key, user_prompt, language)
