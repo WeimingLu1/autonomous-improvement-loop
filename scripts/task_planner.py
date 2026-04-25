@@ -1144,6 +1144,32 @@ def _sticky_done_titles(project: Path, threshold: int = 3) -> set[str]:
     return {title for title, count in _done_log_title_counts(project).items() if count >= threshold}
 
 
+def _maintenance_tag_versions(done_log_entries: list[dict]) -> dict[str, int]:
+    """Parse Done Log entries and return {tag: version_count} mapping.
+
+    version = number of times this tag has appeared in Done Log.
+    So if 'security' appears 2 times, the next security task gets v3.
+    """
+    counts: dict[str, int] = {}
+    for entry in done_log_entries:
+        tag = entry.get("tag", "")
+        if tag:
+            counts[tag] = counts.get(tag, 0) + 1
+    return counts  # {'security': 2, 'testing': 1}
+
+
+def _maintenance_candidate_title(candidate: dict, version: int) -> str:
+    """Generate maintenance task title with version suffix.
+
+    version=1 → original title (no suffix)
+    version>=2 → title + " v{version}"
+    e.g. "进行安全漏洞审计" → "进行安全漏洞审计 v2"
+    """
+    if version <= 1:
+        return candidate["title"]
+    return f"{candidate['title']} v{version}"
+
+
 def _plan_to_planned_task(plan) -> PlannedTask:
     """Convert an LLM-generated PMPlan to a PlannedTask.
     
@@ -1237,8 +1263,24 @@ def choose_next_task(
     maintenance_mode = getattr(roadmap, "maintenance_mode", False)
 
     if maintenance_mode:
-        # Restrict to maintenance candidates only, ignoring rhythm-based selection.
-        primary_pool = [_make_task("maintenance", c, ctx) for c in _MAINTENANCE_CANDIDATES]
+        # Build maintenance pool with versioned titles based on tag history.
+        # Import needed functions from roadmap (lazy import to avoid circular dependency).
+        from scripts.roadmap import _extract_done_log_block, _parse_done_log_entries
+
+        # Read Done Log entries to get tag version counts
+        done_log_block = _extract_done_log_block(roadmap)
+        done_entries = _parse_done_log_entries(done_log_block)
+        tag_versions = _maintenance_tag_versions(done_entries)
+
+        maintenance_pool = []
+        for c in _MAINTENANCE_CANDIDATES:
+            task = _make_task("maintenance", c, ctx)
+            tag = c.get("maintenance_tag", "")
+            version = tag_versions.get(tag, 0) + 1  # next version number
+            task.title = _maintenance_candidate_title(c, version)
+            maintenance_pool.append(task)
+
+        primary_pool = maintenance_pool
         fallback_pool = improve_pool
     elif maintenance_remaining > 0:
         # Force maintenance pool using titles anchored to the triggering feature.
