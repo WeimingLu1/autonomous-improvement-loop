@@ -108,7 +108,7 @@ def _call_minimax(api_key: str, user_prompt: str, language: str) -> str:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=180) as resp:
             data = json.loads(resp.read())
     except urllib.error.HTTPError as e:
         raise MiniMaxError(f"MiniMax API HTTP {e.code}: {e.reason}")

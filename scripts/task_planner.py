@@ -1287,20 +1287,25 @@ def choose_next_task(
     # Maintenance mode: skip LLM, use pool-based candidates
     maintenance_mode = getattr(roadmap, "maintenance_mode", False)
 
-    # Auto-detect LLM availability (skip if maintenance mode is on)
+    # Auto-detect LLM availability (skip if explicitly disabled)
     if use_llm is None:
         use_llm = bool(os.environ.get("MINIMAX_API_KEY", "").strip())
-    if maintenance_mode:
-        use_llm = False
 
-    if use_llm:
+    # In maintenance mode, use LLM PM to dynamically find real bugs (not static pool)
+    if maintenance_mode and use_llm:
         from scripts.llm_client import generate_pm_plan as llm_generate
+        from scripts.llm_prompts import build_bug_finding_prompt
         try:
-            raw_plan = llm_generate(project, language)
-            return _plan_to_planned_task(raw_plan), False
+            user_prompt = build_bug_finding_prompt(project, language)
+            from scripts.llm_client import _call_minimax
+            api_key = os.environ.get("MINIMAX_API_KEY", "").strip()
+            if api_key:
+                response = _call_minimax(api_key, user_prompt, language)
+                raw_plan = _parse_json_response(response)
+                if raw_plan:
+                    return _plan_to_planned_task(raw_plan), False
         except Exception:
-            # Fallback to pool on LLM failure
-            pass
+            pass  # Fall back to pool if LLM fails
 
     cfg = load_config()
     ctx = _read_project_context(project)
