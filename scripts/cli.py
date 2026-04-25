@@ -1048,6 +1048,7 @@ def cmd_plan(force: bool = False, count: int = 1, dry_run: bool = False) -> None
         title=planned.title,
         status="pending",
         created=created,
+        maintenance_tag=getattr(planned, 'maintenance_tag', ''),
     )
 
     next_type = "improve" if roadmap.next_default_type == "idea" else "idea"
@@ -1480,6 +1481,7 @@ def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
             title=current.title,
             status="doing",
             created=current.created,
+            maintenance_tag=getattr(current, 'maintenance_tag', ''),
         )
         set_current_task(
             roadmap_path,
@@ -1548,7 +1550,7 @@ def _record_result_only(project: Path, roadmap_path: Path, force: bool) -> None:
         task_id=current.task_id,
         task_type=current.task_type,
         source=current.source,
-        tag="",
+        tag=current.maintenance_tag if hasattr(current, 'maintenance_tag') else "",
         title=current.title,
         result="pass" if exec_ok else "fail",
         commit=commit,
@@ -1652,6 +1654,7 @@ def _generate_next_task(project: Path, roadmap_path: Path, roadmap) -> None:
         title=planned.title,
         status="pending",
         created=created,
+        maintenance_tag=getattr(planned, 'maintenance_tag', ''),
     )
     next_type = "improve" if roadmap.next_default_type == "idea" else "idea"
     maintenance_mode = selection_roadmap.post_feature_maintenance_remaining > 0

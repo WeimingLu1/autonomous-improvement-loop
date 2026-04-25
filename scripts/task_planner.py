@@ -1351,6 +1351,7 @@ def choose_next_task(
             task.title = _maintenance_candidate_title(c, version)
             # Inject dynamic scope based on changed files
             task.scope = _dynamic_scope_for_candidate(c, changed_files)
+            task.maintenance_tag = tag
             maintenance_pool.append(task)
 
         primary_pool = maintenance_pool

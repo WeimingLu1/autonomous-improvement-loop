@@ -17,6 +17,7 @@ class CurrentTask:
     priority: str = 'P1'
     status: str = 'pending'
     created: str = ''
+    maintenance_tag: str = ''
 
 
 @dataclass
