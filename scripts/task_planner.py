@@ -24,6 +24,7 @@ class PlannedTask:
     acceptance_criteria: list[str]
     verification: list[str]
     risks: list[str]
+    maintenance_tag: str = ""
     background: str = ""
     rollback: str = ""
     effort: str = "medium"
@@ -1257,6 +1258,7 @@ def _plan_to_planned_task(plan) -> PlannedTask:
         acceptance_criteria=plan.acceptance_criteria if plan.acceptance_criteria else [],
         verification=plan.verification if plan.verification else [],
         risks=plan.risks,
+        maintenance_tag="",
         background=plan.background,
         rollback=plan.rollback,
     )
@@ -1447,6 +1449,7 @@ def _make_task(task_type: str, candidate: dict, ctx: dict) -> PlannedTask:
         acceptance_criteria=candidate.get("acceptance_criteria", []),
         verification=candidate.get("verification", []),
         risks=candidate.get("risks", []),
+        maintenance_tag=candidate.get("maintenance_tag", ""),
         background=candidate.get("background", ""),
         rollback=candidate.get("rollback", ""),
         effort=candidate.get("effort", "medium"),
